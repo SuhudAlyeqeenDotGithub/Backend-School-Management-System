@@ -19,4 +19,10 @@ const accountSchema = new Schema(
   { timestamps: true }
 );
 
+accountSchema.pre("validate", function (next) {
+  if (!this.organisationId) {
+    this.organisationId = this._id; // Mongoose auto-generates _id
+  }
+  next();
+});
 export const Account = model("Account", accountSchema);

@@ -82,9 +82,6 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     accountId: updatedOrgAccount?._id,
     role: updatedOrgAccount?.roleId
   };
-
-  console.log("Token Payload:", tokenPayload);
-
   const accessToken = generateAccessToken(tokenPayload);
   const refreshToken = generateRefreshToken(tokenPayload);
 
