@@ -1,19 +1,19 @@
 import asyncHandler from "express-async-handler";
 import bcrypt from "bcryptjs";
 import { Request, Response } from "express";
-import { OrgAccount } from "../models/accountModel";
+import { Account } from "../models/accountModel";
 import { throwError } from "../utils/utilsFunctions";
 import { Role } from "../models/roleModel";
 import { generateRefreshToken, generateAccessToken } from "../utils/utilsFunctions";
 import { ActivityLog } from "../models/activityLogModel";
 
-const fetchOrgAccountData = async (orgId: any) => {
-  const orgAccount_RoleData = await OrgAccount.find({ _id: orgId }).populate("roleData");
-  if (!orgAccount_RoleData) {
-    throwError("Error fetching organization account data", 500);
-  }
-  return orgAccount_RoleData;
-};
+// const fetchOrgAccountData = async (orgId: any) => {
+//   const orgAccount_RoleData = await OrgAccount.find({ _id: orgId }).populate("roleData");
+//   if (!orgAccount_RoleData) {
+//     throwError("Error fetching organization account data", 500);
+//   }
+//   return orgAccount_RoleData;
+// };
 export const signupOrgAccount = asyncHandler(async (req: Request, res: Response) => {
   const { organisationName, organisationEmail, organisationPhone, organisationPassword, organisationConfirmPassword } =
     req.body;
@@ -32,7 +32,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     throwError("Passwords does not match", 400);
   }
 
-  const organisationEmailExists = await OrgAccount.findOne({ organisationEmail });
+  const organisationEmailExists = await Account.findOne({ accountEmail: organisationEmail });
   if (organisationEmailExists) {
     throwError(`Organization already has an account with this email: ${organisationEmail}. Please sign in.`, 409);
   }
@@ -40,11 +40,12 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   const hashedPassword = await bcrypt.hash(organisationPassword, 10);
 
   //   create initial organization account
-  const orgAccount = await OrgAccount.create({
-    organisationName,
-    organisationEmail,
-    organisationPhone,
-    organisationPassword: hashedPassword
+  const orgAccount = await Account.create({
+    accountType: "Organization",
+    accountName: organisationName,
+    accountEmail: organisationEmail,
+    accountPhone: organisationPhone,
+    accountPassword: hashedPassword
   });
 
   //   ensure the organization account was created successfully
@@ -66,22 +67,20 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   }
 
   // update the organization account with the default role
-  const updatedOrgAccount = await OrgAccount.findByIdAndUpdate(
+  const updatedOrgAccount = await Account.findByIdAndUpdate(
     orgAccount._id,
     { roleId: defaultRole._id },
     { new: true }
-  );
+  ).populate("roleId");
 
   if (!updatedOrgAccount) {
     throwError("Failed to update organization account with default role", 500);
   }
 
   const tokenPayload = {
-    organisationId: defaultRole.organisationId,
-    roleName: defaultRole.roleName,
-    roleId: defaultRole._id,
-    absoluteAdmin: defaultRole.absoluteAdmin,
-    tabAccess: defaultRole.tabAccess
+    organisationId: updatedOrgAccount?.organisationId,
+    accountId: updatedOrgAccount?._id,
+    role: updatedOrgAccount?.roleId
   };
 
   console.log("Token Payload:", tokenPayload);
@@ -103,9 +102,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     sameSite: "lax"
   });
 
-  const accountData = { ...updatedOrgAccount, roleData: defaultRole };
-
-  res.status(201).json(accountData);
+  res.status(201).json(updatedOrgAccount);
 });
 
 export const signinOrgAccount = asyncHandler(async (req: Request, res: Response) => {});
