@@ -5,7 +5,7 @@ import { Schema, model } from "mongoose";
 const roleSchema = new Schema(
   {
     organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "OrgAccount", required: true },
-    roleName: { type: String, required: true, unique: true },
+    roleName: { type: String, required: true },
     roleDescription: { type: String },
     absoluteAdmin: { type: Boolean, default: false },
     tabAccess: {
