@@ -330,3 +330,39 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
 
   res.status(200).json({ message: `A verification code has been sent to email ${email}` });
 });
+
+export const resetPasswordVerifyCode = asyncHandler(async (req: Request, res: Response) => {
+  const { code, email } = req.body;
+  if (!code) {
+    throwError("Please provide the code you received", 400);
+  }
+  if (!email) {
+    throwError(
+      "Sorry!!! we lost track of the associated email. Please Ensure you are using the same browser or resend code",
+      400
+    );
+  }
+
+  const resetPasswordDoc = await ResetPassword.findOne({ accountEmail: email });
+  if (!resetPasswordDoc) {
+    throwError("No code has been sent to this email in the last 15 minutes. Please resend code", 409);
+  }
+
+  const { resetCode, expiresAt } = resetPasswordDoc as {
+    resetCode: string;
+    expiresAt: Date;
+  };
+
+  const hashedResetCode = crypto.createHash("sha256").update(code).digest("hex");
+  if (hashedResetCode !== resetCode) {
+    await ResetPassword.deleteOne({ resetCode: hashedResetCode });
+    throwError(`Please use the latest code that was sent to ${email}`, 400);
+  }
+
+  if (expiresAt < new Date()) {
+    await ResetPassword.deleteOne({ resetCode: hashedResetCode });
+    throwError(`This code is expired. Please request a new one`, 409);
+  }
+
+  res.status(200).json({ message: `Code verification successful` });
+});
