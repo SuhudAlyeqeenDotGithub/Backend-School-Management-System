@@ -8,7 +8,19 @@ const activityLogSchema = new Schema({
   recordModel: {
     type: String,
     required: true,
-    enum: ["Course", "Student", "Staff", "Subject", "Account", "Role", "Staff", "Level", "Enrollment", "Attendance"]
+    enum: [
+      "Course",
+      "Student",
+      "Staff",
+      "Subject",
+      "Account",
+      "Role",
+      "Staff",
+      "Level",
+      "Enrollment",
+      "Attendance",
+      "None"
+    ]
   },
   recordId: { type: mongoose.Schema.Types.ObjectId, required: true, refPath: "recordModel" },
 

@@ -7,6 +7,9 @@ import { Role } from "../models/roleModel";
 import { generateRefreshToken, generateAccessToken } from "../utils/utilsFunctions";
 import { ActivityLog } from "../models/activityLogModel";
 import { diff } from "deep-diff";
+import { ResetPassword } from "../models/resetPasswordModel";
+import crypto from "crypto";
+import nodemailer from "nodemailer";
 
 const logActivity = async (
   organisationId: any,
@@ -33,7 +36,6 @@ const logActivity = async (
     throwError("Failed to log activity", 500);
   }
 
-  console.log("Activity logged successfully:", JSON.stringify(activityLog));
   return activityLog;
 };
 export const signupOrgAccount = asyncHandler(async (req: Request, res: Response) => {
@@ -101,8 +103,8 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   //   create a default role for the organization as absolute admin
   const defaultRole = await Role.create({
     organisationId: orgAccount._id,
-    roleName: "Absolute Admin",
-    roleDescription: "This is the default role for the organization, it has all permissions",
+    roleName: `Absolute Admin for organization (${organisationName})`,
+    roleDescription: `This is the default role for the organization (${organisationName}), it has all permissions`,
     absoluteAdmin: true
   });
 
@@ -115,7 +117,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   await logActivity(
     orgAccount._id,
     orgAccount._id,
-    "Initial Organization Default Role Creation - Absolute Admin",
+    `Initial Default Role Creation for organization (${organisationName}) - Absolute Admin`,
     "Role",
     defaultRole._id,
     defaultRole?.roleName ?? undefined,
@@ -166,7 +168,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   await logActivity(
     orgAccount._id,
     orgAccount._id,
-    "Updating Organization Account with Default Role",
+    `Updating organization (${organisationName}) Account with Default Role`,
     "Account",
     updatedOrgAccount?._id,
     updatedOrgAccount?.accountName ?? undefined,
@@ -217,12 +219,12 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
   // find the account by email
   const account = await Account.findOne({ accountEmail: email }).populate("roleId");
   if (!account) {
-    throwError("No associated account found for this email - Please contact your admin", 401);
+    throwError(`No associated account found for email (${email}) - Please contact your admin.`, 401);
   }
 
   const isMatch = await bcrypt.compare(password, account!.accountPassword ?? "");
   if (!isMatch) {
-    throwError("Invalid password for associated account", 401);
+    throwError("Incorrect password for associated account", 401);
   }
 
   // generate tokens
@@ -266,4 +268,65 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
     new Date()
   );
   res.status(200).json(reshapedAccount);
+});
+
+export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Response) => {
+  const { email } = req.body;
+  if (!email) {
+    throwError("Please provide the associated email", 400);
+  }
+
+  const accountExist = await Account.findOne({ accountEmail: email });
+  if (!accountExist) {
+    throwError("Unknown Email. Please sign up if you have no existing account", 409);
+  }
+
+  const resetCode = crypto.randomBytes(32).toString("hex");
+  const hashedResetCode = crypto.createHash("sha256").update(resetCode).digest("hex");
+
+  const resetPasswordDoc = await ResetPassword.create({
+    accountEmail: email,
+    resetCode: hashedResetCode,
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+  });
+
+  if (!resetPasswordDoc) {
+    throwError("Error reset password", 500);
+  }
+
+  // create a log for reset password request
+  await logActivity(
+    accountExist?._id,
+    accountExist?._id,
+    "Reset Password Request",
+    "None",
+    resetPasswordDoc._id,
+    "Reset Password",
+    [],
+    new Date()
+  );
+
+  // send token to account email
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.EMAIL,
+      pass: process.env.PASSWORD
+    }
+  });
+
+  const mailOptions = {
+    from: process.env.EMAIL, // still your email
+    to: email, // send to user
+    subject: "Reset Password Verification Code - From Al-Yeqeen School Management App",
+    text: `Hello ${accountExist?.accountName}, your code is: ${resetCode}. Please do not share this with anyone and use within 8 minutes`
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+  } catch (error: any) {
+    throwError(error.message || "Error sending code", 500);
+  }
+
+  res.status(200).json({ message: `A verification code has been sent to email ${email}` });
 });
