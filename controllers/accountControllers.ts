@@ -328,11 +328,12 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
     throwError(error.message || "Error sending code", 500);
   }
 
-  res.status(200).json({ message: `A verification code has been sent to email ${email}` });
+  res.status(200).json({ message: `A verification code has been sent to email ${email}. You will now be redirected` });
 });
 
 export const resetPasswordVerifyCode = asyncHandler(async (req: Request, res: Response) => {
   const { code, email } = req.body;
+
   if (!code) {
     throwError("Please provide the code you received", 400);
   }
@@ -364,5 +365,119 @@ export const resetPasswordVerifyCode = asyncHandler(async (req: Request, res: Re
     throwError(`This code is expired. Please request a new one`, 409);
   }
 
-  res.status(200).json({ message: `Code verification successful` });
+  res.status(200).json({ message: `Code verification successful. You will now be redirected` });
+});
+
+export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: Response) => {
+  const { organisationEmail, organisationPassword, organisationConfirmPassword, code } = req.body;
+
+  if (!organisationEmail || !organisationPassword || !organisationConfirmPassword) {
+    throwError("Please provide all required fields", 400);
+  }
+
+  if (organisationPassword !== organisationConfirmPassword) {
+    throwError("Passwords does not match", 400);
+  }
+
+  const organisationEmailExists = await Account.findOne({ accountEmail: organisationEmail });
+  if (!organisationEmailExists) {
+    throwError(`Organization with email ${organisationEmail} does not exist. Please sign up`, 409);
+  }
+  if (!code) {
+    throwError(
+      "Sorry!!! we lost track of the associated code for this session. Please Ensure you are using the same browser or resend code",
+      400
+    );
+  }
+
+  const resetPasswordDoc = await ResetPassword.findOne({ accountEmail: organisationEmail });
+  if (!resetPasswordDoc) {
+    throwError("Invalid request. Please request a code to reset password", 409);
+  }
+
+  const { resetCode, expiresAt } = resetPasswordDoc as {
+    resetCode: string;
+    expiresAt: Date;
+  };
+
+  const hashedResetCode = crypto.createHash("sha256").update(code).digest("hex");
+  if (hashedResetCode !== resetCode) {
+    await ResetPassword.deleteOne({ resetCode: hashedResetCode });
+    throwError(`Invalid code, Please request a new one`, 400);
+  }
+
+  if (expiresAt < new Date()) {
+    await ResetPassword.deleteOne({ resetCode: hashedResetCode });
+    throwError(`Associated code for this session is expired. Please request a new one`, 409);
+  }
+
+  const hashedPassword = await bcrypt.hash(organisationPassword, 10);
+
+  const updatedAccountPassword = await Account.findByIdAndUpdate(
+    organisationEmailExists?._id,
+    { accountPassword: hashedPassword },
+    { new: true }
+  ).populate("roleId");
+
+  if (!updatedAccountPassword) {
+    throwError("Failed to change password", 500);
+  }
+
+  // cretae an activity log for the organization account password change
+  // get the difference in old and new
+  const difference = diff(organisationEmailExists, updatedAccountPassword);
+  await logActivity(
+    updatedAccountPassword?._id,
+    updatedAccountPassword?._id,
+    `Changing organisation ${updatedAccountPassword?.accountName} password`,
+    "Account",
+    updatedAccountPassword?._id,
+    updatedAccountPassword?.accountName ?? undefined,
+    difference,
+    new Date()
+  );
+
+  // generate tokens
+  const tokenPayload = {
+    organisationId: updatedAccountPassword?.organisationId,
+    accountId: updatedAccountPassword?._id,
+    role: updatedAccountPassword?.roleId
+  };
+  const accessToken = generateAccessToken(tokenPayload);
+  const refreshToken = generateRefreshToken(tokenPayload);
+
+  res.cookie("refreshToken", refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 60 * 24 * 60 * 60 * 1000,
+    sameSite: "lax"
+  });
+
+  res.cookie("accessToken", accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 60 * 60 * 1000,
+    sameSite: "lax"
+  });
+
+  await ResetPassword.deleteOne({ resetCode: hashedResetCode });
+
+  const reshapedAccount = {
+    ...updatedAccountPassword?.toObject(),
+    accountId: updatedAccountPassword?._id
+  };
+
+  delete reshapedAccount._id;
+  delete reshapedAccount.accountPassword;
+  await logActivity(
+    updatedAccountPassword?.organisationId,
+    updatedAccountPassword?._id,
+    "User auto Sign In after password change",
+    "Account",
+    updatedAccountPassword?._id,
+    updatedAccountPassword?.accountName ?? undefined,
+    [],
+    new Date()
+  );
+  res.status(200).json(reshapedAccount);
 });
