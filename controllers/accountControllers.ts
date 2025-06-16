@@ -11,6 +11,15 @@ import { ResetPassword } from "../models/resetPasswordModel";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 
+// Extend Express Request interface to include userToken
+declare global {
+  namespace Express {
+    interface Request {
+      userToken?: any;
+    }
+  }
+}
+
 const logActivity = async (
   organisationId: any,
   accountId: any,
@@ -142,7 +151,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     orgAccount._id,
     { roleId: defaultRole._id },
     { new: true }
-  ).populate("roleId");
+  ).populate([{ path: "roleId" }, { path: "staffId" }, { path: "organisationId" }]);
 
   if (!updatedOrgAccount) {
     throwError("Failed to update organization account with default role", 500);
@@ -219,7 +228,11 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
   }
 
   // find the account by email
-  const account = await Account.findOne({ accountEmail: email }).populate("roleId");
+  const account = await Account.findOne({ accountEmail: email }).populate([
+    { path: "roleId" },
+    { path: "staffId" },
+    { path: "organisationId" }
+  ]);
   if (!account) {
     throwError(`No associated account found for email (${email}) - Please contact your admin.`, 401);
   }
@@ -269,6 +282,27 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
     [],
     new Date()
   );
+  res.status(200).json(reshapedAccount);
+});
+
+export const fetchAccount = asyncHandler(async (req: Request, res: Response) => {
+  const { organisationId, accountId, role } = req.userToken;
+
+  // find the account by email
+  const account = await Account.findById(accountId).populate([
+    { path: "roleId" },
+    { path: "staffId" },
+    { path: "organisationId" }
+  ]);
+
+  const reshapedAccount = {
+    ...account?.toObject(),
+    accountId: account?._id
+  };
+
+  delete reshapedAccount._id;
+  delete reshapedAccount.accountPassword;
+
   res.status(200).json(reshapedAccount);
 });
 
