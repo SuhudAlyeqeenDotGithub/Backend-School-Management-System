@@ -4,7 +4,7 @@ import { Request, Response } from "express";
 import { Account } from "../models/accountModel";
 import { throwError } from "../utils/utilsFunctions";
 import { Role } from "../models/roleModel";
-import { generateRefreshToken, generateAccessToken } from "../utils/utilsFunctions";
+import { generateRefreshToken, generateAccessToken, generateSearchText } from "../utils/utilsFunctions";
 import { ActivityLog } from "../models/activityLogModel";
 import { diff } from "deep-diff";
 import { ResetPassword } from "../models/resetPasswordModel";
@@ -29,7 +29,8 @@ const logActivity = async (
     recordId,
     recordName,
     recordChange,
-    logDate
+    logDate,
+    searchText: generateSearchText([accountId.toString(), logAction, recordModel, recordId.toString(), recordName])
   });
 
   if (!activityLog) {
@@ -69,7 +70,8 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     accountName: organisationName,
     accountEmail: organisationEmail,
     accountPhone: organisationPhone,
-    accountPassword: hashedPassword
+    accountPassword: hashedPassword,
+    searchText: generateSearchText([organisationName, organisationEmail, organisationPhone])
   });
 
   //   ensure the organization account was created successfully
@@ -268,6 +270,21 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
     new Date()
   );
   res.status(200).json(reshapedAccount);
+});
+
+export const signoutAccount = asyncHandler(async (req: Request, res: Response) => {
+  res.clearCookie("refreshToken", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax"
+  });
+  res.clearCookie("accessToken", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax"
+  });
+
+  res.status(200).json({ message: "Signed out successfully" });
 });
 
 export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Response) => {

@@ -10,6 +10,7 @@ const accountSchema = new Schema(
     accountEmail: { type: String, unique: true, required: true, index: true },
     accountPassword: { type: String, required: true },
     accountPhone: { type: String },
+    searchText: { type: String, required: true },
     roleId: { type: mongoose.Schema.Types.ObjectId, ref: "Role" },
     themes: {
       backgroundColor: { type: String, default: "#ffffff" },

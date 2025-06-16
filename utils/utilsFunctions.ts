@@ -6,6 +6,10 @@ export const throwError = (message: string, statusCode: number) => {
   throw error;
 };
 
+export const generateSearchText = (fields: any[]) => {
+  return fields.join("|");
+};
+
 export const generateAccessToken = (accountData: any) => {
   return jwt.sign(accountData, process.env.JWT_ACCESS_TOKEN_SECRET_KEY as string, {
     expiresIn: "1d"

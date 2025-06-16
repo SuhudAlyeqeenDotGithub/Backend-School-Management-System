@@ -25,6 +25,7 @@ const activityLogSchema = new Schema({
   recordId: { type: mongoose.Schema.Types.ObjectId, required: true, refPath: "recordModel" },
 
   recordName: String,
+  searchText: { type: String, required: true },
   recordChange: { type: [], required: true },
   logDate: { type: Date, default: Date.now, required: true }
 });

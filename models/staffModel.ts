@@ -23,10 +23,12 @@ const staffSchema = new Schema(
     staffNextOfKinRelationship: { type: String, required: true },
     staffNextOfKinPhone: { type: String, required: true },
     staffNextOfKinEmail: { type: String, required: true },
+    searchText: { type: String, required: true },
     staffQualification: {
       type: [{ qualificationName: String, schoolName: String, startDate: String, endDate: String }]
     }
   },
   { timestamps: true }
 );
+
 export const Staff = model("Staff", staffSchema);

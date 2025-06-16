@@ -1,4 +1,3 @@
-
 import mongoose from "mongoose";
 import { Schema, model } from "mongoose";
 
@@ -9,11 +8,21 @@ const roleSchema = new Schema(
     roleDescription: { type: String },
     absoluteAdmin: { type: Boolean, default: false },
     tabAccess: {
-      adminTab: {
+      Admin: {
         type: [String],
-        enum: ["createRole", "editRole", "deleteRole", "viewRole", "createUser", "editUser", "deleteUser", "viewUsers"]
+        enum: [
+          "createRole",
+          "editRole",
+          "deleteRole",
+          "viewRole",
+          "createUser",
+          "editUser",
+          "deleteUser",
+          "viewUsers",
+          "ViewActivityLog"
+        ]
       },
-      courseTab: {
+      Course: {
         type: [String],
         enum: [
           "createCourse",
@@ -30,19 +39,19 @@ const roleSchema = new Schema(
           "viewSubjects"
         ]
       },
-      studentTab: {
+      Student: {
         type: [String],
         enum: ["createStudent", "editStudent", "deleteStudent", "viewStudents"]
       },
-      enrollmentTab: {
+      Enrollment: {
         type: [String],
         enum: ["createEnrollment", "editEnrollment", "deleteEnrollment", "viewEnrollments"]
       },
-      attendanceTab: {
+      Attendance: {
         type: [String],
         enum: ["createAttendance", "editAttendance", "deleteAttendance", "viewAttendance"]
       },
-      staffTab: {
+      Staff: {
         type: [String],
         enum: [
           "createStaff",
