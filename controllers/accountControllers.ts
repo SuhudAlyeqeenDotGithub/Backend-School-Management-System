@@ -10,6 +10,7 @@ import { diff } from "deep-diff";
 import { ResetPassword } from "../models/resetPasswordModel";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+import jwt from "jsonwebtoken";
 
 // Extend Express Request interface to include userToken
 declare global {
@@ -319,6 +320,33 @@ export const signoutAccount = asyncHandler(async (req: Request, res: Response) =
   });
 
   res.status(200).json({ message: "Signed out successfully" });
+});
+
+export const refreshAccessToken = asyncHandler(async (req: Request, res: Response) => {
+  const { organisationId, accountId, role } = req.userToken;
+
+  const account = await Account.findById(accountId);
+
+  if (!account) {
+    throwError("Unknown Account", 403);
+  }
+
+  const tokenPayload = {
+    organisationId: account?.organisationId,
+    accountId: account?._id,
+    role: account?.roleId
+  };
+
+  const accessToken = generateAccessToken(tokenPayload);
+
+  res.cookie("accessToken", accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 60 * 60 * 1000,
+    sameSite: "lax"
+  });
+
+  res.status(201).json("Access token refresh successful");
 });
 
 export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Response) => {

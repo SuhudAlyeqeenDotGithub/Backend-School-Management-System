@@ -59,7 +59,7 @@ const refreshTokenChecker = (req: Request, res: Response, next: NextFunction) =>
           return next(error);
         }
 
-        req.userToken = decoded.userId;
+        req.userToken = decoded;
 
         next();
       }
