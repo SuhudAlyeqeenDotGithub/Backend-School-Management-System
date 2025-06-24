@@ -5,12 +5,11 @@ import { Account } from "../models/accountModel";
 import { throwError } from "../utils/utilsFunctions";
 import { Role } from "../models/roleModel";
 import { generateRefreshToken, generateAccessToken, generateSearchText } from "../utils/utilsFunctions";
-import { ActivityLog } from "../models/activityLogModel";
 import { diff } from "deep-diff";
 import { ResetPassword } from "../models/resetPasswordModel";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
-import jwt from "jsonwebtoken";
+import { logActivity } from "../utils/utilsFunctions";
 
 // Extend Express Request interface to include userToken
 declare global {
@@ -21,34 +20,6 @@ declare global {
   }
 }
 
-const logActivity = async (
-  organisationId: any,
-  accountId: any,
-  logAction: string,
-  recordModel: string,
-  recordId: any,
-  recordName?: string,
-  recordChange?: any,
-  logDate?: Date
-) => {
-  const activityLog = await ActivityLog.create({
-    organisationId,
-    accountId,
-    logAction,
-    recordModel,
-    recordId,
-    recordName,
-    recordChange,
-    logDate,
-    searchText: generateSearchText([accountId.toString(), logAction, recordModel, recordId.toString(), recordName])
-  });
-
-  if (!activityLog) {
-    throwError("Failed to log activity", 500);
-  }
-
-  return activityLog;
-};
 export const signupOrgAccount = asyncHandler(async (req: Request, res: Response) => {
   const { organisationName, organisationEmail, organisationPhone, organisationPassword, organisationConfirmPassword } =
     req.body;
@@ -115,6 +86,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   //   create a default role for the organization as absolute admin
   const defaultRole = await Role.create({
     organisationId: orgAccount._id,
+    accountId: orgAccount._id,
     roleName: `Absolute Admin for organization (${organisationName})`,
     roleDescription: `This is the default role for the organization (${organisationName}), it has all permissions`,
     absoluteAdmin: true
@@ -189,9 +161,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   );
 
   const tokenPayload = {
-    organisationId: updatedOrgAccount?.organisationId,
-    accountId: updatedOrgAccount?._id,
-    role: updatedOrgAccount?.roleId
+    accountId: updatedOrgAccount?._id
   };
   const accessToken = generateAccessToken(tokenPayload);
   const refreshToken = generateRefreshToken(tokenPayload);
@@ -245,9 +215,7 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
 
   // generate tokens
   const tokenPayload = {
-    organisationId: account?.organisationId,
-    accountId: account?._id,
-    role: account?.roleId
+    accountId: account?._id
   };
   const accessToken = generateAccessToken(tokenPayload);
   const refreshToken = generateRefreshToken(tokenPayload);
@@ -323,7 +291,7 @@ export const signoutAccount = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const refreshAccessToken = asyncHandler(async (req: Request, res: Response) => {
-  const { organisationId, accountId, role } = req.userToken;
+  const { accountId } = req.userToken;
 
   const account = await Account.findById(accountId);
 
@@ -332,9 +300,7 @@ export const refreshAccessToken = asyncHandler(async (req: Request, res: Respons
   }
 
   const tokenPayload = {
-    organisationId: account?.organisationId,
-    accountId: account?._id,
-    role: account?.roleId
+    accountId: account?._id
   };
 
   const accessToken = generateAccessToken(tokenPayload);
@@ -518,9 +484,7 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
 
   // generate tokens
   const tokenPayload = {
-    organisationId: updatedAccountPassword?.organisationId,
-    accountId: updatedAccountPassword?._id,
-    role: updatedAccountPassword?.roleId
+    accountId: updatedAccountPassword?._id
   };
   const accessToken = generateAccessToken(tokenPayload);
   const refreshToken = generateRefreshToken(tokenPayload);

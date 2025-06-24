@@ -3,72 +3,70 @@ import { Schema, model } from "mongoose";
 
 const roleSchema = new Schema(
   {
-    organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "OrgAccount", required: true },
+    organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
+    accountId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
     roleName: { type: String, required: true },
     roleDescription: { type: String },
     absoluteAdmin: { type: Boolean, default: false },
     tabAccess: {
-      Admin: {
-        type: [String],
-        enum: [
-          "createRole",
-          "editRole",
-          "deleteRole",
-          "viewRole",
-          "createUser",
-          "editUser",
-          "deleteUser",
-          "viewUsers",
-          "ViewActivityLog"
-        ]
-      },
-      Course: {
-        type: [String],
-        enum: [
-          "createCourse",
-          "editCourse",
-          "deleteCourse",
-          "viewCourses",
-          "createLevel",
-          "editLevel",
-          "deleteLevel",
-          "viewLevels",
-          "createSubject",
-          "editSubject",
-          "deleteSubject",
-          "viewSubjects"
-        ]
-      },
-      Student: {
-        type: [String],
-        enum: ["createStudent", "editStudent", "deleteStudent", "viewStudents"]
-      },
-      Enrollment: {
-        type: [String],
-        enum: ["createEnrollment", "editEnrollment", "deleteEnrollment", "viewEnrollments"]
-      },
-      Attendance: {
-        type: [String],
-        enum: ["createAttendance", "editAttendance", "deleteAttendance", "viewAttendance"]
-      },
-      Staff: {
-        type: [String],
-        enum: [
-          "createStaff",
-          "editStaff",
-          "deleteStaff",
-          "viewStaff",
-          "createStaffContract",
-          "editStaffContract",
-          "deleteStaffContract",
-          "viewStaffContracts"
-        ]
-      },
-      default: {}
+      type: [],
+      default: []
     }
   },
   { timestamps: true }
 );
+
+roleSchema.pre("save", function (next) {
+  if (this.absoluteAdmin === true) {
+    const allTabActions = {
+      Admin: [
+        "Create Role",
+        "Edit Role",
+        "Delete Role",
+        "View Role",
+        "Create User",
+        "Edit User",
+        "Delete User",
+        "View Users",
+        "View Activity Log"
+      ],
+      Course: [
+        "Create Course",
+        "Edit Course",
+        "Delete Course",
+        "View Courses",
+        "Create Level",
+        "Edit Level",
+        "Delete Level",
+        "View Levels",
+        "Create Subject",
+        "Edit Subject",
+        "Delete Subject",
+        "View Subjects"
+      ],
+      Student: ["Create Student", "Edit Student", "Delete Student", "View Students"],
+      Enrollment: ["Create Enrollment", "Edit Enrollment", "Delete Enrollment", "View Enrollments"],
+      Attendance: ["Create Attendance", "Edit Attendance", "Delete Attendance", "View Attendance"],
+      Staff: [
+        "Create Staff",
+        "Edit Staff",
+        "Delete Staff",
+        "View Staff",
+        "Create Staff Contract",
+        "Edit Staff Contract",
+        "Delete Staff Contract",
+        "View Staff Contracts"
+      ]
+    };
+
+    this.tabAccess = Object.entries(allTabActions).map(([tab, actions]) => ({
+      tab,
+      actions: actions.map((name) => ({ name, permission: true }))
+    }));
+  }
+
+  next();
+});
 
 export const Role = model("Role", roleSchema);
 
@@ -80,7 +78,8 @@ erollmentTabActions: [createEnrollment, editEnrollment, deleteEnrollment, viewEn
 attendanceTabActions: [createAttendance, editAttendance, deleteAttendance, viewAttendance],
 staffTabActions: [createStaff, editStaff, deleteStaff, viewStaff, createStaffContract, editStaffContract, deleteStaffContract, viewStaffContracts],
 
+tabAccess = {Admin:{"Create Role": false, "Edit Role: true"}}
 
-
+tabAccess = [{tab: "Admin", actions:[{name: "Create Role", permission: false}]}]
 
 */

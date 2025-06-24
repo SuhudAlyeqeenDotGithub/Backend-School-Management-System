@@ -10,7 +10,7 @@ const accountSchema = new Schema(
     accountEmail: { type: String, unique: true, required: true, index: true },
     accountPassword: { type: String, required: true },
     accountPhone: { type: String },
-    accountStatus: { type: String, required: true, default: "Active", enum: ["Active", "Inactive"] },
+    accountStatus: { type: String, required: true, default: "Active", enum: ["Active", "Locked"] },
     searchText: { type: String, required: true },
     roleId: { type: mongoose.Schema.Types.ObjectId, ref: "Role" },
     themes: {

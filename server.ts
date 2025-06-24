@@ -6,6 +6,8 @@ dotenv.config();
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import accountRoutes from "./routes/accountRoutes";
+import adminRouters from "./routes/adminRoutes";
+import { accessTokenChecker } from "./middleware/checkAccess";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -21,6 +23,7 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/alyeqeenschoolapp/api/", accountRoutes);
+app.use("/alyeqeenschoolapp/api/", accessTokenChecker, adminRouters);
 
 app.use(errorHandler);
 
