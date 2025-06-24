@@ -36,7 +36,7 @@ export const logActivity = async (
   recordModel: string,
   recordId: any,
   recordName?: string,
-  recordChange?: any,
+  recordChange?: {}[],
   logDate?: Date
 ) => {
   const activityLog = await ActivityLog.create({
@@ -81,4 +81,22 @@ export const confirmRole = async (roleId: string) => {
   }
 
   return role;
+};
+
+export const fetchRoles = async (asWho: string, orgId: string) => {
+  if (asWho === "Absolute Admin") {
+    const roles = await Role.find({ organisationId: orgId }).populate("accountId");
+    if (!roles) {
+      throwError("Error fetching roles", 500);
+    }
+    return roles;
+  } else {
+    const roles = await Role.find({ organisationId: orgId, absoluteAdmin: false }).populate("accountId");
+    if (!roles) {
+      throwError("Error fetching roles", 500);
+    }
+    return roles;
+  }
+
+  return;
 };

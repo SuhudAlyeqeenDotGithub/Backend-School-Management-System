@@ -60,7 +60,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     throwError("Failed to create organization account", 500);
   }
 
-  // cretae an activity log for the organization account creation
+  // create an activity log for the organization account creation
   await logActivity(
     orgAccount._id,
     orgAccount._id,
