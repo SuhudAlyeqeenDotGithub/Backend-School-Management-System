@@ -191,6 +191,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   res.status(201).json(reshapedAccount);
 });
 
+// controller to handle signin
 export const signinAccount = asyncHandler(async (req: Request, res: Response) => {
   // get the email and password from the request body
   const { email, password } = req.body;
@@ -290,6 +291,7 @@ export const signoutAccount = asyncHandler(async (req: Request, res: Response) =
   res.status(200).json({ message: "Signed out successfully" });
 });
 
+// controller to refresh token
 export const refreshAccessToken = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
 
@@ -311,7 +313,7 @@ export const refreshAccessToken = asyncHandler(async (req: Request, res: Respons
     maxAge: 60 * 60 * 1000,
     sameSite: "lax"
   });
-
+  console.log("Access token refresh successful");
   res.status(201).json("Access token refresh successful");
 });
 
