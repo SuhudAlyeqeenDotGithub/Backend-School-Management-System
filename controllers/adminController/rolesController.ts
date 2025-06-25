@@ -28,7 +28,7 @@ export const getRoles = asyncHandler(async (req: Request, res: Response) => {
   const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
-  if (accountStatus === "Locked") {
+  if (accountStatus === "Locked" || accountStatus !== "Active") {
     throwError("Your account is no longer active - Please contact your admin", 409);
   }
 
@@ -67,7 +67,7 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
   const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
-  if (accountStatus === "Locked") {
+  if (accountStatus === "Locked" || accountStatus !== "Active") {
     throwError("Your account is no longer active - Please contact your admin", 409);
   }
   const hasAccess = creatorTabAccess
@@ -142,7 +142,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   const { roleId: creatorRoleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
-  if (accountStatus === "Locked") {
+  if (accountStatus === "Locked" || accountStatus !== "Active") {
     throwError("Your account is no longer active - Please contact your admin", 409);
   }
 
@@ -188,6 +188,88 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
     "Role Update",
     "Role",
     updatedRole?._id,
+    roleName,
+    difference,
+    new Date()
+  );
+
+  if (absoluteAdmin || hasAccess) {
+    const roles = await fetchRoles(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
+
+    if (!roles) {
+      throwError("Error fetching roles", 500);
+    }
+    res.status(201).json(roles);
+    return;
+  }
+
+  throwError("Unauthorised Action: You do not have access to view roles - Please contact your admin", 403);
+});
+
+// controller to handle deleting roles
+export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId } = req.userToken;
+  const { roleIdToDelete, roleName, roleDescription, absoluteAdmin: roleAbsoluteAdmin, tabAccess } = req.body;
+
+  if (!roleIdToDelete) {
+    throwError("Unknown delete request - Please try again", 400);
+  }
+
+  if (roleAbsoluteAdmin === undefined) {
+    throwError("Unknown role type - Please try again", 400);
+  }
+
+  if (roleAbsoluteAdmin) {
+    throwError("Disallowd Action: This role cannot be deleted as it is the default Absolute Admin role", 403);
+  }
+
+  // confirm user
+  const account = await confirmAccount(accountId);
+
+  // confirm organisation
+  const organisation = await confirmAccount(account!.organisationId!._id.toString());
+
+  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+
+  if (accountStatus === "Locked" || accountStatus !== "Active") {
+    throwError("Your account is no longer active - Please contact your admin", 409);
+  }
+
+  const hasAccess = creatorTabAccess
+    .filter(({ tab, actions }: any) => tab === "Admin")[0]
+    .actions.some(({ name, permission }: any) => name === "Delete Role");
+
+  if (!absoluteAdmin || !hasAccess) {
+    throwError("Unauthorised Action: You do not have access to delete roles - Please contact your admin", 403);
+  }
+
+  const deletedRole = await Role.findByIdAndDelete(roleIdToDelete);
+
+  if (!deletedRole) {
+    throwError("Error deleting role - Please try again", 500);
+  }
+
+  const original = {
+    roleIdToDelete,
+    roleName,
+    roleDescription,
+    tabAccess
+  };
+
+  const updated = {
+    roleId: deletedRole?._id,
+    roleName: deletedRole?.roleName,
+    roleDescription: deletedRole?.roleDescription,
+    tabAccess: deletedRole?.tabAccess
+  };
+  const difference = diff(original, updated);
+  await logActivity(
+    account?.organisationId,
+    accountId,
+    "Role Delete",
+    "Role",
+    deletedRole?._id,
     roleName,
     difference,
     new Date()
