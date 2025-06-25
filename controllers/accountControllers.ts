@@ -160,6 +160,12 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     new Date()
   );
 
+  const roleId = updatedOrgAccount?.roleId;
+  const noRole = roleId === null || roleId === undefined || !roleId;
+  if (noRole) {
+    throwError("Couldn't fetch user role - Please contact your admin", 400);
+  }
+
   const tokenPayload = {
     accountId: updatedOrgAccount?._id
   };
@@ -214,6 +220,11 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
     throwError("Incorrect password for associated account", 401);
   }
 
+  const roleId = account?.roleId;
+  const noRole = roleId === null || roleId === undefined || !roleId;
+  if (noRole) {
+    throwError("Couldn't fetch user role - Please contact your admin", 400);
+  }
   // generate tokens
   const tokenPayload = {
     accountId: account?._id
@@ -242,6 +253,7 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
 
   delete reshapedAccount._id;
   delete reshapedAccount.accountPassword;
+
   await logActivity(
     account?.organisationId,
     account?._id,
@@ -256,7 +268,7 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
 });
 
 export const fetchAccount = asyncHandler(async (req: Request, res: Response) => {
-  const { organisationId, accountId, role } = req.userToken;
+  const { accountId } = req.userToken;
 
   // find the account by email
   const account = await Account.findById(accountId).populate([
@@ -265,6 +277,14 @@ export const fetchAccount = asyncHandler(async (req: Request, res: Response) => 
     { path: "organisationId" }
   ]);
 
+  if (!account) {
+    throwError("Error fetching account data", 500);
+  }
+  const roleId = account?.roleId;
+  const noRole = roleId === null || roleId === undefined || !roleId;
+  if (noRole) {
+    throwError("Couldn't fetch user role - Please contact your admin", 400);
+  }
   const reshapedAccount = {
     ...account?.toObject(),
     accountId: account?._id
@@ -483,6 +503,12 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
     difference,
     new Date()
   );
+
+  const roleId = updatedAccountPassword?.roleId;
+  const noRole = roleId === null || roleId === undefined || !roleId;
+  if (noRole) {
+    throwError("Couldn't fetch user role - Please contact your admin", 400);
+  }
 
   // generate tokens
   const tokenPayload = {
