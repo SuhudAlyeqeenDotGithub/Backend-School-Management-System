@@ -2,7 +2,7 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { Role } from "../../models/roleModel";
 import { Account } from "../../models/accountModel";
-import { confirmAccount, confirmRole, throwError, fetchRoles } from "../../utils/utilsFunctions";
+import { confirmAccount, confirmRole, throwError, fetchUsers } from "../../utils/utilsFunctions";
 import { logActivity } from "../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
@@ -13,7 +13,7 @@ declare global {
     }
   }
 }
-export const getRoles = asyncHandler(async (req: Request, res: Response) => {
+export const getUsers = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
 
   // confirm user
@@ -33,20 +33,20 @@ export const getRoles = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const hasAccess = tabAccess
-    .filter(({ tab, actions }: any) => tab === "Admin")[0]
-    .actions.some(({ name, permission }: any) => name === "View Roles");
+    .filter(({ tab }: any) => tab === "Admin")[0]
+    .actions.some(({ name }: any) => name === "View Users");
 
   if (absoluteAdmin || hasAccess) {
-    const roles = await fetchRoles(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
+    const users = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
 
-    if (!roles) {
-      throwError("Error fetching roles", 500);
+    if (!users) {
+      throwError("Error fetching users", 500);
     }
-    res.status(201).json(roles);
+    res.status(201).json(users);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view roles - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view users - Please contact your admin", 403);
 });
 
 // controller to handle role creation
@@ -75,7 +75,7 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
     .actions.some(({ name, permission }: any) => name === "Create Role");
 
   if (!absoluteAdmin || !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to create roles - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to create users - Please contact your admin", 403);
   }
 
   const newRole = await Role.create({
@@ -112,7 +112,7 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
   );
 
   if (absoluteAdmin || hasAccess) {
-    const roles = await fetchRoles(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
+    const roles = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
 
     if (!roles) {
       throwError("Error fetching roles", 500);
@@ -194,7 +194,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   );
 
   if (absoluteAdmin || hasAccess) {
-    const roles = await fetchRoles(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
+    const roles = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
 
     if (!roles) {
       throwError("Error fetching roles", 500);
@@ -276,7 +276,7 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   );
 
   if (absoluteAdmin || hasAccess) {
-    const roles = await fetchRoles(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
+    const roles = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
 
     if (!roles) {
       throwError("Error fetching roles", 500);

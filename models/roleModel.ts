@@ -23,12 +23,12 @@ roleSchema.pre("save", function (next) {
         "Create Role",
         "Edit Role",
         "Delete Role",
-        "View Role",
+        "View Roles",
         "Create User",
         "Edit User",
         "Delete User",
         "View Users",
-        "View Activity Log"
+        "View Activity Logs"
       ],
       Course: [
         "Create Course",
@@ -46,7 +46,7 @@ roleSchema.pre("save", function (next) {
       ],
       Student: ["Create Student", "Edit Student", "Delete Student", "View Students"],
       Enrollment: ["Create Enrollment", "Edit Enrollment", "Delete Enrollment", "View Enrollments"],
-      Attendance: ["Create Attendance", "Edit Attendance", "Delete Attendance", "View Attendance"],
+      Attendance: ["Create Attendance", "Edit Attendance", "Delete Attendance", "View Attendances"],
       Staff: [
         "Create Staff",
         "Edit Staff",

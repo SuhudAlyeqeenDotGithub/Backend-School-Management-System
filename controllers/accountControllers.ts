@@ -124,7 +124,11 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     orgAccount._id,
     { roleId: defaultRole._id },
     { new: true }
-  ).populate([{ path: "roleId" }, { path: "staffId" }, { path: "organisationId" }]);
+  ).populate([
+    { path: "roleId" },
+    { path: "staffId" },
+    { path: "organisationId", select: "organisationId accountName" }
+  ]);
 
   if (!updatedOrgAccount) {
     throwError("Failed to update organization account with default role", 500);
@@ -209,7 +213,7 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
   const account = await Account.findOne({ accountEmail: email }).populate([
     { path: "roleId" },
     { path: "staffId" },
-    { path: "organisationId" }
+    { path: "organisationId", select: "organisationId accountName" }
   ]);
   if (!account) {
     throwError(`No associated account found for email (${email}) - Please contact your admin.`, 401);
@@ -274,7 +278,7 @@ export const fetchAccount = asyncHandler(async (req: Request, res: Response) => 
   const account = await Account.findById(accountId).populate([
     { path: "roleId" },
     { path: "staffId" },
-    { path: "organisationId" }
+    { path: "organisationId", select: "organisationId accountName" }
   ]);
 
   if (!account) {
@@ -333,7 +337,6 @@ export const refreshAccessToken = asyncHandler(async (req: Request, res: Respons
     maxAge: 60 * 60 * 1000,
     sameSite: "lax"
   });
-  console.log("Access token refresh successful");
   res.status(201).json("Access token refresh successful");
 });
 

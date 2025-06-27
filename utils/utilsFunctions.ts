@@ -60,11 +60,7 @@ export const logActivity = async (
 
 // function to confirm account existence
 export const confirmAccount = async (accountId: string) => {
-  const account = await Account.findById(accountId).populate([
-    { path: "roleId" },
-    { path: "staffId" },
-    { path: "organisationId" }
-  ]);
+  const account = await Account.findById(accountId).populate([{ path: "roleId" }, { path: "staffId" }]);
   if (!account) {
     throwError("This account does not exist", 401);
   }
@@ -97,6 +93,20 @@ export const fetchRoles = async (asWho: string, orgId: string) => {
     }
     return roles;
   }
+};
 
-  return;
+export const fetchUsers = async (asWho: string, orgId: string) => {
+  if (asWho === "Absolute Admin") {
+    const users = await Account.find({ organisationId: orgId }).populate("roleId");
+    if (!users) {
+      throwError("Error fetching users", 500);
+    }
+    return users;
+  } else {
+    const users = await Account.find({ organisationId: orgId, accountType: "User" }).populate("accountId");
+    if (!users) {
+      throwError("Error fetching users", 500);
+    }
+    return users;
+  }
 };

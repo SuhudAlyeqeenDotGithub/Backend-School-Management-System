@@ -12,11 +12,7 @@ const accountSchema = new Schema(
     accountPhone: { type: String },
     accountStatus: { type: String, required: true, default: "Active", enum: ["Active", "Locked"] },
     searchText: { type: String, required: true },
-    roleId: { type: mongoose.Schema.Types.ObjectId, ref: "Role" },
-    themes: {
-      backgroundColor: { type: String, default: "#ffffff" },
-      foregroundColor: { type: String, default: "#000000" }
-    }
+    roleId: { type: mongoose.Schema.Types.ObjectId, ref: "Role" }
   },
   { timestamps: true }
 );
