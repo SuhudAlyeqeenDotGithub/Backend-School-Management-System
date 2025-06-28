@@ -26,7 +26,7 @@ export const getRoles = asyncHandler(async (req: Request, res: Response) => {
   const role = await confirmRole(account!.roleId!._id.toString());
 
   const { roleId, accountStatus } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess, _id: selfRoleId } = roleId;
 
   if (accountStatus === "Locked" || accountStatus !== "Active") {
     throwError("Your account is no longer active - Please contact your admin", 409);
@@ -37,7 +37,11 @@ export const getRoles = asyncHandler(async (req: Request, res: Response) => {
     .actions.some(({ name, permission }: any) => name === "View Roles");
 
   if (absoluteAdmin || hasAccess) {
-    const roles = await fetchRoles(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
+    const roles = await fetchRoles(
+      absoluteAdmin ? "Absolute Admin" : "User",
+      organisation!._id.toString(),
+      selfRoleId.toString()
+    );
 
     if (!roles) {
       throwError("Error fetching roles", 500);
@@ -65,7 +69,7 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
   const organisation = await confirmAccount(account!.organisationId!._id.toString());
 
   const { roleId, accountStatus } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess, _id: selfRoleId } = roleId;
 
   if (accountStatus === "Locked" || accountStatus !== "Active") {
     throwError("Your account is no longer active - Please contact your admin", 409);
@@ -112,7 +116,11 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
   );
 
   if (absoluteAdmin || hasAccess) {
-    const roles = await fetchRoles(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
+    const roles = await fetchRoles(
+      absoluteAdmin ? "Absolute Admin" : "User",
+      organisation!._id.toString(),
+      selfRoleId.toString()
+    );
 
     if (!roles) {
       throwError("Error fetching roles", 500);
@@ -140,7 +148,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   const organisation = await confirmAccount(account!.organisationId!._id.toString());
 
   const { roleId: creatorRoleId, accountStatus } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess, _id: selfRoleId } = creatorRoleId;
 
   if (accountStatus === "Locked" || accountStatus !== "Active") {
     throwError("Your account is no longer active - Please contact your admin", 409);
@@ -194,7 +202,11 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   );
 
   if (absoluteAdmin || hasAccess) {
-    const roles = await fetchRoles(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
+    const roles = await fetchRoles(
+      absoluteAdmin ? "Absolute Admin" : "User",
+      organisation!._id.toString(),
+      selfRoleId.toString()
+    );
 
     if (!roles) {
       throwError("Error fetching roles", 500);
@@ -230,7 +242,7 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   const organisation = await confirmAccount(account!.organisationId!._id.toString());
 
   const { roleId: creatorRoleId, accountStatus } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess, _id: selfRoleId } = creatorRoleId;
 
   if (accountStatus === "Locked" || accountStatus !== "Active") {
     throwError("Your account is no longer active - Please contact your admin", 409);
@@ -276,7 +288,11 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   );
 
   if (absoluteAdmin || hasAccess) {
-    const roles = await fetchRoles(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
+    const roles = await fetchRoles(
+      absoluteAdmin ? "Absolute Admin" : "User",
+      organisation!._id.toString(),
+      selfRoleId.toString()
+    );
 
     if (!roles) {
       throwError("Error fetching roles", 500);

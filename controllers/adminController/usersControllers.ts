@@ -39,7 +39,7 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
     .actions.some(({ name }: any) => name === "View Users");
 
   if (absoluteAdmin || hasAccess) {
-    const users = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
+    const users = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString(), accountId);
 
     if (!users) {
       throwError("Error fetching users", 500);
@@ -131,7 +131,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   );
 
   if (absoluteAdmin || hasAccess) {
-    const users = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
+    const users = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString(), accountId);
 
     if (!users) {
       throwError("Error fetching users", 500);
@@ -213,7 +213,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   );
 
   if (absoluteAdmin || hasAccess) {
-    const users = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
+    const users = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString(), accountId);
 
     if (!users) {
       throwError("Error fetching users", 500);
@@ -295,12 +295,12 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   );
 
   if (absoluteAdmin || hasAccess) {
-    const roles = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString());
+    const users = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString(), accountId);
 
-    if (!roles) {
-      throwError("Error fetching roles", 500);
+    if (!users) {
+      throwError("Error fetching users", 500);
     }
-    res.status(201).json(roles);
+    res.status(201).json(users);
     return;
   }
 

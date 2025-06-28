@@ -79,7 +79,7 @@ export const confirmRole = async (roleId: string) => {
   return role;
 };
 
-export const fetchRoles = async (asWho: string, orgId: string) => {
+export const fetchRoles = async (asWho: string, orgId: string, selfId: string) => {
   if (asWho === "Absolute Admin") {
     const roles = await Role.find({ organisationId: orgId }).populate("accountId");
     if (!roles) {
@@ -87,7 +87,9 @@ export const fetchRoles = async (asWho: string, orgId: string) => {
     }
     return roles;
   } else {
-    const roles = await Role.find({ organisationId: orgId, absoluteAdmin: false }).populate("accountId");
+    const roles = await Role.find({ organisationId: orgId, absoluteAdmin: false, _id: { $ne: selfId } }).populate(
+      "accountId"
+    );
     if (!roles) {
       throwError("Error fetching roles", 500);
     }
@@ -95,7 +97,7 @@ export const fetchRoles = async (asWho: string, orgId: string) => {
   }
 };
 
-export const fetchUsers = async (asWho: string, orgId: string) => {
+export const fetchUsers = async (asWho: string, orgId: string, selfId: string) => {
   if (asWho === "Absolute Admin") {
     const users = await Account.find({ organisationId: orgId }).populate("roleId");
     if (!users) {
@@ -103,7 +105,9 @@ export const fetchUsers = async (asWho: string, orgId: string) => {
     }
     return users;
   } else {
-    const users = await Account.find({ organisationId: orgId, accountType: "User" }).populate("roleId");
+    const users = await Account.find({ organisationId: orgId, accountType: "User", _id: { $ne: selfId } }).populate(
+      "roleId"
+    );
     if (!users) {
       throwError("Error fetching users", 500);
     }
