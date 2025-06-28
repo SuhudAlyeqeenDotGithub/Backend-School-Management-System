@@ -103,7 +103,7 @@ export const fetchUsers = async (asWho: string, orgId: string) => {
     }
     return users;
   } else {
-    const users = await Account.find({ organisationId: orgId, accountType: "User" }).populate("accountId");
+    const users = await Account.find({ organisationId: orgId, accountType: "User" }).populate("roleId");
     if (!users) {
       throwError("Error fetching users", 500);
     }

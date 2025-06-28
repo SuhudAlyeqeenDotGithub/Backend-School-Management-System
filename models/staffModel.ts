@@ -3,7 +3,7 @@ const { Schema, model } = mongoose;
 
 const staffSchema = new Schema(
   {
-    staffCustomId: { type: String },
+    staffCustomId: { type: String, unique: true },
     staffFirstName: { type: String, required: true },
     staffMiddleName: { type: String },
     staffLastName: { type: String, required: true },
