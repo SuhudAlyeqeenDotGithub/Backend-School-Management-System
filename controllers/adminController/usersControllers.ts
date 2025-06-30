@@ -148,7 +148,21 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
 // controller to handle role update
 export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { userId, staffId, userName, userEmail, userPassword, userStatus, roleId: userRoleId } = req.body;
+  const {
+    onEditUserIsAbsoluteAdmin,
+    userId,
+    staffId,
+    userName,
+    userEmail,
+    userPassword,
+    userStatus,
+    roleId: userRoleId,
+    passwordChanged
+  } = req.body;
+
+  if (passwordChanged === undefined || passwordChanged === null) {
+    throwError("Unknown Error with password state", 400);
+  }
 
   if (!userName || !userEmail || !userPassword || !userRoleId || !userStatus) {
     throwError("Please fill all required fields", 400);
@@ -159,17 +173,25 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
-  if (!staffId && !absoluteAdmin) {
+  // confirm organisation
+  const organisation = await confirmAccount(account!.organisationId!._id.toString());
+
+  if (!staffId && !onEditUserIsAbsoluteAdmin) {
     throwError("Please provide staff ID", 400);
+  }
+
+  if (onEditUserIsAbsoluteAdmin && userStatus !== "Active") {
+    throwError("Disallowed: Default Absolute Admin status cannot be changed - Locked", 403);
+  }
+
+  if (onEditUserIsAbsoluteAdmin && userRoleId !== organisation?.roleId?._id.toString()) {
+    throwError("Disallowed: Another role cannot be assigned to the Default Absolute Admin", 403);
   }
 
   const staffExists = await Staff.findById(staffId);
   if (staffExists) {
     throwError("Please provide the user staff ID related to their staff record - or create one for them", 409);
   }
-
-  // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
 
   if (accountStatus === "Locked" || accountStatus !== "Active") {
     throwError("Your account is no longer active - Please contact your admin", 409);
@@ -178,7 +200,6 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const hasAccess = creatorTabAccess
     .filter(({ tab }: any) => tab === "Admin")[0]
     .actions.some(({ name }: any) => name === "dit User");
-  console.log("hasAccess", hasAccess);
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to edit users - Please contact your admin", 403);
@@ -199,9 +220,8 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     throwError("Change01@Password123? cannot be used for password as it is reserved", 400);
   }
 
-  const noPasswordChange = await bcrypt.compare(userPassword, originalUser!.accountPassword);
-
-  if (noPasswordChange) {
+  if (!passwordChanged) {
+    console.log("not changing password");
     updatedUser = await Account.findByIdAndUpdate(userId, {
       staffId,
       accountName: userName,
@@ -211,8 +231,12 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
       roleId: userRoleId,
       searchText: generateSearchText([staffId, userEmail, userName, userStatus])
     });
-  } else {
+  }
+  if (passwordChanged) {
+    console.log("changing password");
     const hasedPassword = await bcrypt.hash(userPassword, 10);
+    console.log("original new password is", userPassword);
+    console.log("hashed new password is", hasedPassword);
     if (hasedPassword) {
       updatedUser = await Account.findByIdAndUpdate(userId, {
         staffId,
