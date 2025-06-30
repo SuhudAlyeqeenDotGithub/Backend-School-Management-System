@@ -56,7 +56,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { staffId, userName, userEmail, userPassword, userStatus, roleId: userRoleId } = req.body;
 
-  if (!userName || !userEmail || !userPassword || !userRoleId) {
+  if (!staffId || !userName || !userEmail || !userPassword || !userRoleId) {
     throwError("Please fill all required fields", 400);
   }
 
@@ -66,7 +66,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const staffExists = await Staff.findById(staffId);
-  if (!staffExists) {
+  if (staffExists) {
     throwError("Please provide the user staff ID related to their staff record - or create one for them", 409);
   }
 
@@ -82,11 +82,13 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   if (accountStatus === "Locked" || accountStatus !== "Active") {
     throwError("Your account is no longer active - Please contact your admin", 409);
   }
+
   const hasAccess = creatorTabAccess
     .filter(({ tab }: any) => tab === "Admin")[0]
-    .actions.some(({ name }: any) => name === "Create Role");
+    .actions.some(({ name }: any) => name === "Create User");
+  console.log("hasAccess", hasAccess);
 
-  if (!absoluteAdmin || !hasAccess) {
+  if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to create users - Please contact your admin", 403);
   }
 
@@ -144,70 +146,110 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // controller to handle role update
-export const updateRole = asyncHandler(async (req: Request, res: Response) => {
+export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { roleId, roleName, roleDescription, tabAccess } = req.body;
+  const { userId, staffId, userName, userEmail, userPassword, userStatus, roleId: userRoleId } = req.body;
 
-  if (!roleName) {
-    throwError("Please provide the role name", 400);
+  if (!userName || !userEmail || !userPassword || !userRoleId || !userStatus) {
+    throwError("Please fill all required fields", 400);
   }
 
   // confirm user
   const account = await confirmAccount(accountId);
+  const { roleId, accountStatus } = account as any;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+
+  if (!staffId && !absoluteAdmin) {
+    throwError("Please provide staff ID", 400);
+  }
+
+  const staffExists = await Staff.findById(staffId);
+  if (staffExists) {
+    throwError("Please provide the user staff ID related to their staff record - or create one for them", 409);
+  }
 
   // confirm organisation
   const organisation = await confirmAccount(account!.organisationId!._id.toString());
-
-  const { roleId: creatorRoleId, accountStatus } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
   if (accountStatus === "Locked" || accountStatus !== "Active") {
     throwError("Your account is no longer active - Please contact your admin", 409);
   }
 
   const hasAccess = creatorTabAccess
-    .filter(({ tab, actions }: any) => tab === "Admin")[0]
-    .actions.some(({ name, permission }: any) => name === "Edit Role");
+    .filter(({ tab }: any) => tab === "Admin")[0]
+    .actions.some(({ name }: any) => name === "dit User");
+  console.log("hasAccess", hasAccess);
 
-  if (!absoluteAdmin || !hasAccess) {
+  if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to edit users - Please contact your admin", 403);
   }
 
-  const updatedRole = await Role.findByIdAndUpdate(
-    roleId,
-    {
-      roleName,
-      roleDescription,
-      tabAccess
-    },
-    { new: true }
-  ).populate("accountId");
+  const originalUser = await Account.findById(
+    userId,
+    "_id accountName accountEmail roleId staffId accountPassword accountStatus"
+  );
 
-  if (!updatedRole) {
-    throwError("Error updating role", 500);
+  if (!originalUser) {
+    throwError("An error occured whilst getting old user data", 500);
   }
 
-  const original = {
-    roleId,
-    roleName,
-    roleDescription,
-    tabAccess
-  };
+  let updatedUser;
+
+  if (userPassword === "Change01@Password123?") {
+    throwError("Change01@Password123? cannot be used for password as it is reserved", 400);
+  }
+
+  const noPasswordChange = await bcrypt.compare(userPassword, originalUser!.accountPassword);
+
+  if (noPasswordChange) {
+    updatedUser = await Account.findByIdAndUpdate(userId, {
+      staffId,
+      accountName: userName,
+      accountEmail: userEmail,
+      accountPassword: userPassword,
+      accountStatus: userStatus,
+      roleId: userRoleId,
+      searchText: generateSearchText([staffId, userEmail, userName, userStatus])
+    });
+  } else {
+    const hasedPassword = await bcrypt.hash(userPassword, 10);
+    if (hasedPassword) {
+      updatedUser = await Account.findByIdAndUpdate(userId, {
+        staffId,
+        accountName: userName,
+        accountEmail: userEmail,
+        accountPassword: hasedPassword,
+        accountStatus: userStatus,
+        roleId: userRoleId,
+        searchText: generateSearchText([staffId, userEmail, userName, userStatus])
+      });
+    }
+  }
+
+  if (!updatedUser) {
+    throwError("Error updating user", 500);
+  }
+
+  const original = originalUser;
 
   const updated = {
-    roleId: updatedRole?._id,
-    roleName: updatedRole?.roleName,
-    roleDescription: updatedRole?.roleDescription,
-    tabAccess: updatedRole?.tabAccess
+    _id: updatedUser?._id,
+    staffId: updatedUser?.staffId,
+    accountName: updatedUser?.accountName,
+    accountEmail: updatedUser?.accountEmail,
+    accountPassword: updatedUser?.accountPassword,
+    accountStatus: updatedUser?.accountStatus,
+    roleId: updatedUser?.roleId
   };
   const difference = diff(original, updated);
+
   await logActivity(
     account?.organisationId,
     accountId,
-    "Role Update",
-    "Role",
-    updatedRole?._id,
-    roleName,
+    "User Update",
+    "Account",
+    updatedUser?._id,
+    updatedUser?.accountName ?? "",
     difference,
     new Date()
   );
@@ -259,7 +301,7 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
     .filter(({ tab, actions }: any) => tab === "Admin")[0]
     .actions.some(({ name, permission }: any) => name === "Delete Role");
 
-  if (!absoluteAdmin || !hasAccess) {
+  if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete roles - Please contact your admin", 403);
   }
 

@@ -78,7 +78,7 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
     .filter(({ tab, actions }: any) => tab === "Admin")[0]
     .actions.some(({ name, permission }: any) => name === "Create Role");
 
-  if (!absoluteAdmin || !hasAccess) {
+  if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to create roles - Please contact your admin", 403);
   }
 
@@ -158,8 +158,14 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
     .filter(({ tab, actions }: any) => tab === "Admin")[0]
     .actions.some(({ name, permission }: any) => name === "Edit Role");
 
-  if (!absoluteAdmin || !hasAccess) {
+  if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to edit roles - Please contact your admin", 403);
+  }
+
+  const originalRole = await Role.findById(roleId, " roleId roleName roleDescription tabAccess");
+
+  if (!originalRole) {
+    throwError("An error occured whilst getting old role data", 500);
   }
 
   const updatedRole = await Role.findByIdAndUpdate(
@@ -177,10 +183,10 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const original = {
-    roleId,
-    roleName,
-    roleDescription,
-    tabAccess
+    roleId: originalRole?._id,
+    roleName: originalRole?.roleName,
+    roleDescription: originalRole?.roleDescription,
+    tabAccess: originalRole?.tabAccess
   };
 
   const updated = {
@@ -252,8 +258,14 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
     .filter(({ tab, actions }: any) => tab === "Admin")[0]
     .actions.some(({ name, permission }: any) => name === "Delete Role");
 
-  if (!absoluteAdmin || !hasAccess) {
+  if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete roles - Please contact your admin", 403);
+  }
+
+  const originalRole = await Role.findById(roleIdToDelete, " roleId roleName roleDescription tabAccess");
+
+  if (!originalRole) {
+    throwError("An error occured whilst getting old role data", 500);
   }
 
   const deletedRole = await Role.findByIdAndDelete(roleIdToDelete);
@@ -263,10 +275,10 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const original = {
-    roleIdToDelete,
-    roleName,
-    roleDescription,
-    tabAccess
+    roleId: originalRole?._id,
+    roleName: originalRole?.roleName,
+    roleDescription: originalRole?.roleDescription,
+    tabAccess: originalRole?.tabAccess
   };
 
   const updated = {
