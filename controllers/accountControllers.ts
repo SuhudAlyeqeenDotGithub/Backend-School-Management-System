@@ -351,6 +351,18 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
     throwError("Unknown Email. Please sign up if you have no existing account", 409);
   }
 
+  const roleExist = await Role.findById(accountExist?.roleId);
+  if (!roleExist) {
+    throwError("Could not fetch role associated with account - Please contact your admin", 409);
+  }
+
+  if (roleExist?.absoluteAdmin !== true) {
+    throwError(
+      "You do not have the permission to change password - Please contact your admin for any password change",
+      403
+    );
+  }
+
   const resetCode = crypto.randomBytes(32).toString("hex");
   const hashedResetCode = crypto.createHash("sha256").update(resetCode).digest("hex");
 
@@ -452,6 +464,18 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
   const organisationEmailExists = await Account.findOne({ accountEmail: organisationEmail });
   if (!organisationEmailExists) {
     throwError(`Organization with email ${organisationEmail} does not exist. Please sign up`, 409);
+  }
+
+  const roleExist = await Role.findById(organisationEmailExists?.roleId);
+  if (!roleExist) {
+    throwError("Could not fetch role associated with account - Please contact your admin", 409);
+  }
+
+  if (roleExist?.absoluteAdmin !== true) {
+    throwError(
+      "You do not have the permission to change password - Please contact your admin for any password change",
+      403
+    );
   }
   if (!code) {
     throwError(
