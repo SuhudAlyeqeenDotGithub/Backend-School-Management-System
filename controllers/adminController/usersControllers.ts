@@ -221,7 +221,6 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   }
 
   if (!passwordChanged) {
-    console.log("not changing password");
     updatedUser = await Account.findByIdAndUpdate(userId, {
       staffId,
       accountName: userName,
@@ -233,7 +232,6 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     });
   }
   if (passwordChanged) {
-    console.log("changing password");
     const hasedPassword = await bcrypt.hash(userPassword, 10);
     console.log("original new password is", userPassword);
     console.log("hashed new password is", hasedPassword);
@@ -292,20 +290,23 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // controller to handle deleting roles
-export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
+export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { roleIdToDelete, roleName, roleDescription, absoluteAdmin: roleAbsoluteAdmin, tabAccess } = req.body;
+  const { accountIdToDelete, accountType, staffId, userName, userEmail, userStatus, roleId } = req.body;
 
-  if (!roleIdToDelete) {
+  if (!accountIdToDelete) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
-  if (roleAbsoluteAdmin === undefined) {
+  if (roleId.absoluteAdmin === undefined) {
     throwError("Unknown role type - Please try again", 400);
   }
 
-  if (roleAbsoluteAdmin) {
-    throwError("Disallowd Action: This role cannot be deleted as it is the default Absolute Admin role", 403);
+  if (roleId.absoluteAdmin || accountType === "Organization") {
+    throwError(
+      "Disallowd Action: This account cannot be deleted as it is the default Absolute Admin/organisation account",
+      403
+    );
   }
 
   // confirm user
@@ -323,39 +324,36 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
 
   const hasAccess = creatorTabAccess
     .filter(({ tab, actions }: any) => tab === "Admin")[0]
-    .actions.some(({ name, permission }: any) => name === "Delete Role");
+    .actions.some(({ name, permission }: any) => name === "Delete User");
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete roles - Please contact your admin", 403);
   }
 
-  const deletedRole = await Role.findByIdAndDelete(roleIdToDelete);
+  const deletedUser = await Account.findByIdAndDelete(accountIdToDelete);
 
-  if (!deletedRole) {
-    throwError("Error deleting role - Please try again", 500);
+  if (!deletedUser) {
+    throwError("Error deleting user account - Please try again", 500);
   }
 
   const original = {
-    roleIdToDelete,
-    roleName,
-    roleDescription,
-    tabAccess
+    accountId: accountIdToDelete,
+    staffId,
+    accountName: userName,
+    accountEmail: userEmail,
+    accountStatus: userStatus,
+    roleId
   };
 
-  const updated = {
-    roleId: deletedRole?._id,
-    roleName: deletedRole?.roleName,
-    roleDescription: deletedRole?.roleDescription,
-    tabAccess: deletedRole?.tabAccess
-  };
+  const updated = {};
   const difference = diff(original, updated);
   await logActivity(
     account?.organisationId,
     accountId,
-    "Role Delete",
-    "Role",
-    deletedRole?._id,
-    roleName,
+    "User Delete",
+    "Account",
+    accountIdToDelete,
+    userName,
     difference,
     new Date()
   );

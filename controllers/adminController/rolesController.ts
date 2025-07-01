@@ -281,12 +281,7 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
     tabAccess: originalRole?.tabAccess
   };
 
-  const updated = {
-    roleId: deletedRole?._id,
-    roleName: deletedRole?.roleName,
-    roleDescription: deletedRole?.roleDescription,
-    tabAccess: deletedRole?.tabAccess
-  };
+  const updated = {};
   const difference = diff(original, updated);
   await logActivity(
     account?.organisationId,
