@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { ActivityLog } from "../models/activityLogModel";
 import { Account } from "../models/accountModel";
 import { Role } from "../models/roleModel";
+import { nanoid } from "nanoid";
 
 // throw error function
 export const throwError = (message: string, statusCode: number) => {
@@ -13,6 +14,12 @@ export const throwError = (message: string, statusCode: number) => {
 // generateSearchTextFunction
 export const generateSearchText = (fields: any[]) => {
   return fields.join("|");
+};
+
+// generateCustomId
+export const generateCustomId = (prefix: string | string[]) => {
+  const joined = Array.isArray(prefix) ? prefix.join("") : prefix;
+  return `${joined.trim().toUpperCase()}-${nanoid()}`;
 };
 
 export const generateAccessToken = (accountData: any) => {

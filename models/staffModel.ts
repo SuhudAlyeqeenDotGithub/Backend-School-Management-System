@@ -1,8 +1,10 @@
 import mongoose from "mongoose";
+import { nanoid } from "nanoid";
 const { Schema, model } = mongoose;
 
 const staffSchema = new Schema(
   {
+    organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
     staffCustomId: { type: String, unique: true },
     staffFirstName: { type: String, required: true },
     staffMiddleName: { type: String },
@@ -25,7 +27,7 @@ const staffSchema = new Schema(
     staffNextOfKinEmail: { type: String, required: true },
     searchText: { type: String, required: true },
     staffQualification: {
-      type: [{ qualificationName: String, schoolName: String, startDate: String, endDate: String }]
+      type: [{ _id: String, qualificationName: String, schoolName: String, startDate: String, endDate: String }]
     }
   },
   { timestamps: true }
