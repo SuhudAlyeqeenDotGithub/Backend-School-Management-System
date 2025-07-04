@@ -2,7 +2,16 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { Role } from "../../models/roleModel";
 import { Account } from "../../models/accountModel";
-import { confirmAccount, confirmRole, throwError, fetchUsers, generateSearchText } from "../../utils/utilsFunctions";
+import {
+  confirmAccount,
+  confirmRole,
+  throwError,
+  fetchUsers,
+  generateSearchText,
+  fetchStaffProfiles,
+  userIsStaff,
+  generateCustomId
+} from "../../utils/utilsFunctions";
 import { logActivity } from "../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 import bcrypt from "bcryptjs";
@@ -15,7 +24,30 @@ declare global {
     }
   }
 }
-export const getUsers = asyncHandler(async (req: Request, res: Response) => {
+
+const validateStaffProfile = (staffDataParam: any) => {
+  const {
+    staffCustomId,
+    staffImage,
+    staffMiddleName,
+    staffNextOfKinEmail,
+    staffQualification,
+    staffPostCode,
+    staffEndDate,
+    ...copyLocalData
+  } = staffDataParam;
+
+  for (const [key, value] of Object.entries(copyLocalData)) {
+    if (!value || (typeof value === "string" && value.trim() === "")) {
+      throwError(`Missing Data: Please fill in the ${key} input`, 400);
+      return false;
+    }
+  }
+
+  return true;
+};
+
+export const getStaffProfiles = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
 
   // confirm user
@@ -27,7 +59,7 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
   // confirm role
   const role = await confirmRole(account!.roleId!._id.toString());
 
-  const { roleId, accountStatus } = account as any;
+  const { roleId, accountStatus, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   if (accountStatus === "Locked" || accountStatus !== "Active") {
@@ -36,47 +68,95 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
 
   const hasAccess = tabAccess
     .filter(({ tab }: any) => tab === "Admin")[0]
-    .actions.some(({ name }: any) => name === "View Users");
+    .actions.some(({ name }: any) => name === "View Staff");
 
   if (absoluteAdmin || hasAccess) {
-    const users = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString(), accountId);
+    const staffProfiles = await fetchStaffProfiles(
+      absoluteAdmin ? "Absolute Admin" : "User",
+      organisation!._id.toString(),
+      staffId || "".toString()
+    );
 
-    if (!users) {
-      throwError("Error fetching users", 500);
+    if (!staffProfiles) {
+      throwError("Error fetching staff profiles", 500);
     }
-    res.status(201).json(users);
+    res.status(201).json(staffProfiles);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view users - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view staff profile - Please contact your admin", 403);
 });
 
 // controller to handle role creation
-export const createUser = asyncHandler(async (req: Request, res: Response) => {
+export const createStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { staffId, userName, userEmail, userPassword, userStatus, roleId: userRoleId } = req.body;
+  const {
+    staffCustomId,
+    staffFirstName,
+    staffMiddleName,
+    staffLastName,
+    staffDateOfBirth,
+    staffGender,
+    staffPhone,
+    staffEmail,
+    staffAddress,
+    staffPostCode,
+    staffImage,
+    staffMaritalStatus,
+    staffStartDate,
+    staffEndDate,
+    staffNationality,
+    staffAllergies,
+    staffNextOfKinName,
+    staffNextOfKinRelationship,
+    staffNextOfKinPhone,
+    staffNextOfKinEmail,
+    staffQualification
+  } = req.body;
 
-  if (!staffId || !userName || !userEmail || !userPassword || !userRoleId) {
-    throwError("Please fill all required fields", 400);
-  }
+  const copyBody = {
+    staffCustomId,
+    staffFirstName,
+    staffMiddleName,
+    staffLastName,
+    staffDateOfBirth,
+    staffGender,
+    staffPhone,
+    staffEmail,
+    staffAddress,
+    staffPostCode,
+    staffImage,
+    staffMaritalStatus,
+    staffStartDate,
+    staffEndDate,
+    staffNationality,
+    staffAllergies,
+    staffNextOfKinName,
+    staffNextOfKinRelationship,
+    staffNextOfKinPhone,
+    staffNextOfKinEmail,
+    staffQualification
+  };
 
-  const userExists = await Account.findOne({ accountEmail: userEmail });
-  if (userExists) {
-    throwError("This user already exist - Please sign in", 409);
-  }
-
-  const staffExists = await Staff.findById(staffId);
-  if (staffExists) {
-    throwError("Please provide the user staff ID related to their staff record - or create one for them", 409);
+  if (!validateStaffProfile(copyBody)) {
+    throwError("Please fill in all required fields", 400);
   }
 
   // confirm user
   const account = await confirmAccount(accountId);
-
   // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
+  const orgParsedId = account!.organisationId!._id.toString();
+  const organisation = await confirmAccount(orgParsedId);
 
-  const { roleId, accountStatus } = account as any;
+  const staffExists = await userIsStaff(staffCustomId, orgParsedId);
+  if (staffExists) {
+    throwError(
+      "A staff with this Custom Id already exist - Either refer to that record or change the staff custom Id",
+      409
+    );
+  }
+
+  const { roleId, accountStatus, accountName, staffId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   if (accountStatus === "Locked" || accountStatus !== "Active") {
@@ -85,47 +165,44 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
 
   const hasAccess = creatorTabAccess
     .filter(({ tab }: any) => tab === "Admin")[0]
-    .actions.some(({ name }: any) => name === "Create User");
-  console.log("hasAccess", hasAccess);
+    .actions.some(({ name }: any) => name === "Create Staff");
 
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to create users - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to create staff - Please contact your admin", 403);
   }
 
-  const hasedPassword = await bcrypt.hash(userPassword, 10);
-  const newUser = await Account.create({
-    accountType: "User",
-    organisationId: organisation?._id,
-    staffId,
-    accountEmail: userEmail,
-    accountName: userName,
-    accountPassword: hasedPassword,
-    accountStatus: userStatus,
-    roleId: userRoleId,
-    searchText: generateSearchText([staffId, userEmail, userName, userStatus])
+  const newStaff = await Staff.create({
+    ...copyBody,
+    staffCustomId: staffCustomId === "" ? generateCustomId(["STF", accountName.trim().slice(0, 4)]) : staffCustomId,
+    organisationId: orgParsedId,
+    searchText: generateSearchText([
+      staffFirstName,
+      staffGender,
+      staffMiddleName,
+      staffLastName,
+      staffEmail,
+      staffDateOfBirth,
+      staffNationality,
+      staffNextOfKinName,
+      staffCustomId,
+      staffQualification.qualificationName
+    ])
   });
-
-  if (!newUser) {
-    throwError("Error creating role", 500);
-  }
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "User Creation",
-    "Account",
-    newUser?._id,
-    userName,
+    "Staff Profile Creation",
+    "Staff",
+    newStaff?._id,
+    staffFirstName + " " + staffLastName,
     [
       {
         kind: "N",
         rhs: {
-          _id: newUser._id,
-          staffId,
-          accountName: userName,
-          accountEmail: userEmail,
-          accountStatus: userStatus,
-          roleId: userRoleId
+          _id: newStaff._id,
+          staffId: newStaff.staffCustomId,
+          staffFullName: staffFirstName + " " + staffLastName
         }
       }
     ],
@@ -133,20 +210,24 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   );
 
   if (absoluteAdmin || hasAccess) {
-    const users = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString(), accountId);
+    const staffProfiles = await fetchStaffProfiles(
+      absoluteAdmin ? "Absolute Admin" : "User",
+      organisation!._id.toString(),
+      staffId || "".toString()
+    );
 
-    if (!users) {
-      throwError("Error fetching users", 500);
+    if (!staffProfiles) {
+      throwError("Error fetching staff profiles", 500);
     }
-    res.status(201).json(users);
+    res.status(201).json(staffProfiles);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view users - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view staff profile - Please contact your admin", 403);
 });
 
 // controller to handle role update
-export const updateUser = asyncHandler(async (req: Request, res: Response) => {
+export const updateStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const {
     onEditUserIsAbsoluteAdmin,
@@ -290,7 +371,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // controller to handle deleting roles
-export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
+export const deleteStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { accountIdToDelete, accountType, staffId, userName, userEmail, userStatus, roleId } = req.body;
 

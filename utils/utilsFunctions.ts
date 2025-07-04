@@ -3,6 +3,7 @@ import { ActivityLog } from "../models/activityLogModel";
 import { Account } from "../models/accountModel";
 import { Role } from "../models/roleModel";
 import { nanoid } from "nanoid";
+import { Staff } from "../models/staffModel";
 
 // throw error function
 export const throwError = (message: string, statusCode: number) => {
@@ -120,4 +121,28 @@ export const fetchUsers = async (asWho: string, orgId: string, selfId: string) =
     }
     return users;
   }
+};
+
+export const fetchStaffProfiles = async (asWho: string, orgId: string, selfId: string) => {
+  if (asWho === "Absolute Admin") {
+    const staff = await Staff.find({ organisationId: orgId });
+    if (!staff) {
+      throwError("Error fetching staff", 500);
+    }
+    return staff;
+  } else {
+    const staff = await Staff.find({ organisationId: orgId, staffCustomId: { $ne: selfId } });
+    if (!staff) {
+      throwError("Error fetching staff", 500);
+    }
+    return staff;
+  }
+};
+
+export const userIsStaff = async (customId: string, orgId: string) => {
+  const staff = await Staff.findOne({ staffCustomId: customId, organisationId: orgId });
+  if (!staff) {
+    return null;
+  }
+  return staff;
 };
