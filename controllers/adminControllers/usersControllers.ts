@@ -74,10 +74,12 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   if (userExists) {
     throwError("This user already exist - Please sign in", 409);
   }
-
-  const staffExists = await userIsStaff(staffId, accountId!.organisationId!._id.toString());
+  const staffExists = await userIsStaff(staffId, account!.organisationId!._id.toString());
   if (!staffExists) {
-    throwError("Please provide the user staff ID related to their staff record - or create one for them", 409);
+    throwError(
+      "This staff ID does not exist. Please provide the user staff ID related to their staff record - or create one for them",
+      409
+    );
   }
 
   // confirm organisation
@@ -103,7 +105,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   const newUser = await Account.create({
     accountType: "User",
     organisationId: organisation?._id,
-    staffId,
+    staffId: staffExists?._id,
     accountEmail: userEmail,
     accountName: userName,
     accountPassword: hasedPassword,
@@ -128,7 +130,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
         kind: "N",
         rhs: {
           _id: newUser._id,
-          staffId,
+          staffId: staffExists?._id,
           accountName: userName,
           accountEmail: userEmail,
           accountStatus: userStatus,
@@ -195,7 +197,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     throwError("Disallowed: Another role cannot be assigned to the Default Absolute Admin", 403);
   }
 
-  const staffExists = await userIsStaff(staffId, accountId!.organisationId!._id.toString());
+  const staffExists = await userIsStaff(staffId, account!.organisationId!._id.toString());
   if (!staffExists) {
     throwError("Please provide the user staff ID related to their staff record - or create one for them", 409);
   }
@@ -229,7 +231,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
 
   if (!passwordChanged) {
     updatedUser = await Account.findByIdAndUpdate(userId, {
-      staffId,
+      staffId: staffExists?._id,
       accountName: userName,
       accountEmail: userEmail,
       accountPassword: userPassword,
@@ -244,7 +246,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     console.log("hashed new password is", hasedPassword);
     if (hasedPassword) {
       updatedUser = await Account.findByIdAndUpdate(userId, {
-        staffId,
+        staffId: staffExists?._id,
         accountName: userName,
         accountEmail: userEmail,
         accountPassword: hasedPassword,

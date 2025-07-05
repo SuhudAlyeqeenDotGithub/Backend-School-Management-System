@@ -107,15 +107,15 @@ export const fetchRoles = async (asWho: string, orgId: string, selfId: string) =
 
 export const fetchUsers = async (asWho: string, orgId: string, selfId: string) => {
   if (asWho === "Absolute Admin") {
-    const users = await Account.find({ organisationId: orgId }).populate("roleId");
+    const users = await Account.find({ organisationId: orgId }).populate("roleId").populate("staffId", "staffCustomId");
     if (!users) {
       throwError("Error fetching users", 500);
     }
     return users;
   } else {
-    const users = await Account.find({ organisationId: orgId, accountType: "User", _id: { $ne: selfId } }).populate(
-      "roleId"
-    );
+    const users = await Account.find({ organisationId: orgId, accountType: "User", _id: { $ne: selfId } })
+      .populate("roleId")
+      .populate("staffId", "staffCustomId");
     if (!users) {
       throwError("Error fetching users", 500);
     }

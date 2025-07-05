@@ -30,7 +30,6 @@ const validateStaffProfile = (staffDataParam: any) => {
     staffCustomId,
     staffImage,
     staffMiddleName,
-    staffNextOfKinEmail,
     staffQualification,
     staffPostCode,
     staffEndDate,
@@ -176,6 +175,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
     staffCustomId: staffCustomId === "" ? generateCustomId(["STF", accountName.trim().slice(0, 4)]) : staffCustomId,
     organisationId: orgParsedId,
     searchText: generateSearchText([
+      staffCustomId,
       staffFirstName,
       staffGender,
       staffMiddleName,

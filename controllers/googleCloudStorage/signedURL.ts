@@ -67,7 +67,6 @@ export const getSignedUrl = asyncHandler(async (req: Request, res: Response) => 
   try {
     const file = storage.bucket(bucketName).file(destination);
     const [signedUrl] = await file.getSignedUrl(signedUrlOptions);
-    await file.makePublic();
 
     const publicUrl = `https://storage.googleapis.com/${bucketName}/${destination}`;
 
