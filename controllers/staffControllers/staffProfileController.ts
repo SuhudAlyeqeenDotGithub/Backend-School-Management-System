@@ -66,14 +66,14 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
   }
 
   const hasAccess = tabAccess
-    .filter(({ tab }: any) => tab === "Admin")[0]
+    .filter(({ tab }: any) => tab === "Staff")[0]
     .actions.some(({ name }: any) => name === "View Staff");
 
   if (absoluteAdmin || hasAccess) {
     const staffProfiles = await fetchStaffProfiles(
       absoluteAdmin ? "Absolute Admin" : "User",
       organisation!._id.toString(),
-      staffId || "".toString()
+      staffId.staffCustomId || "".toString()
     );
 
     if (!staffProfiles) {
@@ -163,7 +163,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
   }
 
   const hasAccess = creatorTabAccess
-    .filter(({ tab }: any) => tab === "Admin")[0]
+    .filter(({ tab }: any) => tab === "Staff")[0]
     .actions.some(({ name }: any) => name === "Create Staff");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -213,7 +213,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
     const staffProfiles = await fetchStaffProfiles(
       absoluteAdmin ? "Absolute Admin" : "User",
       organisation!._id.toString(),
-      staffId || "".toString()
+      staffId.staffCustomId || "".toString()
     );
 
     if (!staffProfiles) {
@@ -279,7 +279,7 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
   }
 
   const hasAccess = creatorTabAccess
-    .filter(({ tab }: any) => tab === "Admin")[0]
+    .filter(({ tab }: any) => tab === "Staff")[0]
     .actions.some(({ name }: any) => name === "dit User");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -404,7 +404,7 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
   }
 
   const hasAccess = creatorTabAccess
-    .filter(({ tab, actions }: any) => tab === "Admin")[0]
+    .filter(({ tab, actions }: any) => tab === "Staff")[0]
     .actions.some(({ name, permission }: any) => name === "Delete User");
 
   if (!absoluteAdmin && !hasAccess) {
