@@ -16,6 +16,7 @@ const staffSchema = new Schema(
     staffAddress: { type: String, required: true },
     staffPostCode: { type: String },
     staffImage: { type: String },
+    staffImageDestination: { type: String },
     staffMaritalStatus: { type: String, required: true },
     staffStartDate: { type: String, required: true },
     staffEndDate: { type: String },

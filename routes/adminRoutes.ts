@@ -2,7 +2,10 @@ import express from "express";
 const router = express.Router();
 import { getRoles, createRole, updateRole, deleteRole } from "../controllers/adminControllers/rolesController";
 import { getUsers, createUser, updateUser, deleteUser } from "../controllers/adminControllers/usersControllers";
-import { getSignedUrlForStaffProfile } from "../controllers/googleCloudStorage/staffSignedURL";
+import {
+  getSignedUrlForStaffProfile,
+  deleteStaffImageInBucket
+} from "../controllers/googleCloudStorage/staffSignedURL";
 
 // admin roles endpoints
 router.get("/admin/getroles", getRoles);
@@ -18,5 +21,5 @@ router.delete("/admin/deleteuser", deleteUser);
 
 // request signed url
 router.post("/signedurl", getSignedUrlForStaffProfile);
-
+router.delete("/staffimage", deleteStaffImageInBucket);
 export default router;

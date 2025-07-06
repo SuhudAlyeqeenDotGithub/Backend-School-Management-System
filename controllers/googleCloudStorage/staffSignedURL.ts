@@ -51,7 +51,7 @@ export const getSignedUrlForStaffProfile = asyncHandler(async (req: Request, res
     throwError("Unauthorised Action: You do not have access to upload image- Please contact your admin", 403);
   }
 
-  const destination = `alyeqeenschoolappimages/${nanoid()}-${imageName}`;
+  const destination = `${nanoid()}-${imageName}`;
 
   const signedUrlOptions = {
     version: "v4" as const,
@@ -66,8 +66,48 @@ export const getSignedUrlForStaffProfile = asyncHandler(async (req: Request, res
 
     const publicUrl = `https://storage.googleapis.com/${bucketName}/${destination}`;
 
-    res.status(200).json({ signedUrl, publicUrl });
+    res.status(200).json({ signedUrl, publicUrl, destination });
   } catch (err: any) {
     throwError("Failed to get signed URL:" + err.message, 500);
+  }
+});
+
+export const deleteStaffImageInBucket = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId } = req.userToken;
+  const { staffImageDestination } = req.body;
+
+  if (!staffImageDestination) {
+    throwError("Unknown Image to Delete", 400);
+  }
+  // confirm user
+  const account = await confirmAccount(accountId);
+
+  // confirm organisation
+  const organisation = await confirmAccount(account!.organisationId!._id.toString());
+
+  // confirm role
+  const role = await confirmRole(account!.roleId!._id.toString());
+
+  const { roleId, accountStatus } = account as any;
+  const { absoluteAdmin, tabAccess } = roleId;
+
+  if (accountStatus === "Locked" || accountStatus !== "Active") {
+    throwError("Your account is no longer active - Please contact your admin", 409);
+  }
+
+  const hasCreateStaffAccess = tabAccess
+    .filter(({ tab }: any) => tab === "Staff")[0]
+    .actions.some(({ name }: any) => name === "Edit Staff");
+
+  if (!hasCreateStaffAccess && !absoluteAdmin) {
+    throwError("Unauthorised Action: You do not have access to upload image- Please contact your admin", 403);
+  }
+
+  try {
+    await storage.bucket(bucketName).file(staffImageDestination).delete();
+
+    res.status(200).json("delete successful");
+  } catch (err: any) {
+    throwError("Failed to delete image:" + err.message, 500);
   }
 });
