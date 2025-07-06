@@ -19,7 +19,7 @@ declare global {
   }
 }
 
-export const getSignedUrl = asyncHandler(async (req: Request, res: Response) => {
+export const getSignedUrlForStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { imageName, imageType } = req.body;
 
@@ -43,15 +43,11 @@ export const getSignedUrl = asyncHandler(async (req: Request, res: Response) => 
     throwError("Your account is no longer active - Please contact your admin", 409);
   }
 
-  const hasCreateStudentAccess = tabAccess
-    .filter(({ tab }: any) => tab === "Admin")[0]
-    .actions.some(({ name }: any) => name === "Create Student");
-
   const hasCreateStaffAccess = tabAccess
-    .filter(({ tab }: any) => tab === "Admin")[0]
+    .filter(({ tab }: any) => tab === "Staff")[0]
     .actions.some(({ name }: any) => name === "Create Staff");
 
-  if (!hasCreateStaffAccess && !hasCreateStudentAccess && !absoluteAdmin) {
+  if (!hasCreateStaffAccess && !absoluteAdmin) {
     throwError("Unauthorised Action: You do not have access to upload image- Please contact your admin", 403);
   }
 

@@ -73,7 +73,7 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
     const staffProfiles = await fetchStaffProfiles(
       absoluteAdmin ? "Absolute Admin" : "User",
       organisation!._id.toString(),
-      staffId.staffCustomId || "".toString()
+      absoluteAdmin ? "" : staffId.staffCustomId.toString()
     );
 
     if (!staffProfiles) {
@@ -213,7 +213,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
     const staffProfiles = await fetchStaffProfiles(
       absoluteAdmin ? "Absolute Admin" : "User",
       organisation!._id.toString(),
-      staffId.staffCustomId || "".toString()
+      absoluteAdmin ? "" : staffId.staffCustomId.toString()
     );
 
     if (!staffProfiles) {
@@ -230,49 +230,65 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
 export const updateStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const {
-    onEditUserIsAbsoluteAdmin,
-    userId,
-    staffId,
-    userName,
-    userEmail,
-    userPassword,
-    userStatus,
-    roleId: userRoleId,
-    passwordChanged
+    staffCustomId,
+    staffFirstName,
+    staffMiddleName,
+    staffLastName,
+    staffDateOfBirth,
+    staffGender,
+    staffPhone,
+    staffEmail,
+    staffAddress,
+    staffPostCode,
+    staffImage,
+    staffMaritalStatus,
+    staffStartDate,
+    staffEndDate,
+    staffNationality,
+    staffAllergies,
+    staffNextOfKinName,
+    staffNextOfKinRelationship,
+    staffNextOfKinPhone,
+    staffNextOfKinEmail,
+    staffQualification
   } = req.body;
 
-  if (passwordChanged === undefined || passwordChanged === null) {
-    throwError("Unknown Error with password state", 400);
-  }
+  const copyBody = {
+    staffCustomId,
+    staffFirstName,
+    staffMiddleName,
+    staffLastName,
+    staffDateOfBirth,
+    staffGender,
+    staffPhone,
+    staffEmail,
+    staffAddress,
+    staffPostCode,
+    staffImage,
+    staffMaritalStatus,
+    staffStartDate,
+    staffEndDate,
+    staffNationality,
+    staffAllergies,
+    staffNextOfKinName,
+    staffNextOfKinRelationship,
+    staffNextOfKinPhone,
+    staffNextOfKinEmail,
+    staffQualification
+  };
 
-  if (!userName || !userEmail || !userPassword || !userRoleId || !userStatus) {
-    throwError("Please fill all required fields", 400);
+  if (!validateStaffProfile(copyBody)) {
+    throwError("Please fill in all required fields", 400);
   }
 
   // confirm user
   const account = await confirmAccount(accountId);
-  const { roleId, accountStatus } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
-
   // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
+  const orgParsedId = account!.organisationId!._id.toString();
+  const organisation = await confirmAccount(orgParsedId);
 
-  if (!staffId && !onEditUserIsAbsoluteAdmin) {
-    throwError("Please provide staff ID", 400);
-  }
-
-  if (onEditUserIsAbsoluteAdmin && userStatus !== "Active") {
-    throwError("Disallowed: Default Absolute Admin status cannot be changed - Locked", 403);
-  }
-
-  if (onEditUserIsAbsoluteAdmin && userRoleId !== organisation?.roleId?._id.toString()) {
-    throwError("Disallowed: Another role cannot be assigned to the Default Absolute Admin", 403);
-  }
-
-  const staffExists = await Staff.findById(staffId);
-  if (staffExists) {
-    throwError("Please provide the user staff ID related to their staff record - or create one for them", 409);
-  }
+  const { roleId, accountStatus, staffId } = account as any;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   if (accountStatus === "Locked" || accountStatus !== "Active") {
     throwError("Your account is no longer active - Please contact your admin", 409);
@@ -280,94 +296,73 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
 
   const hasAccess = creatorTabAccess
     .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name }: any) => name === "dit User");
+    .actions.some(({ name }: any) => name === "Edit Staff");
 
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to edit users - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to edit staff - Please contact your admin", 403);
   }
 
-  const originalUser = await Account.findById(
-    userId,
-    "_id accountName accountEmail roleId staffId accountPassword accountStatus"
+  const originalStaff = await Staff.findOne({ staffCustomId });
+
+  if (!originalStaff) {
+    throwError("An error occured whilst getting old staff data", 500);
+  }
+
+  const updatedStaff = await Staff.findByIdAndUpdate(
+    originalStaff?._id.toString(),
+    {
+      ...copyBody,
+      searchText: generateSearchText([
+        staffCustomId,
+        staffFirstName,
+        staffGender,
+        staffMiddleName,
+        staffLastName,
+        staffEmail,
+        staffDateOfBirth,
+        staffNationality,
+        staffNextOfKinName,
+        staffCustomId,
+        staffQualification.qualificationName
+      ])
+    },
+    { new: true }
   );
 
-  if (!originalUser) {
-    throwError("An error occured whilst getting old user data", 500);
+  if (!updatedStaff) {
+    throwError("Error updating staff profile", 500);
   }
 
-  let updatedUser;
-
-  if (userPassword === "Change01@Password123?") {
-    throwError("Change01@Password123? cannot be used for password as it is reserved", 400);
-  }
-
-  if (!passwordChanged) {
-    updatedUser = await Account.findByIdAndUpdate(userId, {
-      staffId,
-      accountName: userName,
-      accountEmail: userEmail,
-      accountPassword: userPassword,
-      accountStatus: userStatus,
-      roleId: userRoleId,
-      searchText: generateSearchText([staffId, userEmail, userName, userStatus])
-    });
-  }
-  if (passwordChanged) {
-    const hasedPassword = await bcrypt.hash(userPassword, 10);
-    console.log("original new password is", userPassword);
-    console.log("hashed new password is", hasedPassword);
-    if (hasedPassword) {
-      updatedUser = await Account.findByIdAndUpdate(userId, {
-        staffId,
-        accountName: userName,
-        accountEmail: userEmail,
-        accountPassword: hasedPassword,
-        accountStatus: userStatus,
-        roleId: userRoleId,
-        searchText: generateSearchText([staffId, userEmail, userName, userStatus])
-      });
-    }
-  }
-
-  if (!updatedUser) {
-    throwError("Error updating user", 500);
-  }
-
-  const original = originalUser;
-
-  const updated = {
-    _id: updatedUser?._id,
-    staffId: updatedUser?.staffId,
-    accountName: updatedUser?.accountName,
-    accountEmail: updatedUser?.accountEmail,
-    accountPassword: updatedUser?.accountPassword,
-    accountStatus: updatedUser?.accountStatus,
-    roleId: updatedUser?.roleId
-  };
-  const difference = diff(original, updated);
+  const difference = diff(originalStaff, updatedStaff);
+  const staffFullName =
+    updatedStaff?.staffFirstName + " " + updatedStaff?.staffMiddleName + " " + updatedStaff?.staffLastName.trim();
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "User Update",
-    "Account",
-    updatedUser?._id,
-    updatedUser?.accountName ?? "",
+    "Staff Profile Update",
+    "Staff",
+    updatedStaff?._id,
+    staffFullName,
     difference,
     new Date()
   );
 
   if (absoluteAdmin || hasAccess) {
-    const users = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString(), accountId);
+    const staffProfiles = await fetchStaffProfiles(
+      absoluteAdmin ? "Absolute Admin" : "User",
+      organisation!._id.toString(),
+      absoluteAdmin ? "" : staffId.staffCustomId.toString()
+    );
 
-    if (!users) {
-      throwError("Error fetching users", 500);
+    if (!staffProfiles) {
+      throwError("Error fetching staff profiles", 500);
     }
-    res.status(201).json(users);
+    res.status(201).json(staffProfiles);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view roles - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view staff profile - Please contact your admin", 403);
 });
 
 // controller to handle deleting roles

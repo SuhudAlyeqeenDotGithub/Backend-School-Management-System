@@ -7,7 +7,6 @@ import {
   updateStaffProfile,
   deleteStaffProfile
 } from "../controllers/staffControllers/staffProfileController";
-import { getSignedUrl } from "../controllers/googleCloudStorage/signedURL";
 
 // end point for staff / profile
 router.get("/staff/profiles", getStaffProfiles);
