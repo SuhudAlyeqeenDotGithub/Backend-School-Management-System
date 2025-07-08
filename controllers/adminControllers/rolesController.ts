@@ -34,7 +34,7 @@ export const getRoles = asyncHandler(async (req: Request, res: Response) => {
 
   const hasAccess = tabAccess
     .filter(({ tab, actions }: any) => tab === "Admin")[0]
-    .actions.some(({ name, permission }: any) => name === "View Roles");
+    .actions.some(({ name, permission }: any) => name === "View Roles" && permission === true);
 
   if (absoluteAdmin || hasAccess) {
     const roles = await fetchRoles(
@@ -76,7 +76,7 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
   }
   const hasAccess = creatorTabAccess
     .filter(({ tab, actions }: any) => tab === "Admin")[0]
-    .actions.some(({ name, permission }: any) => name === "Create Role");
+    .actions.some(({ name, permission }: any) => name === "Create Role" && permission === true);
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to create roles - Please contact your admin", 403);
@@ -156,7 +156,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
 
   const hasAccess = creatorTabAccess
     .filter(({ tab, actions }: any) => tab === "Admin")[0]
-    .actions.some(({ name, permission }: any) => name === "Edit Role");
+    .actions.some(({ name, permission }: any) => name === "Edit Role" && permission === true);
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to edit roles - Please contact your admin", 403);
@@ -256,7 +256,7 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
 
   const hasAccess = creatorTabAccess
     .filter(({ tab, actions }: any) => tab === "Admin")[0]
-    .actions.some(({ name, permission }: any) => name === "Delete Role");
+    .actions.some(({ name, permission }: any) => name === "Delete Role" && permission === true);
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete roles - Please contact your admin", 403);
@@ -274,15 +274,6 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error deleting role - Please try again", 500);
   }
 
-  const original = {
-    roleId: originalRole?._id,
-    roleName: originalRole?.roleName,
-    roleDescription: originalRole?.roleDescription,
-    tabAccess: originalRole?.tabAccess
-  };
-
-  const updated = {};
-  const difference = diff(original, updated);
   await logActivity(
     account?.organisationId,
     accountId,
@@ -290,7 +281,18 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
     "Role",
     deletedRole?._id,
     roleName,
-    difference,
+    [
+      {
+        kind: "D",
+        lhs: {
+          _id: originalRole?._id,
+          roleName: originalRole?.roleName,
+          roleDescription: originalRole?.roleDescription,
+          absoluteAdmin: originalRole?.absoluteAdmin,
+          tabAccess: originalRole?.tabAccess
+        }
+      }
+    ],
     new Date()
   );
 

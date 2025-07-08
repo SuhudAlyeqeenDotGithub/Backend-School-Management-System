@@ -45,7 +45,7 @@ export const getSignedUrlForStaffProfile = asyncHandler(async (req: Request, res
 
   const hasCreateStaffAccess = tabAccess
     .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name }: any) => name === "Create Staff");
+    .actions.some(({ name, permission }: any) => name === "Create Staff" && permission === true);
 
   if (!hasCreateStaffAccess && !absoluteAdmin) {
     throwError("Unauthorised Action: You do not have access to upload image- Please contact your admin", 403);
@@ -97,7 +97,7 @@ export const deleteStaffImageInBucket = asyncHandler(async (req: Request, res: R
 
   const hasCreateStaffAccess = tabAccess
     .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name }: any) => name === "Edit Staff");
+    .actions.some(({ name, permission }: any) => name === "Edit Staff" && permission === true);
 
   if (!hasCreateStaffAccess && !absoluteAdmin) {
     throwError("Unauthorised Action: You do not have access to upload image- Please contact your admin", 403);

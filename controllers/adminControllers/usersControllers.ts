@@ -43,7 +43,7 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
 
   const hasAccess = tabAccess
     .filter(({ tab }: any) => tab === "Admin")[0]
-    .actions.some(({ name }: any) => name === "View Users");
+    .actions.some(({ name, permission }: any) => name === "View Users" && permission === true);
 
   if (absoluteAdmin || hasAccess) {
     const users = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString(), accountId);
@@ -94,7 +94,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
 
   const hasAccess = creatorTabAccess
     .filter(({ tab }: any) => tab === "Admin")[0]
-    .actions.some(({ name }: any) => name === "Create User");
+    .actions.some(({ name, permission }: any) => name === "Create User" && permission === true);
   console.log("hasAccess", hasAccess);
 
   if (!absoluteAdmin && !hasAccess) {
@@ -208,7 +208,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
 
   const hasAccess = creatorTabAccess
     .filter(({ tab }: any) => tab === "Admin")[0]
-    .actions.some(({ name }: any) => name === "dit User");
+    .actions.some(({ name, permission }: any) => name === "Edit User" && permission === true);
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to edit users - Please contact your admin", 403);
@@ -333,7 +333,7 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
 
   const hasAccess = creatorTabAccess
     .filter(({ tab, actions }: any) => tab === "Admin")[0]
-    .actions.some(({ name, permission }: any) => name === "Delete User");
+    .actions.some(({ name, permission }: any) => name === "Delete User" && permission === true);
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete roles - Please contact your admin", 403);
@@ -345,25 +345,26 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error deleting user account - Please try again", 500);
   }
 
-  const original = {
-    accountId: accountIdToDelete,
-    staffId,
-    accountName: userName,
-    accountEmail: userEmail,
-    accountStatus: userStatus,
-    roleId
-  };
-
-  const updated = {};
-  const difference = diff(original, updated);
   await logActivity(
     account?.organisationId,
     accountId,
-    "User Delete",
+    "User Deletion",
     "Account",
     accountIdToDelete,
     userName,
-    difference,
+    [
+      {
+        kind: "D",
+        lhs: {
+          _id: accountIdToDelete,
+          staffId,
+          accountName: userName,
+          accountEmail: userEmail,
+          accountStatus: userStatus,
+          roleId
+        }
+      }
+    ],
     new Date()
   );
 

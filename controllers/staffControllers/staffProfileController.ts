@@ -150,6 +150,11 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
   const orgParsedId = account!.organisationId!._id.toString();
   const organisation = await confirmAccount(orgParsedId);
 
+  const usedEmail = await Account.findOne({ staffEmail, organisationId: orgParsedId });
+  if (usedEmail) {
+    throwError("This email is already in use by another staff member - Please use a different email", 409);
+  }
+
   const staffExists = await userIsStaff(staffCustomId, orgParsedId);
   if (staffExists) {
     throwError(
@@ -167,7 +172,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
 
   const hasAccess = creatorTabAccess
     .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name }: any) => name === "Create Staff");
+    .actions.some(({ name, permission }: any) => name === "Create Staff" && permission === true);
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to create staff - Please contact your admin", 403);
@@ -301,7 +306,7 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
 
   const hasAccess = creatorTabAccess
     .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name }: any) => name === "Edit Staff");
+    .actions.some(({ name, permission }: any) => name === "Edit Staff" && permission === true);
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to edit staff - Please contact your admin", 403);
@@ -373,81 +378,81 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
 // controller to handle deleting roles
 export const deleteStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { accountIdToDelete, accountType, staffId, userName, userEmail, userStatus, roleId } = req.body;
-
-  if (!accountIdToDelete) {
+  const { StaffIDToDelete } = req.body;
+  if (!StaffIDToDelete) {
     throwError("Unknown delete request - Please try again", 400);
   }
-
-  if (roleId.absoluteAdmin === undefined) {
-    throwError("Unknown role type - Please try again", 400);
-  }
-
-  if (roleId.absoluteAdmin || accountType === "Organization") {
-    throwError(
-      "Disallowd Action: This account cannot be deleted as it is the default Absolute Admin/organisation account",
-      403
-    );
-  }
-
   // confirm user
   const account = await confirmAccount(accountId);
-
   // confirm organisation
   const organisation = await confirmAccount(account!.organisationId!._id.toString());
-
   const { roleId: creatorRoleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
-
   if (accountStatus === "Locked" || accountStatus !== "Active") {
     throwError("Your account is no longer active - Please contact your admin", 409);
   }
-
   const hasAccess = creatorTabAccess
     .filter(({ tab, actions }: any) => tab === "Staff")[0]
-    .actions.some(({ name, permission }: any) => name === "Delete User");
-
+    .actions.some(({ name, permission }: any) => name === "Delete Staff" && permission === true);
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to delete roles - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to delete staff profile - Please contact your admin", 403);
   }
 
-  const deletedUser = await Account.findByIdAndDelete(accountIdToDelete);
+  const staffProfileToDelete = await Staff.findOne({
+    staffCustomId: StaffIDToDelete,
+    organisationId: organisation?._id.toString()
+  });
 
-  if (!deletedUser) {
-    throwError("Error deleting user account - Please try again", 500);
+  if (!staffProfileToDelete) {
+    throwError("Error finding staff profile with provided Custom Id - Please try again", 404);
   }
 
-  const original = {
-    accountId: accountIdToDelete,
-    staffId,
-    accountName: userName,
-    accountEmail: userEmail,
-    accountStatus: userStatus,
-    roleId
-  };
+  const deletedStaffProfile = await Staff.findByIdAndDelete(staffProfileToDelete?._id.toString());
+  if (!deletedStaffProfile) {
+    throwError("Error deleting staff profile - Please try again", 500);
+  }
+  const staffFullName =
+    deletedStaffProfile?.staffFirstName +
+    " " +
+    deletedStaffProfile?.staffMiddleName +
+    " " +
+    deletedStaffProfile?.staffLastName;
 
-  const updated = {};
-  const difference = diff(original, updated);
   await logActivity(
     account?.organisationId,
     accountId,
     "User Delete",
-    "Account",
-    accountIdToDelete,
-    userName,
-    difference,
+    "Staff",
+    deletedStaffProfile?._id,
+    staffFullName.trim(),
+    [
+      {
+        kind: "D" as any,
+        lhs: {
+          _id: deletedStaffProfile?._id,
+          staffCustomId: deletedStaffProfile?.staffCustomId,
+          staffFullName: staffFullName.trim(),
+          staffEmail: deletedStaffProfile?.staffEmail,
+          staffNextOfKinName: deletedStaffProfile?.staffNextOfKinName,
+          staffQualification: deletedStaffProfile?.staffQualification
+        }
+      }
+    ],
     new Date()
   );
-
   if (absoluteAdmin || hasAccess) {
-    const users = await fetchUsers(absoluteAdmin ? "Absolute Admin" : "User", organisation!._id.toString(), accountId);
+    const staffProfiles = await fetchStaffProfiles(
+      absoluteAdmin ? "Absolute Admin" : "User",
+      organisation!._id.toString(),
+      absoluteAdmin ? "" : StaffIDToDelete
+    );
 
-    if (!users) {
-      throwError("Error fetching users", 500);
+    if (!staffProfiles) {
+      throwError("Error fetching staff profiles", 500);
     }
-    res.status(201).json(users);
+    res.status(201).json(staffProfiles);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view roles - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view staff profile - Please contact your admin", 403);
 });
