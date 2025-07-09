@@ -2,7 +2,7 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { Role } from "../../models/roleModel";
 import { Account } from "../../models/accountModel";
-import { confirmAccount, confirmRole, throwError, fetchRoles } from "../../utils/utilsFunctions";
+import { confirmAccount, confirmRole, throwError, fetchRoles, emitToOrganisation } from "../../utils/utilsFunctions";
 import { logActivity } from "../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
@@ -165,7 +165,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   const originalRole = await Role.findById(roleId, " roleId roleName roleDescription tabAccess");
 
   if (!originalRole) {
-    throwError("An error occured whilst getting old role data", 500);
+    throwError("An error occured whilst getting old role data - it may have been deleted", 500);
   }
 
   const updatedRole = await Role.findByIdAndUpdate(
@@ -265,7 +265,7 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   const originalRole = await Role.findById(roleIdToDelete, " roleId roleName roleDescription tabAccess");
 
   if (!originalRole) {
-    throwError("An error occured whilst getting old role data", 500);
+    throwError("An error occured whilst getting old role data - it may have been deleted", 500);
   }
 
   const deletedRole = await Role.findByIdAndDelete(roleIdToDelete);
@@ -273,6 +273,9 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   if (!deletedRole) {
     throwError("Error deleting role - Please try again", 500);
   }
+
+  const emitRoom = deletedRole?.organisationId?.toString() ?? "";
+  emitToOrganisation(emitRoom, "roles");
 
   await logActivity(
     account?.organisationId,

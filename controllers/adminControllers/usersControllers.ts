@@ -8,7 +8,8 @@ import {
   throwError,
   fetchUsers,
   generateSearchText,
-  userIsStaff
+  userIsStaff,
+  emitToOrganisation
 } from "../../utils/utilsFunctions";
 import { logActivity } from "../../utils/utilsFunctions";
 import { diff } from "deep-diff";
@@ -344,6 +345,9 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   if (!deletedUser) {
     throwError("Error deleting user account - Please try again", 500);
   }
+
+  const emitRoom = deletedUser?.organisationId?.toString() ?? "";
+  emitToOrganisation(emitRoom, "accounts");
 
   await logActivity(
     account?.organisationId,

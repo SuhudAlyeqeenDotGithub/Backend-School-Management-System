@@ -10,7 +10,8 @@ import {
   generateSearchText,
   fetchStaffProfiles,
   userIsStaff,
-  generateCustomId
+  generateCustomId,
+  emitToOrganisation
 } from "../../utils/utilsFunctions";
 import { logActivity } from "../../utils/utilsFunctions";
 import { diff } from "deep-diff";
@@ -192,8 +193,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
       staffDateOfBirth,
       staffNationality,
       staffNextOfKinName,
-      staffCustomId,
-      staffQualification.qualificationName
+      staffCustomId
     ])
   });
 
@@ -332,8 +332,7 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
         staffDateOfBirth,
         staffNationality,
         staffNextOfKinName,
-        staffCustomId,
-        staffQualification.qualificationName
+        staffCustomId
       ])
     },
     { new: true }
@@ -378,8 +377,8 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
 // controller to handle deleting roles
 export const deleteStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { StaffIDToDelete } = req.body;
-  if (!StaffIDToDelete) {
+  const { staffIDToDelete } = req.body;
+  if (!staffIDToDelete) {
     throwError("Unknown delete request - Please try again", 400);
   }
   // confirm user
@@ -393,13 +392,13 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
   }
   const hasAccess = creatorTabAccess
     .filter(({ tab, actions }: any) => tab === "Staff")[0]
-    .actions.some(({ name, permission }: any) => name === "Delete Staff" && permission === true);
+    .actions.some(({ name, permission }: any) => name === "Delete Sta" && permission === true);
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete staff profile - Please contact your admin", 403);
   }
 
   const staffProfileToDelete = await Staff.findOne({
-    staffCustomId: StaffIDToDelete,
+    staffCustomId: staffIDToDelete,
     organisationId: organisation?._id.toString()
   });
 
@@ -411,6 +410,10 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
   if (!deletedStaffProfile) {
     throwError("Error deleting staff profile - Please try again", 500);
   }
+
+  const emitRoom = deletedStaffProfile?.organisationId?.toString() ?? "";
+  emitToOrganisation(emitRoom, "staffs");
+
   const staffFullName =
     deletedStaffProfile?.staffFirstName +
     " " +
@@ -444,7 +447,7 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
     const staffProfiles = await fetchStaffProfiles(
       absoluteAdmin ? "Absolute Admin" : "User",
       organisation!._id.toString(),
-      absoluteAdmin ? "" : StaffIDToDelete
+      absoluteAdmin ? "" : staffIDToDelete
     );
 
     if (!staffProfiles) {

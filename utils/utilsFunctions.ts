@@ -4,6 +4,11 @@ import { Account } from "../models/accountModel";
 import { Role } from "../models/roleModel";
 import { nanoid } from "nanoid";
 import { Staff } from "../models/staffModel";
+import { io } from "../server";
+
+export const emitToOrganisation = (organisationId: string, collection: any) => {
+  io.to(organisationId).emit("databaseChange", collection);
+};
 
 // throw error function
 export const throwError = (message: string, statusCode: number) => {
