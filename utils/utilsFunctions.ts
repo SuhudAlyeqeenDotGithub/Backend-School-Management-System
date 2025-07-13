@@ -1,10 +1,12 @@
 import jwt from "jsonwebtoken";
-import { ActivityLog } from "../models/activityLogModel";
-import { Account } from "../models/accountModel";
-import { Role } from "../models/roleModel";
+import { ActivityLog } from "../models/admin/activityLogModel";
+import { Account } from "../models/admin/accountModel";
+import { Role } from "../models/admin/roleModel";
 import { nanoid } from "nanoid";
-import { Staff } from "../models/staffModel";
+import { Staff } from "../models/staff/profile";
 import { io } from "../server";
+import { StaffContract } from "../models/staff/contracts";
+import { AcademicYear } from "../models/general/academicYear";
 
 export const emitToOrganisation = (organisationId: string, collection: any) => {
   io.to(organisationId).emit("databaseChange", collection);
@@ -150,4 +152,40 @@ export const userIsStaff = async (customId: string, orgId: string) => {
     return null;
   }
   return staff;
+};
+
+export const fetchStaffContracts = async (
+  academicYearOnFocus: string,
+  asWho: string,
+  orgId: string,
+  selfId: string
+) => {
+  if (asWho === "Absolute Admin") {
+    const staffContracts = await StaffContract.find({
+      academicYearId: academicYearOnFocus,
+      organisationId: orgId
+    });
+    if (!staffContracts) {
+      throwError("Error fetching staff contracts", 500);
+    }
+    return staffContracts;
+  } else {
+    const staffContracts = await StaffContract.find({
+      academicYearId: academicYearOnFocus,
+      organisationId: orgId,
+      staffCustomId: { $ne: selfId }
+    });
+    if (!staffContracts) {
+      throwError("Error fetching staff contracts", 500);
+    }
+    return staffContracts;
+  }
+};
+
+export const fetchAcademicYears = async (orgId: string) => {
+  const academicYears = await AcademicYear.find({ organisationId: orgId });
+  if (!academicYears) {
+    throwError("Error fetching academic years", 500);
+  }
+  return academicYears;
 };

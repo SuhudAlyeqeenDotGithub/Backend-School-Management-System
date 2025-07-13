@@ -19,6 +19,8 @@ const activityLogSchema = new Schema({
       "Level",
       "Enrollment",
       "Attendance",
+      "AcademicYear",
+      "StaffContract",
       "None"
     ]
   },

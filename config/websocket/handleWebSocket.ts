@@ -4,17 +4,13 @@ import mongoose from "mongoose";
 const handleWebSocket = (io: Server) => {
   const socketHandler = () => {
     io.on("connection", (socket) => {
-      console.log("New client connected");
-      socket.on("joinOrgRoom", ({ organisationId, accountName }: any) => {
+      socket.on("joinOrgRoom", ({ organisationId }: any) => {
         if (!organisationId) return;
         socket.join(organisationId);
-        console.log(`Client ${accountName} joined room: ${organisationId}`);
       });
     });
 
-    io.on("disconnect", () => {
-      console.log("Client disconnected");
-    });
+    io.on("disconnect", () => {});
   };
 
   const databaseWatcher = () => {
@@ -24,7 +20,6 @@ const handleWebSocket = (io: Server) => {
     });
 
     changeStream.on("change", (change) => {
-      console.log(`Change detected in collection:`, change);
       const changeOperation = change.operationType;
       if (changeOperation === "delete") return;
       const changeExist = "ns" in change && change.ns && "coll" in change.ns && change.ns.coll;
@@ -38,7 +33,6 @@ const handleWebSocket = (io: Server) => {
           collectionOnQueue.add(collection);
           setTimeout(() => {
             io.to(organisationId).emit("databaseChange", collection);
-            console.log(`Emitting databaseChange for collection: ${collection} to organisation: ${organisationId}`);
             collectionOnQueue.delete(collection);
           }, 200);
         }

@@ -9,6 +9,7 @@ import cookieParser from "cookie-parser";
 import accountRoutes from "./routes/accountRoutes";
 import adminRoutes from "./routes/adminRoutes";
 import staffRoutes from "./routes/staffRoutes";
+import academicYearRoutes from "./routes/academicYearRoutes";
 import { accessTokenChecker } from "./middleware/checkAccess";
 import { Server } from "socket.io";
 import handleWebSocket from "./config/websocket/handleWebSocket";
@@ -43,6 +44,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/alyeqeenschoolapp/api/", accountRoutes);
 app.use("/alyeqeenschoolapp/api/", accessTokenChecker, adminRoutes);
 app.use("/alyeqeenschoolapp/api/", accessTokenChecker, staffRoutes);
+app.use("/alyeqeenschoolapp/api/", accessTokenChecker, academicYearRoutes);
 
 app.use(errorHandler);
 

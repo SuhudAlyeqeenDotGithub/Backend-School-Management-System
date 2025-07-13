@@ -1,7 +1,7 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { Role } from "../../models/roleModel";
-import { Account } from "../../models/accountModel";
+import { Role } from "../../models/admin/roleModel";
+import { Account } from "../../models/admin/accountModel";
 import {
   confirmAccount,
   confirmRole,
@@ -14,7 +14,7 @@ import {
 import { logActivity } from "../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 import bcrypt from "bcryptjs";
-import { Staff } from "../../models/staffModel";
+import { Staff } from "../../models/staff/profile";
 
 declare global {
   namespace Express {

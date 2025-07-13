@@ -1,12 +1,12 @@
 import asyncHandler from "express-async-handler";
 import bcrypt from "bcryptjs";
 import { Request, Response } from "express";
-import { Account } from "../models/accountModel";
+import { Account } from "../models/admin/accountModel";
 import { throwError } from "../utils/utilsFunctions";
-import { Role } from "../models/roleModel";
+import { Role } from "../models/admin/roleModel";
 import { generateRefreshToken, generateAccessToken, generateSearchText } from "../utils/utilsFunctions";
 import { diff } from "deep-diff";
-import { ResetPassword } from "../models/resetPasswordModel";
+import { ResetPassword } from "../models/authentication/resetPasswordModel";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 import { logActivity } from "../utils/utilsFunctions";
