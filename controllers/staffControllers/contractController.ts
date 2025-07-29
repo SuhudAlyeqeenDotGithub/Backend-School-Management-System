@@ -42,7 +42,7 @@ const validateStaffContract = (staffDataParam: any) => {
 export const getStaffContracts = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
 
-  const { search = "", limit = 2, cursorType, nextCursor, prevCursor, ...filters } = req.query;
+  const { search = "", limit = 15, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
   const query: any = {};
@@ -58,9 +58,9 @@ export const getStaffContracts = asyncHandler(async (req: Request, res: Response
   }
 
   if (cursorType) {
-    if (nextCursor) {
+    if (nextCursor && cursorType === "next") {
       query._id = { $lt: nextCursor };
-    } else if (prevCursor) {
+    } else if (prevCursor && cursorType === "prev") {
       query._id = { $gt: prevCursor };
     }
   }

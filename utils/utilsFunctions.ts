@@ -174,17 +174,19 @@ export const fetchStaffContracts = async (query: any, limit: number, asWho: stri
     throwError("Error fetching staff contracts", 500);
   }
   const totalCount = await StaffContract.countDocuments();
+  const hasNext = staffContracts.length > limit;
+
+  if (staffContracts.length > limit) {
+    staffContracts.pop();
+  }
   const chunkCount = staffContracts.length;
-
-  staffContracts.pop();
-
   return {
     staffContracts: staffContracts,
     totalCount,
     chunkCount,
     nextCursor: staffContracts[staffContracts.length - 1]?._id,
     prevCursor: staffContracts[0]?._id,
-    hasNext: staffContracts.length > limit
+    hasNext
   };
 };
 
