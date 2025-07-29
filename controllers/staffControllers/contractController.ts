@@ -16,6 +16,7 @@ import { diff } from "deep-diff";
 import { Staff } from "../../models/staff/profile";
 import { StaffContract } from "../../models/staff/contracts";
 import { AcademicYear } from "../../models/general/academicYear";
+import { parse } from "path";
 
 declare global {
   namespace Express {
@@ -40,7 +41,29 @@ const validateStaffContract = (staffDataParam: any) => {
 
 export const getStaffContracts = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { academicYearOnFocus } = req.query as { academicYearOnFocus?: string };
+
+  const { search = "", limit = 2, cursorType, nextCursor, prevCursor, ...filters } = req.query;
+
+  const parsedLimit = parseInt(limit as string);
+  const query: any = {};
+
+  if (search) {
+    query.searchText = { $regex: search, $options: "i" };
+  }
+
+  for (const key in filters) {
+    if (filters[key] !== "all") {
+      query[key] = filters[key];
+    }
+  }
+
+  if (cursorType) {
+    if (nextCursor) {
+      query._id = { $lt: nextCursor };
+    } else if (prevCursor) {
+      query._id = { $gt: prevCursor };
+    }
+  }
 
   // confirm user
   const account = await confirmAccount(accountId);
@@ -49,7 +72,7 @@ export const getStaffContracts = asyncHandler(async (req: Request, res: Response
   const organisation = await confirmAccount(account!.organisationId!._id.toString());
 
   // confirm role
-  const role = await confirmRole(account!.roleId!._id.toString());
+  await confirmRole(account!.roleId!._id.toString());
 
   const { roleId, accountStatus, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
@@ -63,17 +86,20 @@ export const getStaffContracts = asyncHandler(async (req: Request, res: Response
     .actions.some(({ name }: any) => name === "View Staff Contracts");
 
   if (absoluteAdmin || hasAccess) {
-    const staffContracts = await fetchStaffContracts(
-      academicYearOnFocus ?? "",
+    const result = await fetchStaffContracts(
+      query,
+      parsedLimit,
       absoluteAdmin ? "Absolute Admin" : "User",
       organisation!._id.toString(),
       absoluteAdmin ? "" : staffId.staffCustomId.toString()
     );
 
-    if (!staffContracts) {
+    if (!result || !result.staffContracts) {
       throwError("Error fetching staff contracts", 500);
     }
-    res.status(201).json(staffContracts);
+    deleteStaffContract;
+
+    res.status(201).json(result);
     return;
   }
 
@@ -186,21 +212,6 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
     ],
     new Date()
   );
-
-  if (absoluteAdmin || hasAccess) {
-    const staffContracts = await fetchStaffContracts(
-      academicYearId,
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      absoluteAdmin ? "" : staffId.staffCustomId.toString()
-    );
-
-    if (!staffContracts) {
-      throwError("Error fetching staff contracts", 500);
-    }
-    res.status(201).json(staffContracts);
-    return;
-  }
 
   throwError("Unauthorised Action: You do not have access to create staff contracts - Please contact your admin", 403);
 });
@@ -329,21 +340,6 @@ export const updateStaffContract = asyncHandler(async (req: Request, res: Respon
     new Date()
   );
 
-  if (absoluteAdmin || hasAccess) {
-    const staffCogetStaffContracts = await fetchStaffContracts(
-      academicYearId,
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      absoluteAdmin ? "" : staffId.staffCustomId.toString()
-    );
-
-    if (!staffCogetStaffContracts) {
-      throwError("Error fetching staff profiles", 500);
-    }
-    res.status(201).json(staffCogetStaffContracts);
-    return;
-  }
-
   throwError("Unauthorised Action: You do not have access to view staff profile - Please contact your admin", 403);
 });
 
@@ -416,20 +412,6 @@ export const deleteStaffContract = asyncHandler(async (req: Request, res: Respon
     ],
     new Date()
   );
-  if (absoluteAdmin || hasAccess) {
-    const staffCogetStaffContracts = await fetchStaffContracts(
-      academicYearId,
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      absoluteAdmin ? "" : staffIDToDelete
-    );
-
-    if (!staffCogetStaffContracts) {
-      throwError("Error fetching staff profiles", 500);
-    }
-    res.status(201).json(staffCogetStaffContracts);
-    return;
-  }
 
   throwError("Unauthorised Action: You do not have access to view staff profile - Please contact your admin", 403);
 });

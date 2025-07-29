@@ -154,32 +154,38 @@ export const userIsStaff = async (customId: string, orgId: string) => {
   return staff;
 };
 
-export const fetchStaffContracts = async (
-  academicYearOnFocus: string,
-  asWho: string,
-  orgId: string,
-  selfId: string
-) => {
+export const fetchStaffContracts = async (query: any, limit: number, asWho: string, orgId: string, selfId: string) => {
+  let staffContracts;
   if (asWho === "Absolute Admin") {
-    const staffContracts = await StaffContract.find({
-      academicYearId: academicYearOnFocus,
-      organisationId: orgId
-    });
-    if (!staffContracts) {
-      throwError("Error fetching staff contracts", 500);
-    }
-    return staffContracts;
+    staffContracts = await StaffContract.find({ ...query, organisationId: orgId })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
   } else {
-    const staffContracts = await StaffContract.find({
-      academicYearId: academicYearOnFocus,
+    staffContracts = await StaffContract.find({
+      ...query,
       organisationId: orgId,
       staffCustomId: { $ne: selfId }
-    });
-    if (!staffContracts) {
-      throwError("Error fetching staff contracts", 500);
-    }
-    return staffContracts;
+    })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
   }
+
+  if (!staffContracts) {
+    throwError("Error fetching staff contracts", 500);
+  }
+  const totalCount = await StaffContract.countDocuments();
+  const chunkCount = staffContracts.length;
+
+  staffContracts.pop();
+
+  return {
+    staffContracts: staffContracts,
+    totalCount,
+    chunkCount,
+    nextCursor: staffContracts[staffContracts.length - 1]?._id,
+    prevCursor: staffContracts[0]?._id,
+    hasNext: staffContracts.length > limit
+  };
 };
 
 export const fetchAcademicYears = async (orgId: string) => {
