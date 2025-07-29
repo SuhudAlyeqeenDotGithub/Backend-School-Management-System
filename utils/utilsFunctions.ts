@@ -154,7 +154,14 @@ export const userIsStaff = async (customId: string, orgId: string) => {
   return staff;
 };
 
-export const fetchStaffContracts = async (query: any, limit: number, asWho: string, orgId: string, selfId: string) => {
+export const fetchStaffContracts = async (
+  query: any,
+  cursorType: string,
+  limit: number,
+  asWho: string,
+  orgId: string,
+  selfId: string
+) => {
   let staffContracts;
   if (asWho === "Absolute Admin") {
     staffContracts = await StaffContract.find({ ...query, organisationId: orgId })
@@ -174,12 +181,13 @@ export const fetchStaffContracts = async (query: any, limit: number, asWho: stri
     throwError("Error fetching staff contracts", 500);
   }
   const totalCount = await StaffContract.countDocuments();
-  const hasNext = staffContracts.length > limit;
+  const hasNext = staffContracts.length > limit || cursorType === "prev";
 
   if (staffContracts.length > limit) {
     staffContracts.pop();
   }
   const chunkCount = staffContracts.length;
+
   return {
     staffContracts: staffContracts,
     totalCount,
