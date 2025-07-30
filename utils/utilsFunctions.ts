@@ -130,20 +130,44 @@ export const fetchUsers = async (asWho: string, orgId: string, selfId: string) =
   }
 };
 
-export const fetchStaffProfiles = async (asWho: string, orgId: string, selfId: string) => {
+export const fetchStaffProfiles = async (
+  query: any,
+  cursorType: string,
+  limit: number,
+  asWho: string,
+  orgId: string,
+  selfId: string
+) => {
+  let staffProfiles;
   if (asWho === "Absolute Admin") {
-    const staff = await Staff.find({ organisationId: orgId });
-    if (!staff) {
-      throwError("Error fetching staff", 500);
-    }
-    return staff;
+    staffProfiles = await Staff.find({ ...query, organisationId: orgId })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
   } else {
-    const staff = await Staff.find({ organisationId: orgId, staffCustomId: { $ne: selfId } });
-    if (!staff) {
-      throwError("Error fetching staff", 500);
-    }
-    return staff;
+    staffProfiles = await Staff.find({ ...query, organisationId: orgId, staffCustomId: { $ne: selfId } })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
   }
+
+  if (!staffProfiles) {
+    throwError("Error fetching staff profiles", 500);
+  }
+  const totalCount = await Staff.countDocuments();
+  const hasNext = staffProfiles.length > limit || cursorType === "prev";
+
+  if (staffProfiles.length > limit) {
+    staffProfiles.pop();
+  }
+  const chunkCount = staffProfiles.length;
+
+  return {
+    staffProfiles,
+    totalCount,
+    chunkCount,
+    nextCursor: staffProfiles[staffProfiles.length - 1]?._id,
+    prevCursor: staffProfiles[0]?._id,
+    hasNext
+  };
 };
 
 export const userIsStaff = async (customId: string, orgId: string) => {
@@ -189,7 +213,7 @@ export const fetchStaffContracts = async (
   const chunkCount = staffContracts.length;
 
   return {
-    staffContracts: staffContracts,
+    staffContracts,
     totalCount,
     chunkCount,
     nextCursor: staffContracts[staffContracts.length - 1]?._id,

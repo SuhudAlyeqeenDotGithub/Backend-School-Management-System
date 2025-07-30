@@ -33,4 +33,10 @@ const staffSchema = new Schema(
   { timestamps: true }
 );
 
+staffSchema.index({ organisationId: 1 });
+staffSchema.index({ organisationId: 1, staffCustomId: 1 });
+staffSchema.index({ staffMaritalStatus: 1 });
+staffSchema.index({ staffGender: 1 });
+staffSchema.index({ searchText: 1 });
+
 export const Staff = model("Staff", staffSchema);

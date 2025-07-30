@@ -5,7 +5,6 @@ import {
   confirmAccount,
   confirmRole,
   throwError,
-  fetchUsers,
   generateSearchText,
   fetchStaffProfiles,
   userIsStaff,
@@ -14,7 +13,7 @@ import {
 } from "../../utils/utilsFunctions";
 import { logActivity } from "../../utils/utilsFunctions";
 import { diff } from "deep-diff";
-import bcrypt from "bcryptjs";
+
 import { Staff } from "../../models/staff/profile";
 
 declare global {
@@ -49,6 +48,28 @@ const validateStaffProfile = (staffDataParam: any) => {
 
 export const getStaffProfiles = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
+  const { search = "", limit = 15, cursorType = "next", nextCursor, prevCursor, ...filters } = req.query;
+
+  const parsedLimit = parseInt(limit as string);
+  const query: any = {};
+
+  if (search) {
+    query.searchText = { $regex: search, $options: "i" };
+  }
+
+  for (const key in filters) {
+    if (filters[key] !== "all") {
+      query[key] = filters[key];
+    }
+  }
+
+  if (cursorType) {
+    if (nextCursor && cursorType === "next") {
+      query._id = { $lt: nextCursor };
+    } else if (prevCursor && cursorType === "prev") {
+      query._id = { $gt: prevCursor };
+    }
+  }
 
   // confirm user
   const account = await confirmAccount(accountId);
@@ -71,16 +92,19 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
     .actions.some(({ name }: any) => name === "View Staff");
 
   if (absoluteAdmin || hasAccess) {
-    const staffProfiles = await fetchStaffProfiles(
+    const result = await fetchStaffProfiles(
+      query,
+      cursorType as string,
+      parsedLimit,
       absoluteAdmin ? "Absolute Admin" : "User",
       organisation!._id.toString(),
       absoluteAdmin ? "" : staffId.staffCustomId.toString()
     );
 
-    if (!staffProfiles) {
+    if (!result || !result.staffProfiles) {
       throwError("Error fetching staff profiles", 500);
     }
-    res.status(201).json(staffProfiles);
+    res.status(201).json(result);
     return;
   }
 
@@ -215,21 +239,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
     new Date()
   );
 
-  if (absoluteAdmin || hasAccess) {
-    const staffProfiles = await fetchStaffProfiles(
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      absoluteAdmin ? "" : staffId.staffCustomId.toString()
-    );
-
-    if (!staffProfiles) {
-      throwError("Error fetching staff profiles", 500);
-    }
-    res.status(201).json(staffProfiles);
-    return;
-  }
-
-  throwError("Unauthorised Action: You do not have access to view staff profile - Please contact your admin", 403);
+  res.status(201).json("successfull");
 });
 
 // controller to handle role update
@@ -354,21 +364,7 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
     new Date()
   );
 
-  if (absoluteAdmin || hasAccess) {
-    const staffProfiles = await fetchStaffProfiles(
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      absoluteAdmin ? "" : staffId.staffCustomId.toString()
-    );
-
-    if (!staffProfiles) {
-      throwError("Error fetching staff profiles", 500);
-    }
-    res.status(201).json(staffProfiles);
-    return;
-  }
-
-  throwError("Unauthorised Action: You do not have access to view staff profile - Please contact your admin", 403);
+  res.status(201).json("successfull");
 });
 
 // controller to handle deleting roles
@@ -440,19 +436,5 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
     ],
     new Date()
   );
-  if (absoluteAdmin || hasAccess) {
-    const staffProfiles = await fetchStaffProfiles(
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      absoluteAdmin ? "" : staffIDToDelete
-    );
-
-    if (!staffProfiles) {
-      throwError("Error fetching staff profiles", 500);
-    }
-    res.status(201).json(staffProfiles);
-    return;
-  }
-
-  throwError("Unauthorised Action: You do not have access to view staff profile - Please contact your admin", 403);
+  res.status(201).json("successfull");
 });
