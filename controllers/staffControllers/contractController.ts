@@ -218,57 +218,23 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
 export const updateStaffContract = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const {
-    staffCustomId,
+    _id: contractId,
     academicYearId,
-    staffFirstName,
-    staffMiddleName,
-    staffLastName,
-    staffDateOfBirth,
-    staffGender,
-    staffPhone,
-    staffEmail,
-    staffAddress,
-    staffPostCode,
-    staffImage,
-    staffImageDestination,
-    staffMaritalStatus,
-    staffStartDate,
-    staffEndDate,
-    staffNationality,
-    staffAllergies,
-    staffNextOfKinName,
-    staffNextOfKinRelationship,
-    staffNextOfKinPhone,
-    staffNextOfKinEmail,
-    staffQualification
+    academicYear,
+    staffId,
+    staffCustomId,
+    staffFullName,
+    jobTitle,
+    contractStartDate,
+    contractEndDate,
+    responsibilities,
+    contractType,
+    contractStatus,
+    contractSalary,
+    workingSchedule
   } = req.body;
 
-  const copyBody = {
-    staffCustomId,
-    staffFirstName,
-    staffMiddleName,
-    staffLastName,
-    staffDateOfBirth,
-    staffGender,
-    staffPhone,
-    staffEmail,
-    staffAddress,
-    staffPostCode,
-    staffImage,
-    staffImageDestination,
-    staffMaritalStatus,
-    staffStartDate,
-    staffEndDate,
-    staffNationality,
-    staffAllergies,
-    staffNextOfKinName,
-    staffNextOfKinRelationship,
-    staffNextOfKinPhone,
-    staffNextOfKinEmail,
-    staffQualification
-  };
-
-  if (!validateStaffContract(copyBody)) {
+  if (!validateStaffContract({ ...req.body })) {
     throwError("Please fill in all required fields", 400);
   }
 
@@ -278,7 +244,7 @@ export const updateStaffContract = asyncHandler(async (req: Request, res: Respon
   const orgParsedId = account!.organisationId!._id.toString();
   const organisation = await confirmAccount(orgParsedId);
 
-  const { roleId, accountStatus, staffId } = account as any;
+  const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   if (accountStatus === "Locked" || accountStatus !== "Active") {
@@ -287,65 +253,60 @@ export const updateStaffContract = asyncHandler(async (req: Request, res: Respon
 
   const hasAccess = creatorTabAccess
     .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name, permission }: any) => name === "Edit Staff" && permission === true);
+    .actions.some(({ name, permission }: any) => name === "Edit Staff Contract" && permission === true);
 
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to edit staff - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to edit staff contract - Please contact your admin", 403);
   }
 
-  const originalStaff = await Staff.findOne({ staffCustomId });
+  const originalStaff = await StaffContract.findOne({ staffCustomId });
 
   if (!originalStaff) {
     throwError("An error occured whilst getting old staff data", 500);
   }
 
-  const updatedStaff = await Staff.findByIdAndUpdate(
-    originalStaff?._id.toString(),
+  const updatedStaffContract = await StaffContract.findByIdAndUpdate(
+    contractId,
     {
-      ...copyBody,
+      ...req.body,
       searchText: generateSearchText([
+        academicYear,
         staffCustomId,
-        staffFirstName,
-        staffGender,
-        staffMiddleName,
-        staffLastName,
-        staffEmail,
-        staffDateOfBirth,
-        staffNationality,
-        staffNextOfKinName,
-        staffCustomId
+        staffFullName,
+        jobTitle,
+        contractStartDate,
+        contractEndDate,
+        contractType,
+        contractStatus
       ])
     },
     { new: true }
   );
 
-  if (!updatedStaff) {
-    throwError("Error updating staff profile", 500);
+  if (!updatedStaffContract) {
+    throwError("Error updating staff contract", 500);
   }
 
-  const difference = diff(originalStaff, updatedStaff);
-  const staffFullName =
-    updatedStaff?.staffFirstName + " " + updatedStaff?.staffMiddleName + " " + updatedStaff?.staffLastName.trim();
+  const difference = diff(originalStaff, updatedStaffContract);
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "Staff Profile Update",
-    "Staff",
-    updatedStaff?._id,
+    "Staff Contract Update",
+    "StaffContract",
+    updatedStaffContract?._id,
     staffFullName,
     difference,
     new Date()
   );
-
-  throwError("Unauthorised Action: You do not have access to view staff profile - Please contact your admin", 403);
+  res.status(201).json("successful");
 });
 
 // controller to handle deleting roles
 export const deleteStaffContract = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { staffIDToDelete, academicYearId } = req.body;
-  if (!staffIDToDelete) {
+  const { staffContractIDToDelete } = req.body;
+  if (!staffContractIDToDelete) {
     throwError("Unknown delete request - Please try again", 400);
   }
   // confirm user
@@ -354,62 +315,46 @@ export const deleteStaffContract = asyncHandler(async (req: Request, res: Respon
   const organisation = await confirmAccount(account!.organisationId!._id.toString());
   const { roleId: creatorRoleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+
   if (accountStatus === "Locked" || accountStatus !== "Active") {
     throwError("Your account is no longer active - Please contact your admin", 409);
   }
   const hasAccess = creatorTabAccess
     .filter(({ tab, actions }: any) => tab === "Staff")[0]
-    .actions.some(({ name, permission }: any) => name === "Delete Sta" && permission === true);
+    .actions.some(({ name, permission }: any) => name === "Delete Staff Contract" && permission === true);
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to delete staff profile - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to delete staff contract - Please contact your admin", 403);
   }
 
-  const StaffContractToDelete = await Staff.findOne({
-    staffCustomId: staffIDToDelete,
-    organisationId: organisation?._id.toString()
-  });
+  const StaffContractToDelete = await StaffContract.findById(staffContractIDToDelete);
 
   if (!StaffContractToDelete) {
-    throwError("Error finding staff contract with provided Custom Id - Please try again", 404);
+    throwError("Error finding staff contract - Please try again", 404);
   }
 
-  const deletedStaffContract = await Staff.findByIdAndDelete(StaffContractToDelete?._id.toString());
+  const deletedStaffContract = await StaffContract.findByIdAndDelete(staffContractIDToDelete);
   if (!deletedStaffContract) {
     throwError("Error deleting staff contract - Please try again", 500);
   }
 
   const emitRoom = deletedStaffContract?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "staffs");
-
-  const staffFullName =
-    deletedStaffContract?.staffFirstName +
-    " " +
-    deletedStaffContract?.staffMiddleName +
-    " " +
-    deletedStaffContract?.staffLastName;
+  emitToOrganisation(emitRoom, "staffcontracts");
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "User Delete",
-    "Staff",
+    "Staff Contract Delete",
+    "StaffContract",
     deletedStaffContract?._id,
-    staffFullName.trim(),
+    deletedStaffContract?._id.toString(),
     [
       {
         kind: "D" as any,
-        lhs: {
-          _id: deletedStaffContract?._id,
-          staffCustomId: deletedStaffContract?.staffCustomId,
-          staffFullName: staffFullName.trim(),
-          staffEmail: deletedStaffContract?.staffEmail,
-          staffNextOfKinName: deletedStaffContract?.staffNextOfKinName,
-          staffQualification: deletedStaffContract?.staffQualification
-        }
+        lhs: deletedStaffContract
       }
     ],
     new Date()
   );
 
-  throwError("Unauthorised Action: You do not have access to view staff profile - Please contact your admin", 403);
+  res.status(201).json("successful");
 });

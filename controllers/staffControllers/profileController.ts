@@ -417,7 +417,7 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
   await logActivity(
     account?.organisationId,
     accountId,
-    "User Delete",
+    "Staff Delete",
     "Staff",
     deletedStaffProfile?._id,
     staffFullName.trim(),
