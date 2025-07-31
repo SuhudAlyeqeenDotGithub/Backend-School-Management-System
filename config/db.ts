@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { StaffContract } from "../models/staff/contracts";
 import { Staff } from "../models/staff/profile";
+import { AcademicYear } from "../models/general/academicYear";
 
 const connectDatabase = async () => {
   try {
@@ -8,6 +9,7 @@ const connectDatabase = async () => {
     console.log(`MongoDB database connected to ${conn.connection.host}`);
     await StaffContract.init();
     await Staff.init();
+    await AcademicYear.init();
   } catch (error: unknown) {
     if (error instanceof Error) {
       console.error(`Error: ${error.message}`);

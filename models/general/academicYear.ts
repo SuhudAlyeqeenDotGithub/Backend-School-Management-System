@@ -12,4 +12,8 @@ const academicYearSchema = new Schema({
   }
 });
 
+academicYearSchema.index({ organisationId: 1 });
+academicYearSchema.index({ academicYear: 1, organisationId: 1 });
+academicYearSchema.index({ searchText: 1 });
+
 export const AcademicYear = model("AcademicYear", academicYearSchema);

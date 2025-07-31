@@ -223,7 +223,7 @@ export const fetchStaffContracts = async (
 };
 
 export const fetchAcademicYears = async (orgId: string) => {
-  const academicYears = await AcademicYear.find({ organisationId: orgId });
+  const academicYears = await AcademicYear.find({ organisationId: orgId }).sort({ _id: -1 });
   if (!academicYears) {
     throwError("Error fetching academic years", 500);
   }

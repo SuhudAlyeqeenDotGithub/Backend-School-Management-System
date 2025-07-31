@@ -25,28 +25,6 @@ declare global {
   }
 }
 
-const validateAcademicYear = (staffDataParam: any) => {
-  const {
-    staffCustomId,
-    staffImage,
-    staffImageDestination,
-    staffMiddleName,
-    staffQualification,
-    staffPostCode,
-    staffEndDate,
-    ...copyLocalData
-  } = staffDataParam;
-
-  for (const [key, value] of Object.entries(copyLocalData)) {
-    if (!value || (typeof value === "string" && value.trim() === "")) {
-      throwError(`Missing Data: Please fill in the ${key} input`, 400);
-      return false;
-    }
-  }
-
-  return true;
-};
-
 export const getAcademicYears = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
 
@@ -149,83 +127,25 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
     new Date()
   );
 
-  if (absoluteAdmin || hasAccess) {
-    const academicYears = await fetchAcademicYears(orgParsedId);
-
-    if (!academicYears) {
-      throwError("Error fetching academic years", 500);
-    }
-    res.status(201).json(academicYears);
-    return;
-  }
-
-  throwError("Unauthorised Action: You do not have access to view academic year - Please contact your admin", 403);
+  res.status(201).json("successfull");
 });
 
 // controller to handle role update
 export const updateAcademicYear = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const {
-    staffCustomId,
-    staffFirstName,
-    staffMiddleName,
-    staffLastName,
-    staffDateOfBirth,
-    staffGender,
-    staffPhone,
-    staffEmail,
-    staffAddress,
-    staffPostCode,
-    staffImage,
-    staffImageDestination,
-    staffMaritalStatus,
-    staffStartDate,
-    staffEndDate,
-    staffNationality,
-    staffAllergies,
-    staffNextOfKinName,
-    staffNextOfKinRelationship,
-    staffNextOfKinPhone,
-    staffNextOfKinEmail,
-    staffQualification
-  } = req.body;
+  const { _id: academicYearId, academicYear, startDate, endDate } = req.body;
 
-  const copyBody = {
-    staffCustomId,
-    staffFirstName,
-    staffMiddleName,
-    staffLastName,
-    staffDateOfBirth,
-    staffGender,
-    staffPhone,
-    staffEmail,
-    staffAddress,
-    staffPostCode,
-    staffImage,
-    staffImageDestination,
-    staffMaritalStatus,
-    staffStartDate,
-    staffEndDate,
-    staffNationality,
-    staffAllergies,
-    staffNextOfKinName,
-    staffNextOfKinRelationship,
-    staffNextOfKinPhone,
-    staffNextOfKinEmail,
-    staffQualification
-  };
-
-  if (!validateAcademicYear(copyBody)) {
+  // validate input
+  if (!academicYear || !startDate || !endDate) {
     throwError("Please fill in all required fields", 400);
   }
-
   // confirm user
   const account = await confirmAccount(accountId);
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
   const organisation = await confirmAccount(orgParsedId);
 
-  const { roleId, accountStatus, staffId } = account as any;
+  const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   if (accountStatus === "Locked" || accountStatus !== "Active") {
@@ -233,69 +153,46 @@ export const updateAcademicYear = asyncHandler(async (req: Request, res: Respons
   }
 
   const hasAccess = creatorTabAccess
-    .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name, permission }: any) => name === "Edit Staff" && permission === true);
+    .filter(({ tab }: any) => tab === "Academic Year")[0]
+    .actions.some(({ name, permission }: any) => name === "Edit Academic Year" && permission === true);
 
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to edit staff - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to edit academic year - Please contact your admin", 403);
   }
 
-  const originalStaff = await Staff.findOne({ staffCustomId });
+  const originalAcademicYear = await AcademicYear.findById(academicYearId);
 
-  if (!originalStaff) {
-    throwError("An error occured whilst getting old staff data", 500);
+  if (!originalAcademicYear) {
+    throwError("An error occured whilst getting old Academic Year data", 500);
   }
 
-  const updatedStaff = await Staff.findByIdAndUpdate(
-    originalStaff?._id.toString(),
+  const updatedAcademicYear = await AcademicYear.findByIdAndUpdate(
+    academicYearId,
     {
-      ...copyBody,
-      searchText: generateSearchText([
-        staffCustomId,
-        staffFirstName,
-        staffGender,
-        staffMiddleName,
-        staffLastName,
-        staffEmail,
-        staffDateOfBirth,
-        staffNationality,
-        staffNextOfKinName,
-        staffCustomId
-      ])
+      ...req.body,
+      searchText: generateSearchText([academicYear, startDate, endDate])
     },
     { new: true }
   );
 
-  if (!updatedStaff) {
+  if (!updatedAcademicYear) {
     throwError("Error updating academic year", 500);
   }
 
-  const difference = diff(originalStaff, updatedStaff);
-  const staffFullName =
-    updatedStaff?.staffFirstName + " " + updatedStaff?.staffMiddleName + " " + updatedStaff?.staffLastName.trim();
+  const difference = diff(originalAcademicYear, updatedAcademicYear);
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "Staff Profile Update",
-    "Staff",
-    updatedStaff?._id,
-    staffFullName,
+    "Academic Year Update",
+    "AcademicYear",
+    updatedAcademicYear?._id,
+    academicYear,
     difference,
     new Date()
   );
 
-  if (absoluteAdmin || hasAccess) {
-    const academicYears = await fetchAcademicYears(organisation!._id.toString());
-
-    if (!academicYears) {
-      throwError("Error fetching academic years", 500);
-    }
-    res.status(201).json(academicYears);
-    return;
-  }
-
-  throwError("Unauthorised Action: You do not have access to view academic year - Please contact your admin", 403);
+  res.status(201).json("successfull");
 });
 
 // controller to handle deleting roles
