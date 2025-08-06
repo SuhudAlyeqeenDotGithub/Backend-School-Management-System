@@ -1,6 +1,5 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { Account } from "../../models/admin/accountModel";
 import {
   confirmAccount,
   confirmRole,

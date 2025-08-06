@@ -198,8 +198,8 @@ export const updateAcademicYear = asyncHandler(async (req: Request, res: Respons
 // controller to handle deleting roles
 export const deleteAcademicYear = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { staffIDToDelete } = req.body;
-  if (!staffIDToDelete) {
+  const { academicYearIdToDelete } = req.body;
+  if (!academicYearIdToDelete) {
     throwError("Unknown delete request - Please try again", 400);
   }
   // confirm user
@@ -218,61 +218,34 @@ export const deleteAcademicYear = asyncHandler(async (req: Request, res: Respons
     throwError("Unauthorised Action: You do not have access to delete academic year - Please contact your admin", 403);
   }
 
-  const AcademicYearToDelete = await Staff.findOne({
-    staffCustomId: staffIDToDelete,
-    organisationId: organisation?._id.toString()
-  });
+  const academicYearToDelete = await AcademicYear.findById(academicYearIdToDelete);
 
-  if (!AcademicYearToDelete) {
-    throwError("Error finding staff contract with provided Custom Id - Please try again", 404);
+  if (!academicYearToDelete) {
+    throwError("Error finding academic year - It could have been deleted, Please try again", 404);
   }
 
-  const deletedAcademicYear = await Staff.findByIdAndDelete(AcademicYearToDelete?._id.toString());
+  const deletedAcademicYear = await AcademicYear.findByIdAndDelete(academicYearIdToDelete);
   if (!deletedAcademicYear) {
-    throwError("Error deleting staff contract - Please try again", 500);
+    throwError("Error deleting academic year - Please try again", 500);
   }
 
   const emitRoom = deletedAcademicYear?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "staffs");
-
-  const staffFullName =
-    deletedAcademicYear?.staffFirstName +
-    " " +
-    deletedAcademicYear?.staffMiddleName +
-    " " +
-    deletedAcademicYear?.staffLastName;
+  emitToOrganisation(emitRoom, "academicyears");
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "User Delete",
-    "Staff",
+    "Academic Year Deletion",
+    "AcademicYear",
     deletedAcademicYear?._id,
-    staffFullName.trim(),
+    academicYearToDelete?.academicYear,
     [
       {
         kind: "D" as any,
-        lhs: {
-          _id: deletedAcademicYear?._id,
-          staffCustomId: deletedAcademicYear?.staffCustomId,
-          staffFullName: staffFullName.trim(),
-          staffEmail: deletedAcademicYear?.staffEmail,
-          staffNextOfKinName: deletedAcademicYear?.staffNextOfKinName,
-          staffQualification: deletedAcademicYear?.staffQualification
-        }
+        lhs: academicYearToDelete
       }
     ],
     new Date()
   );
-  if (absoluteAdmin || hasAccess) {
-    const academicYears = await fetchAcademicYears(organisation!._id.toString());
-
-    if (!academicYears) {
-      throwError("Error fetching academic years", 500);
-    }
-    res.status(201).json(academicYears);
-    return;
-  }
-
-  throwError("Unauthorised Action: You do not have access to view academic year - Please contact your admin", 403);
+  res.status(201).json("successfull");
 });
