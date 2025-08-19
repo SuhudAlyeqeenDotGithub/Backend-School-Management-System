@@ -1,7 +1,7 @@
 import { Storage } from "@google-cloud/storage";
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { throwError, confirmAccount, confirmRole } from "../../utils/utilsFunctions";
+import { throwError, confirmAccount, confirmRole } from "../../utils/utilsFunctions.ts";
 import { nanoid } from "nanoid";
 
 const storage = new Storage({

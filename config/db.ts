@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
-import { StaffContract } from "../models/staff/contracts";
-import { Staff } from "../models/staff/profile";
-import { AcademicYear } from "../models/general/academicYear";
+import { StaffContract } from "../models/staff/contracts.ts";
+import { Staff } from "../models/staff/profile.ts";
+import { AcademicYear } from "../models/general/academicYear.ts";
 
 const connectDatabase = async () => {
   try {

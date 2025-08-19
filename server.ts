@@ -1,21 +1,23 @@
 import express from "express";
-import errorHandler from "./middleware/errorMiddleware";
-import connectDatabase from "./config/db";
+import errorHandler from "./middleware/errorMiddleware.ts";
+import connectDatabase from "./config/db.ts";
 import dotenv from "dotenv";
 dotenv.config();
 import cors from "cors";
 import http from "http";
 import cookieParser from "cookie-parser";
-import accountRoutes from "./routes/accountRoutes";
-import adminRoutes from "./routes/adminRoutes";
-import staffRoutes from "./routes/staffRoutes";
-import academicYearRoutes from "./routes/academicYearRoutes";
-import { accessTokenChecker } from "./middleware/checkAccess";
+import accountRoutes from "./routes/accountRoutes.ts";
+import adminRoutes from "./routes/adminRoutes.ts";
+import staffRoutes from "./routes/staffRoutes.ts";
+import academicYearRoutes from "./routes/academicYearRoutes.ts";
+import { accessTokenChecker } from "./middleware/checkAccess.ts";
 import { Server } from "socket.io";
-import handleWebSocket from "./config/websocket/handleWebSocket";
+import handleWebSocket from "./config/websocket/handleWebSocket.ts";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+
 
 connectDatabase();
 const server = http.createServer(app);

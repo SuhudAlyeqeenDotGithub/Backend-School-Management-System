@@ -1,15 +1,37 @@
 import jwt from "jsonwebtoken";
 import { ActivityLog } from "../models/admin/activityLogModel";
-import { Account } from "../models/admin/accountModel";
-import { Role } from "../models/admin/roleModel";
+import { Account } from "../models/admin/accountModel.ts";
+import { Role } from "../models/admin/roleModel.ts";
 import { nanoid } from "nanoid";
-import { Staff } from "../models/staff/profile";
+import { Staff } from "../models/staff/profile.ts";
 import { io } from "../server";
-import { StaffContract } from "../models/staff/contracts";
+import { StaffContract } from "../models/staff/contracts.ts";
 import { AcademicYear } from "../models/general/academicYear";
 
 export const emitToOrganisation = (organisationId: string, collection: any) => {
   io.to(organisationId).emit("databaseChange", collection);
+};
+
+export const toNegative = (value: number) => {
+  return Math.abs(value) * -1;
+};
+
+export const getObjectSize = (obj: any): number => {
+  return parseFloat((Buffer.byteLength(JSON.stringify(obj), "utf8") / 1024 ** 3).toString());
+};
+
+export const getLastMonth = () => {
+  const date = new Date();
+  date.setMonth(date.getMonth() - 1);
+  return `5 ${date.toLocaleString("en-GB", { month: "long", year: "numeric" })}`;
+};
+
+export const getOwnerMongoId = () => {
+  return process.env.OWNER_MONGO_ID as string;
+};
+
+export const getCurrentMonth = () => {
+  return `5 ${new Date().toLocaleString("en-GB", { month: "long", year: "numeric" })}`;
 };
 
 // throw error function

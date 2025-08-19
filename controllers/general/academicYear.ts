@@ -1,6 +1,5 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { Account } from "../../models/admin/accountModel";
 import {
   confirmAccount,
   confirmRole,
@@ -9,13 +8,15 @@ import {
   fetchAcademicYears,
   userIsStaff,
   emitToOrganisation,
-  logActivity
-} from "../../utils/utilsFunctions";
+  logActivity,
+  getObjectSize
+} from "../../utils/utilsFunctions.ts";
+import { Billing } from "../../models/admin/billingModel.ts";
 
 import { diff } from "deep-diff";
-import { Staff } from "../../models/staff/profile";
-import { AcademicYear } from "../../models/general/academicYear";
-import { parse } from "path";
+import { AcademicYear } from "../../models/general/academicYear.ts";
+import { getBillingDoc, billOrganisation } from "../../utils/billingFunctions.ts";
+import { get } from "http";
 
 declare global {
   namespace Express {
@@ -54,6 +55,12 @@ export const getAcademicYears = asyncHandler(async (req: Request, res: Response)
     if (!academicYears) {
       throwError("Error fetching academic years", 500);
     }
+
+    // log database read
+    await billOrganisation(organisation!._id.toString(), [
+      { field: "databaseOperation", value: academicYears.length + 3 }
+    ]);
+
     res.status(201).json(academicYears);
     return;
   }
@@ -82,6 +89,8 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
     throwError("This academic year name is already in use in this organisation - Please use a different name", 409);
   }
 
+  const role = await confirmRole(account!.roleId!._id.toString());
+
   const { roleId, accountStatus, accountName, staffId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
@@ -105,7 +114,7 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
     searchText: generateSearchText([academicYear, startDate, endDate])
   });
 
-  await logActivity(
+  const activityLog = await logActivity(
     account?.organisationId,
     accountId,
     "Academic Year Creation",
@@ -126,7 +135,12 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
     ],
     new Date()
   );
-
+  // log database read
+  const objectSize = getObjectSize(newAcademicYear) + getObjectSize(activityLog);
+  await billOrganisation(organisation!._id.toString(), [
+    { field: "databaseOperation", value: 6 },
+    { field: "databaseStorageAndBackup", value: objectSize * 2 }
+  ]);
   res.status(201).json("successfull");
 });
 
@@ -144,6 +158,7 @@ export const updateAcademicYear = asyncHandler(async (req: Request, res: Respons
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
   const organisation = await confirmAccount(orgParsedId);
+  const role = await confirmRole(account!.roleId!._id.toString());
 
   const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
@@ -181,7 +196,7 @@ export const updateAcademicYear = asyncHandler(async (req: Request, res: Respons
 
   const difference = diff(originalAcademicYear, updatedAcademicYear);
 
-  await logActivity(
+  const activityLog = await logActivity(
     account?.organisationId,
     accountId,
     "Academic Year Update",
@@ -191,7 +206,7 @@ export const updateAcademicYear = asyncHandler(async (req: Request, res: Respons
     difference,
     new Date()
   );
-
+  await billOrganisation(organisation!._id.toString(), [{ field: "databaseOperation", value: 6 }]);
   res.status(201).json("successfull");
 });
 
@@ -206,6 +221,7 @@ export const deleteAcademicYear = asyncHandler(async (req: Request, res: Respons
   const account = await confirmAccount(accountId);
   // confirm organisation
   const organisation = await confirmAccount(account!.organisationId!._id.toString());
+  const role = await confirmRole(account!.roleId!._id.toString());
   const { roleId: creatorRoleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
   if (accountStatus === "Locked" || accountStatus !== "Active") {
@@ -247,5 +263,8 @@ export const deleteAcademicYear = asyncHandler(async (req: Request, res: Respons
     ],
     new Date()
   );
+
+  await billOrganisation(organisation!._id.toString(), [{ field: "databaseOperation", value: 6 }]);
+
   res.status(201).json("successfull");
 });

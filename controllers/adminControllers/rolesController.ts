@@ -1,9 +1,15 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { Role } from "../../models/admin/roleModel";
-import { Account } from "../../models/admin/accountModel";
-import { confirmAccount, confirmRole, throwError, fetchRoles, emitToOrganisation } from "../../utils/utilsFunctions";
-import { logActivity } from "../../utils/utilsFunctions";
+import { Role } from "../../models/admin/roleModel.ts";
+import {
+  confirmAccount,
+  confirmRole,
+  throwError,
+  fetchRoles,
+  emitToOrganisation,
+  logActivity
+} from "../../utils/utilsFunctions.ts";
+
 import { diff } from "deep-diff";
 
 declare global {

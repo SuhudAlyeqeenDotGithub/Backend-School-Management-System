@@ -3,7 +3,7 @@ const { Schema, model } = mongoose;
 
 const accountSchema = new Schema(
   {
-    accountType: { type: String, enum: ["Organization", "User"], required: true },
+    accountType: { type: String, enum: ["Organization", "User", "Owner"], required: true },
     organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
     staffId: { type: mongoose.Schema.Types.ObjectId, ref: "Staff" },
     accountName: { type: String },

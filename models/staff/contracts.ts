@@ -8,15 +8,40 @@ const staffContractSchema = new Schema(
     staffId: { type: String, required: true },
     academicYear: { type: String, required: true },
     staffCustomId: { type: String, required: true },
+    contractCustomId: { type: String, required: true },
+    reportingManagerCustomId: String,
     staffFullName: { type: String, required: true },
     jobTitle: { type: String, required: true },
     contractStartDate: { type: String, required: true },
-    contractEndDate: { type: String },
-    responsibilities: { type: [{ _id: String, responsibility: String, description: String }], required: true },
+    contractEndDate: String,
+    responsibilities: {
+      type: [{ _id: String, role: String, responsibility: String, description: String }],
+      required: true
+    },
     searchText: { type: String, required: true },
-    contractType: { type: String, required: true, enum: ["Full-time", "Part-time"] },
+    contractType: {
+      type: String,
+      required: true,
+      enum: ["Full-time", "Part-time", "Casual", "Internship", "Fixed-term"]
+    },
+    probationStartDate: String,
+    probationEndDate: String,
+    annualLeaveDays: Number,
+    sickLeaveDays: Number,
+    probationMonths: { type: Number },
     contractStatus: { type: String, required: true, enum: ["Active", "Closed"] },
-    contractSalary: { type: String, required: true, default: "0.00" },
+    department: String,
+    contractSalary: { type: Number, required: true, default: "0.00" },
+    payFrequency: {
+      type: String,
+      enum: ["Monthly", "Termly", "Weekly", "Annually"]
+    },
+    allowances: {
+      type: [{ _id: String, allowanceType: String, amount: Number }],
+      required: true
+    },
+    terminationNoticePeriod: String,
+    confidentialityAgreement: Boolean,
     workingSchedule: {
       type: [{ _id: String, day: String, startTime: String, endTime: String, hours: String }],
       required: true

@@ -1,15 +1,15 @@
 import asyncHandler from "express-async-handler";
 import bcrypt from "bcryptjs";
 import { Request, Response } from "express";
-import { Account } from "../models/admin/accountModel";
-import { throwError } from "../utils/utilsFunctions";
-import { Role } from "../models/admin/roleModel";
-import { generateRefreshToken, generateAccessToken, generateSearchText } from "../utils/utilsFunctions";
+import { Account } from "../models/admin/accountModel.ts";
+import { throwError } from "../utils/utilsFunctions.ts";
+import { Role } from "../models/admin/roleModel.ts";
+import { generateRefreshToken, generateAccessToken, generateSearchText } from "../utils/utilsFunctions.ts";
 import { diff } from "deep-diff";
-import { ResetPassword } from "../models/authentication/resetPasswordModel";
+import { ResetPassword } from "../models/authentication/resetPasswordModel.ts";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
-import { logActivity } from "../utils/utilsFunctions";
+import { logActivity } from "../utils/utilsFunctions.ts";
 
 // Extend Express Request interface to include userToken
 declare global {

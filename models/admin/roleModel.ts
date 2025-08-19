@@ -56,7 +56,8 @@ roleSchema.pre("save", function (next) {
         "Edit Staff Contract",
         "Delete Staff Contract",
         "View Staff Contracts"
-      ]
+      ],
+      "Academic Year": ["Create Academic Year", "Edit Academic Year", "Delete Academic Year", "View Academic Years"]
     };
 
     this.tabAccess = Object.entries(allTabActions).map(([tab, actions]) => ({

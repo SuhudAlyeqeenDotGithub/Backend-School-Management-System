@@ -26,8 +26,31 @@ const staffSchema = new Schema(
     staffNextOfKinPhone: { type: String, required: true },
     staffNextOfKinEmail: { type: String, required: true },
     searchText: { type: String, required: true },
+    skills: { type: [String] },
+    identification: {
+      type: [
+        {
+          idType: String,
+          idNumber: String,
+          issueDate: Date,
+          expiryDate: Date
+        }
+      ]
+    },
     staffQualification: {
       type: [{ _id: String, qualificationName: String, schoolName: String, startDate: String, endDate: String }]
+    },
+    workExperience: {
+      type: [
+        {
+          _id: String,
+          organisation: String,
+          position: String,
+          experience: String,
+          startDate: Date,
+          endDate: Date
+        }
+      ]
     }
   },
   { timestamps: true }

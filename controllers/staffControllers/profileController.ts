@@ -1,6 +1,6 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { Account } from "../../models/admin/accountModel";
+import { Account } from "../../models/admin/accountModel.ts";
 import {
   confirmAccount,
   confirmRole,
@@ -10,11 +10,11 @@ import {
   userIsStaff,
   generateCustomId,
   emitToOrganisation
-} from "../../utils/utilsFunctions";
-import { logActivity } from "../../utils/utilsFunctions";
+} from "../../utils/utilsFunctions.ts";
+import { logActivity } from "../../utils/utilsFunctions.ts";
 import { diff } from "deep-diff";
 
-import { Staff } from "../../models/staff/profile";
+import { Staff } from "../../models/staff/profile.ts";
 
 declare global {
   namespace Express {

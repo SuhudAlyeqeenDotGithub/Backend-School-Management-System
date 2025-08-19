@@ -9,11 +9,11 @@ import {
   userIsStaff,
   emitToOrganisation,
   logActivity
-} from "../../utils/utilsFunctions";
+} from "../../utils/utilsFunctions.ts";
 
 import { diff } from "deep-diff";
-import { Staff } from "../../models/staff/profile";
-import { StaffContract } from "../../models/staff/contracts";
+import { Staff } from "../../models/staff/profile.ts";
+import { StaffContract } from "../../models/staff/contracts.ts";
 
 declare global {
   namespace Express {
