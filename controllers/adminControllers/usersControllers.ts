@@ -14,13 +14,6 @@ import { logActivity } from "../../utils/utilsFunctions.ts";
 import { diff } from "deep-diff";
 import bcrypt from "bcryptjs";
 
-declare global {
-  namespace Express {
-    interface Request {
-      userToken?: any;
-    }
-  }
-}
 export const getUsers = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
 

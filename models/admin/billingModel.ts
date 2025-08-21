@@ -57,6 +57,15 @@ const billingSchema = new Schema(
         costInDollar: 0
       })
     },
+    renderComputeSeconds: {
+      type: valueCostType,
+      _id: false,
+      required: true,
+      default: () => ({
+        value: 0,
+        costInDollar: 0
+      })
+    },
     databaseStorageAndBackup: {
       type: valueCostType,
       _id: false,

@@ -16,14 +16,6 @@ import { diff } from "deep-diff";
 
 import { Staff } from "../../models/staff/profile.ts";
 
-declare global {
-  namespace Express {
-    interface Request {
-      userToken?: any;
-    }
-  }
-}
-
 const validateStaffProfile = (staffDataParam: any) => {
   const {
     staffCustomId,

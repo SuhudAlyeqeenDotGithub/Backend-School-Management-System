@@ -1,7 +1,7 @@
 import { Billing } from "../models/admin/billingModel";
 import { getCurrentMonth, getLastMonth, getOwnerMongoId, throwError } from "./utilsFunctions";
 import { getObjectSize } from "./utilsFunctions";
-import { AggregateBilling } from "../models/admin/aggregateBilling";
+import { Request } from "express";
 
 export const getLastMonthBill = async (organisationId: string) => {
   const lastMonthBillingDoc = await Billing.findOne({
@@ -20,6 +20,13 @@ export const getLastMonthStorages = async (organisationId: string) => {
   const lastMonthDatabaseStorage = lastMonthBillingDoc ? lastMonthBillingDoc?.databaseStorageAndBackup.value : 0;
   const lastMonthCloudStorageGBStored = lastMonthBillingDoc ? lastMonthBillingDoc?.cloudStorageGBStored.value : 0;
   return { lastMonthDatabaseStorage, lastMonthCloudStorageGBStored };
+};
+
+export const registerBillings = (req: Request, fields: { field: string; value: number }[]) => {
+  if (!req.billings) {
+    req.billings = [];
+  }
+  req.billings.push(...fields);
 };
 
 const createNewMonthBilling = async (organisationId: string, newBillingMonth = getCurrentMonth()) => {
@@ -42,9 +49,10 @@ export const getSelfBillingDoc = async () => {
   const newBillingMonth = getCurrentMonth();
   const ownerMongoId = getOwnerMongoId();
   let operationCount = 0;
+
   const existingBillingDoc = await Billing.findOne({
     organisationId: ownerMongoId,
-    newBillingMonth
+    billingMonth: newBillingMonth
   });
   operationCount++;
 
@@ -57,18 +65,18 @@ export const getSelfBillingDoc = async () => {
 };
 
 export const getBillingDoc = async (organisationId: string) => {
-  const billingMonth = getCurrentMonth();
+  const newBillingMonth = getCurrentMonth();
   let operationCount = 0;
 
   const existingBillingDoc = await Billing.findOne({
     organisationId: organisationId,
-    billingMonth
+    billingMonth: newBillingMonth
   });
 
   operationCount++;
 
   if (!existingBillingDoc) {
-    const { newBillingDoc, returnOperationCount } = await createNewMonthBilling(organisationId, billingMonth);
+    const { newBillingDoc, returnOperationCount } = await createNewMonthBilling(organisationId, newBillingMonth);
 
     const objectSize = getObjectSize(newBillingDoc);
     await selfBill([
@@ -89,7 +97,6 @@ export const selfBill = async (billingFields: { field: string; value: any }[]) =
   billingFields.forEach(({ field, value: localValue }) => {
     if (selfBillingDoc[field]) {
       selfBillingDoc[field].value += localValue;
-      selfBillingDoc[field].costInDollar = selfBillingDoc[field].value * selfBillingDoc[field].ratePerUnit;
     }
   });
 
@@ -114,7 +121,6 @@ export const billOrganisation = async (organisationId: string, billingFields: { 
   billingFields.forEach(({ field, value: localValue }) => {
     if (billingDoc[field]) {
       billingDoc[field].value += localValue;
-      billingDoc[field].costInDollar = billingDoc[field].value * billingDoc[field].ratePerUnit;
     }
   });
 

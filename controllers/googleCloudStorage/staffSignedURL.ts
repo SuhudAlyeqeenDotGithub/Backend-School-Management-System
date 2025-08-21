@@ -11,14 +11,6 @@ const storage = new Storage({
 
 const bucketName = "alyeqeenappsimages";
 
-declare global {
-  namespace Express {
-    interface Request {
-      userToken?: any;
-    }
-  }
-}
-
 export const getSignedUrlForStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { imageName, imageType } = req.body;

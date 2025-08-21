@@ -1,6 +1,7 @@
 import express from "express";
 import errorHandler from "./middleware/errorMiddleware.ts";
 import connectDatabase from "./config/db.ts";
+import { trackComputeSeconds, trackResponseSize } from "./middleware/resourceUsageTracker.ts";
 import dotenv from "dotenv";
 dotenv.config();
 import cors from "cors";
@@ -9,15 +10,14 @@ import cookieParser from "cookie-parser";
 import accountRoutes from "./routes/accountRoutes.ts";
 import adminRoutes from "./routes/adminRoutes.ts";
 import staffRoutes from "./routes/staffRoutes.ts";
-import academicYearRoutes from "./routes/academicYearRoutes.ts";
+import timelineRoutes from "./routes/timelineRoutes.ts";
 import { accessTokenChecker } from "./middleware/checkAccess.ts";
 import { Server } from "socket.io";
 import handleWebSocket from "./config/websocket/handleWebSocket.ts";
+import { fetchAccount } from "./controllers/accountControllers.ts";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
-
 
 connectDatabase();
 const server = http.createServer(app);
@@ -44,9 +44,15 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/alyeqeenschoolapp/api/", accountRoutes);
-app.use("/alyeqeenschoolapp/api/", accessTokenChecker, adminRoutes);
-app.use("/alyeqeenschoolapp/api/", accessTokenChecker, staffRoutes);
-app.use("/alyeqeenschoolapp/api/", accessTokenChecker, academicYearRoutes);
+
+app.use(accessTokenChecker);
+app.use(trackComputeSeconds);
+app.use(trackResponseSize);
+
+app.get("/alyeqeenschoolapp/api/orgaccount/fetchaccount", fetchAccount);
+app.use("/alyeqeenschoolapp/api/", adminRoutes);
+app.use("/alyeqeenschoolapp/api/", staffRoutes);
+app.use("/alyeqeenschoolapp/api/timeline/", timelineRoutes);
 
 app.use(errorHandler);
 

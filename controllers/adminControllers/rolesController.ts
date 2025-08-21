@@ -12,13 +12,6 @@ import {
 
 import { diff } from "deep-diff";
 
-declare global {
-  namespace Express {
-    interface Request {
-      userToken?: any;
-    }
-  }
-}
 export const getRoles = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
 

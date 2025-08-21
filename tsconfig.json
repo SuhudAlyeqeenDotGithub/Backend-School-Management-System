@@ -9,8 +9,13 @@
     "outDir": "./dist",
     "rootDir": "./",
     "noEmit": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "typeRoots": ["./node_modules/@types", "./types"]
   },
-  "include": ["src/**/*.ts", "server.ts"],
-  "exclude": ["node_modules"]
+  "ts-node": {
+    "files": true
+  },
+  "include": ["**/*.ts", "**/*.d.ts"],
+  "exclude": ["node_modules", "dist"]
 }

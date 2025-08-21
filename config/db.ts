@@ -1,7 +1,8 @@
 import mongoose from "mongoose";
 import { StaffContract } from "../models/staff/contracts.ts";
 import { Staff } from "../models/staff/profile.ts";
-import { AcademicYear } from "../models/general/academicYear.ts";
+import { AcademicYear } from "../models/timeline/academicYear.ts";
+import { Period } from "../models/timeline/period.ts";
 
 const connectDatabase = async () => {
   try {
@@ -10,6 +11,7 @@ const connectDatabase = async () => {
     await StaffContract.init();
     await Staff.init();
     await AcademicYear.init();
+    await Period.init();
   } catch (error: unknown) {
     if (error instanceof Error) {
       console.error(`Error: ${error.message}`);

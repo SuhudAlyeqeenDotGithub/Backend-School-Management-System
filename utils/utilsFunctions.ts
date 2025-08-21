@@ -6,7 +6,7 @@ import { nanoid } from "nanoid";
 import { Staff } from "../models/staff/profile.ts";
 import { io } from "../server";
 import { StaffContract } from "../models/staff/contracts.ts";
-import { AcademicYear } from "../models/general/academicYear";
+import { AcademicYear } from "../models/timeline/academicYear.ts";
 
 export const emitToOrganisation = (organisationId: string, collection: any) => {
   io.to(organisationId).emit("databaseChange", collection);
@@ -17,6 +17,7 @@ export const toNegative = (value: number) => {
 };
 
 export const getObjectSize = (obj: any): number => {
+  if (obj == null || !obj) return 0;
   return parseFloat((Buffer.byteLength(JSON.stringify(obj), "utf8") / 1024 ** 3).toString());
 };
 

@@ -1,8 +1,9 @@
+import { Request, Response } from "express";
 import asyncHandler from "express-async-handler";
 import bcrypt from "bcryptjs";
-import { Request, Response } from "express";
-import { Account } from "../models/admin/accountModel.ts";
-import { throwError } from "../utils/utilsFunctions.ts";
+
+import { Account, defaultSettings } from "../models/admin/accountModel.ts";
+import { getObjectSize, throwError } from "../utils/utilsFunctions.ts";
 import { Role } from "../models/admin/roleModel.ts";
 import { generateRefreshToken, generateAccessToken, generateSearchText } from "../utils/utilsFunctions.ts";
 import { diff } from "deep-diff";
@@ -10,15 +11,7 @@ import { ResetPassword } from "../models/authentication/resetPasswordModel.ts";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 import { logActivity } from "../utils/utilsFunctions.ts";
-
-// Extend Express Request interface to include userToken
-declare global {
-  namespace Express {
-    interface Request {
-      userToken?: any;
-    }
-  }
-}
+import { registerBillings } from "../utils/billingFunctions.ts";
 
 export const signupOrgAccount = asyncHandler(async (req: Request, res: Response) => {
   const { organisationName, organisationEmail, organisationPhone, organisationPassword, organisationConfirmPassword } =
@@ -52,6 +45,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     accountEmail: organisationEmail,
     accountPhone: organisationPhone,
     accountPassword: hashedPassword,
+    settings: { ...defaultSettings },
     searchText: generateSearchText([organisationName, organisationEmail, organisationPhone])
   });
 
@@ -171,7 +165,8 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   }
 
   const tokenPayload = {
-    accountId: updatedOrgAccount?._id
+    accountId: updatedOrgAccount?._id,
+    organisationId: updatedOrgAccount?.organisationId?._id
   };
   const accessToken = generateAccessToken(tokenPayload);
   const refreshToken = generateRefreshToken(tokenPayload);
@@ -190,9 +185,12 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     sameSite: "lax"
   });
 
+  const parsedAccount = updatedOrgAccount?.toObject();
+
   const reshapedAccount = {
-    ...updatedOrgAccount?.toObject(),
-    accountId: updatedOrgAccount?._id
+    ...parsedAccount,
+    settings: { ...defaultSettings, ...parsedAccount?.settings },
+    accountId: parsedAccount?._id
   };
 
   delete reshapedAccount._id;
@@ -231,7 +229,8 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
   }
   // generate tokens
   const tokenPayload = {
-    accountId: account?._id
+    accountId: account?._id,
+    organisationId: account?.organisationId?._id
   };
   const accessToken = generateAccessToken(tokenPayload);
   const refreshToken = generateRefreshToken(tokenPayload);
@@ -250,9 +249,12 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
     sameSite: "lax"
   });
 
+  const parsedAccount = account?.toObject();
+
   const reshapedAccount = {
-    ...account?.toObject(),
-    accountId: account?._id
+    ...parsedAccount,
+    settings: { ...defaultSettings, ...parsedAccount?.settings },
+    accountId: parsedAccount?._id
   };
 
   delete reshapedAccount._id;
@@ -289,13 +291,24 @@ export const fetchAccount = asyncHandler(async (req: Request, res: Response) => 
   if (noRole) {
     throwError("Couldn't fetch user role - Please contact your admin", 400);
   }
+  const parsedAccount = account?.toObject();
+
   const reshapedAccount = {
-    ...account?.toObject(),
-    accountId: account?._id
+    ...parsedAccount,
+    settings: { ...defaultSettings, ...parsedAccount?.settings },
+    accountId: parsedAccount?._id
   };
 
   delete reshapedAccount._id;
   delete reshapedAccount.accountPassword;
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize(account)
+    }
+  ]);
 
   res.status(200).json(reshapedAccount);
 });
@@ -326,7 +339,8 @@ export const refreshAccessToken = asyncHandler(async (req: Request, res: Respons
   }
 
   const tokenPayload = {
-    accountId: account?._id
+    accountId: account?._id,
+    organisationId: account?.organisationId
   };
 
   const accessToken = generateAccessToken(tokenPayload);
@@ -517,7 +531,7 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
     throwError("Failed to change password", 500);
   }
 
-  // cretae an activity log for the organization account password change
+  // create an activity log for the organization account password change
   // get the difference in old and new
   const difference = diff(organisationEmailExists, updatedAccountPassword);
   await logActivity(
@@ -539,7 +553,8 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
 
   // generate tokens
   const tokenPayload = {
-    accountId: updatedAccountPassword?._id
+    accountId: updatedAccountPassword?._id,
+    organisationId: updatedAccountPassword?.organisationId
   };
   const accessToken = generateAccessToken(tokenPayload);
   const refreshToken = generateRefreshToken(tokenPayload);
@@ -560,9 +575,12 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
 
   await ResetPassword.deleteOne({ resetCode: hashedResetCode });
 
+  const parsedAccount = updatedAccountPassword?.toObject();
+
   const reshapedAccount = {
-    ...updatedAccountPassword?.toObject(),
-    accountId: updatedAccountPassword?._id
+    ...parsedAccount,
+    settings: { ...defaultSettings, ...parsedAccount?.settings },
+    accountId: parsedAccount?._id
   };
 
   delete reshapedAccount._id;

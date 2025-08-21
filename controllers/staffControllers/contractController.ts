@@ -15,14 +15,6 @@ import { diff } from "deep-diff";
 import { Staff } from "../../models/staff/profile.ts";
 import { StaffContract } from "../../models/staff/contracts.ts";
 
-declare global {
-  namespace Express {
-    interface Request {
-      userToken?: any;
-    }
-  }
-}
-
 const validateStaffContract = (staffDataParam: any) => {
   const { contractEndDate, workingSchedule, responsibilities, searchText, ...copyLocalData } = staffDataParam;
 
