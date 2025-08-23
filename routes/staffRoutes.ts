@@ -16,14 +16,14 @@ import {
 } from "../controllers/staffControllers/contractController";
 
 // end point for staff / profile
-router.get("/staff/profile.tss", getStaffProfiles);
-router.post("/staff/profile.tss", createStaffProfile);
-router.put("/staff/profile.tss", updateStaffProfile);
-router.delete("/staff/profile.tss", deleteStaffProfile);
+router.get("/staff/profile", getStaffProfiles);
+router.post("/staff/profile", createStaffProfile);
+router.put("/staff/profile", updateStaffProfile);
+router.delete("/staff/profile", deleteStaffProfile);
 
 // end point for staff / contracts
-router.get("/staff/contracts.ts", getStaffContracts);
-router.post("/staff/contracts.ts", createStaffContract);
-router.put("/staff/contracts.ts", updateStaffContract);
-router.delete("/staff/contracts.ts", deleteStaffContract);
+router.get("/staff/contract", getStaffContracts);
+router.post("/staff/contract", createStaffContract);
+router.put("/staff/contract", updateStaffContract);
+router.delete("/staff/contract", deleteStaffContract);
 export default router;

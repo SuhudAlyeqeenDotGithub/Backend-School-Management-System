@@ -21,11 +21,14 @@ import { Period } from "../../models/timeline/period.ts";
 // controller to handle role creation
 export const createPeriod = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { period, startDate, endDate } = req.body;
+  const { period, startDate, endDate, academicYearId, customId, academicYear } = req.body;
 
   // validate input
   if (!period || !startDate || !endDate) {
     throwError("Please fill in all required fields", 400);
+  }
+  if (!academicYearId || !customId || !academicYear) {
+    throwError("error attaching required fields - Please try again", 400);
   }
 
   // confirm user
@@ -34,7 +37,7 @@ export const createPeriod = asyncHandler(async (req: Request, res: Response) => 
   const orgParsedId = account!.organisationId!._id.toString();
   const organisation = await confirmAccount(orgParsedId);
 
-  const periodNameExists = await AcademicYear.findOne({ period: period, organisationId: orgParsedId });
+  const periodNameExists = await AcademicYear.findOne({ period: period, academicYearId });
   if (periodNameExists) {
     throwError("This period name is already in use under a same academic year - Please use a different name", 409);
   }
@@ -60,6 +63,9 @@ export const createPeriod = asyncHandler(async (req: Request, res: Response) => 
     period,
     startDate,
     endDate,
+    academicYearId,
+    customId,
+    academicYear,
     organisationId: orgParsedId
   });
 
@@ -89,26 +95,30 @@ export const createPeriod = asyncHandler(async (req: Request, res: Response) => 
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 1 : 0) },
+    { field: "databaseOperation", value: 8 + (logActivityAllowed ? 1 : 0) },
     { field: "databaseStorageAndBackup", value: getObjectSize([newPeriod, activityLog]) * 2 },
     {
       field: "databaseDataTransfer",
-      value: getObjectSize([newPeriod, organisation, role, account, periodNameExists, activityLog])
+      value: getObjectSize([newPeriod, organisation, role, account, periodNameExists, activityLog, newPeriod])
     }
   ]);
 
-  res.status(201).json("successfull");
+  res.status(201).json(newPeriod);
 });
 
 // controller to handle role update
 export const updatePeriod = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { _id: periodId, period, startDate, endDate } = req.body;
+  const { _id: periodId, period, startDate, endDate, academicYearId, customId, academicYear } = req.body;
 
   // validate input
-  if (!periodId || !period || !startDate || !endDate) {
+  if (!period || !startDate || !endDate) {
     throwError("Please fill in all required fields", 400);
   }
+  if (!periodId || !academicYearId || !customId || !academicYear) {
+    throwError("error attaching required fields - Please try again", 400);
+  }
+
   // confirm user
   const account = await confirmAccount(accountId);
   // confirm organisation
@@ -174,7 +184,7 @@ export const updatePeriod = asyncHandler(async (req: Request, res: Response) => 
     }
   ]);
 
-  res.status(201).json("successfull");
+  res.status(201).json(updatedPeriod);
 });
 
 // controller to handle deleting roles
@@ -245,5 +255,5 @@ export const deletePeriod = asyncHandler(async (req: Request, res: Response) => 
     }
   ]);
 
-  res.status(201).json("successfull");
+  res.status(201).json(periodIdToDelete);
 });

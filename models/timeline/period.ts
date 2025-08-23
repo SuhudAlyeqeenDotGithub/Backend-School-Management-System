@@ -4,6 +4,8 @@ const periodSchema = new Schema(
   {
     organisationId: { type: Schema.Types.ObjectId, ref: "Account", required: true },
     academicYearId: { type: Schema.Types.ObjectId, ref: "AcademicYear", required: true },
+    academicYear: { type: String },
+    customId: { type: String, required: true },
     period: { type: String, required: true },
     startDate: { type: String, required: true },
     endDate: { type: String, required: true }

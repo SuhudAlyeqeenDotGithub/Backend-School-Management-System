@@ -11,14 +11,14 @@ const academicYearSchema = new Schema(
   { timestamps: true }
 );
 
-// academicYearSchema.virtual("periods", {
-//   ref: "periods",
-//   localField: "_id",
-//   foreignField: "academicYearId"
-// });
+academicYearSchema.virtual("periods", {
+  ref: "Period",
+  localField: "_id",
+  foreignField: "academicYearId"
+});
 
-// academicYearSchema.set("toObject", { virtuals: true });
-// academicYearSchema.set("toJSON", { virtuals: true });
+academicYearSchema.set("toObject", { virtuals: true });
+academicYearSchema.set("toJSON", { virtuals: true });
 
 academicYearSchema.index({ organisationId: 1 });
 academicYearSchema.index({ academicYear: 1, organisationId: 1 }, { unique: true });

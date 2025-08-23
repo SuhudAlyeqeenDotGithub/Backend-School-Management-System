@@ -66,10 +66,10 @@ export const getAcademicYears = asyncHandler(async (req: Request, res: Response)
 // controller to handle role creation
 export const createAcademicYear = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { academicYear, startDate, endDate } = req.body;
+  const { academicYear, startDate, endDate, periods } = req.body;
 
   // validate input
-  if (!academicYear || !startDate || !endDate) {
+  if (!academicYear || !startDate || !endDate || !Array.isArray(periods) || periods.length === 0) {
     throwError("Please fill in all required fields", 400);
   }
 
@@ -108,6 +108,28 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
     organisationId: orgParsedId
   });
 
+  if (!newAcademicYear) {
+    throwError("Error creating academic year", 500);
+  }
+
+  const academicYearTaggedPeriods = periods.map(
+    (period: { period: string; startDate: string; endDate: string; customId: string }) => ({
+      organisationId: orgParsedId,
+      customId: period.customId,
+      academicYearId: newAcademicYear?._id,
+      academicYear: newAcademicYear?.academicYear,
+      period: period.period,
+      startDate: period.startDate,
+      endDate: period.endDate
+    })
+  );
+
+  const createdPeriods = await Period.insertMany(academicYearTaggedPeriods);
+
+  if (!createdPeriods) {
+    throwError("Error creating academic year periods", 500);
+  }
+
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
   if (logActivityAllowed) {
@@ -125,7 +147,8 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
             _id: newAcademicYear?._id,
             academicYear: newAcademicYear?.academicYear,
             startDate: newAcademicYear?.startDate,
-            endDate: newAcademicYear?.endDate
+            endDate: newAcademicYear?.endDate,
+            periods: createdPeriods
           }
         }
       ],
@@ -134,11 +157,11 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 1 : 0) },
-    { field: "databaseStorageAndBackup", value: getObjectSize([newAcademicYear, activityLog]) * 2 },
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 1 : 0) + createdPeriods?.length * 2 },
+    { field: "databaseStorageAndBackup", value: getObjectSize([newAcademicYear, activityLog, createdPeriods]) * 2 },
     {
       field: "databaseDataTransfer",
-      value: getObjectSize([newAcademicYear, organisation, role, account, yearNameExists, activityLog])
+      value: getObjectSize([newAcademicYear, organisation, role, account, yearNameExists, activityLog, createdPeriods])
     }
   ]);
 
