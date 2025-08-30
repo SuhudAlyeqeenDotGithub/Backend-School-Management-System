@@ -3,22 +3,29 @@ import asyncHandler from "express-async-handler";
 import bcrypt from "bcryptjs";
 
 import { Account, defaultSettings } from "../models/admin/accountModel.ts";
-import { getObjectSize, throwError } from "../utils/utilsFunctions.ts";
+import { codeMatches, getObjectSize, getVerificationCode, sendEmail, throwError } from "../utils/utilsFunctions.ts";
 import { Role } from "../models/admin/roleModel.ts";
 import { generateRefreshToken, generateAccessToken, generateSearchText } from "../utils/utilsFunctions.ts";
 import { diff } from "deep-diff";
-import { ResetPassword } from "../models/authentication/resetPasswordModel.ts";
+import { VerificationCode } from "../models/authentication/resetPasswordModel.ts";
 import crypto from "crypto";
-import nodemailer from "nodemailer";
+import { Subscription } from "../models/admin/subscription.ts";
 import { logActivity } from "../utils/utilsFunctions.ts";
 import { registerBillings } from "../utils/billingFunctions.ts";
 
 export const signupOrgAccount = asyncHandler(async (req: Request, res: Response) => {
-  const { organisationName, organisationEmail, organisationPhone, organisationPassword, organisationConfirmPassword } =
-    req.body;
+  const {
+    organisationName,
+    organisationInitial,
+    organisationEmail,
+    organisationPhone,
+    organisationPassword,
+    organisationConfirmPassword
+  } = req.body;
 
   if (
     !organisationName ||
+    !organisationInitial ||
     !organisationEmail ||
     !organisationPhone ||
     !organisationPassword ||
@@ -42,6 +49,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   const orgAccount = await Account.create({
     accountType: "Organization",
     accountName: organisationName,
+    accountInitial: organisationInitial,
     accountEmail: organisationEmail,
     accountPhone: organisationPhone,
     accountPassword: hashedPassword,
@@ -76,6 +84,16 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     ],
     new Date()
   );
+
+  const freemiumSubscription = await Subscription.create({
+    subscriptionType: "Freemium",
+    organisationId: orgAccount._id,
+    freemiumStartDate: new Date(),
+    freemiumEndDate: new Date(new Date().setDate(new Date().getDate() + 30)),
+    premiumStartDate: null,
+    premiumEndDate: null,
+    subscriptionStatus: "Active"
+  });
 
   //   create a default role for the organization as absolute admin
   const defaultRole = await Role.create({
@@ -197,6 +215,84 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   delete reshapedAccount.accountPassword;
 
   res.status(201).json(reshapedAccount);
+});
+
+// controller to send email verification code
+export const getEmailVerificationCode = asyncHandler(async (req: Request, res: Response) => {
+  const { organisationName, organisationEmail } = req.body;
+  if (!organisationEmail) {
+    throwError("Please provide organisation (admin) email", 400);
+  }
+
+  const accountExist = await Account.findOne({ accountEmail: organisationEmail });
+  if (accountExist) {
+    throwError("Account with this email already exist. Please sign in instead", 400);
+  }
+
+  const { verificationCode, hashedVerificationCode } = getVerificationCode();
+
+  const verificationCodeDoc = await VerificationCode.create({
+    accountEmail: organisationEmail,
+    resetCode: hashedVerificationCode,
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+  });
+
+  if (!verificationCodeDoc) {
+    throwError("Error creating verification code. Please try again", 500);
+  }
+
+  // send token to account email
+  await sendEmail(
+    organisationEmail,
+    "Email Verification Code - From Al-Yeqeen School Management App",
+    `Hello ${organisationName}, your code is: ${verificationCode}. Please do not share this with anyone and use within 8 minutes`
+  );
+
+  res
+    .status(200)
+    .json({ message: `A verification code has been sent to email ${organisationEmail}. Please enter it below` });
+});
+
+// controller to verify new organisation email - signup
+export const verifyAccount = asyncHandler(async (req: Request, res: Response) => {
+  const { code, email } = req.body;
+
+  if (!code) {
+    throwError("Please provide the code you received", 400);
+  }
+  if (!email) {
+    throwError(
+      "Sorry!!! we lost track of the associated email. Please Ensure you are using the same browser or resend code",
+      400
+    );
+  }
+
+  const verificationCodeDoc = await VerificationCode.findOne({ accountEmail: email });
+  if (!verificationCodeDoc) {
+    throwError(
+      "No code has been sent to this email in the last 15 minutes. Please - refresh page and resend code",
+      409
+    );
+  }
+
+  const { verificationCode, expiresAt } = verificationCodeDoc as {
+    verificationCode: string;
+    expiresAt: Date;
+  };
+
+  if (!codeMatches(code, verificationCode)) {
+    await VerificationCode.deleteOne({ verificationCode });
+    throwError(`Please use the latest code that was sent to ${email}`, 400);
+  }
+
+  if (expiresAt < new Date()) {
+    await VerificationCode.deleteOne({ verificationCode });
+    throwError(`This code is expired. Please request a new one`, 409);
+  }
+
+  await VerificationCode.deleteOne({ verificationCode });
+
+  res.status(200).json({ message: `Code verification successful. You will now be redirected to signup` });
 });
 
 // controller to handle signin
@@ -354,6 +450,8 @@ export const refreshAccessToken = asyncHandler(async (req: Request, res: Respons
   res.status(201).json("Access token refresh successful");
 });
 
+// controller to send password reset email with code
+
 export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Response) => {
   const { email } = req.body;
   if (!email) {
@@ -377,12 +475,11 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
     );
   }
 
-  const resetCode = crypto.randomBytes(32).toString("hex");
-  const hashedResetCode = crypto.createHash("sha256").update(resetCode).digest("hex");
+  const { verificationCode, hashedVerificationCode } = getVerificationCode();
 
-  const resetPasswordDoc = await ResetPassword.create({
+  const resetPasswordDoc = await VerificationCode.create({
     accountEmail: email,
-    resetCode: hashedResetCode,
+    resetCode: hashedVerificationCode,
     expiresAt: new Date(Date.now() + 10 * 60 * 1000)
   });
 
@@ -403,30 +500,16 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
   );
 
   // send token to account email
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.EMAIL,
-      pass: process.env.PASSWORD
-    }
-  });
-
-  const mailOptions = {
-    from: process.env.EMAIL, // still your email
-    to: email, // send to user
-    subject: "Reset Password Verification Code - From Al-Yeqeen School Management App",
-    text: `Hello ${accountExist?.accountName}, your code is: ${resetCode}. Please do not share this with anyone and use within 8 minutes`
-  };
-
-  try {
-    await transporter.sendMail(mailOptions);
-  } catch (error: any) {
-    throwError(error.message || "Error sending code", 500);
-  }
+  await sendEmail(
+    email,
+    "Reset Password Verification Code - From Al-Yeqeen School Management App",
+    `Hello ${accountExist?.accountName}, your code is: ${verificationCode}. Please do not share this with anyone and use within 8 minutes`
+  );
 
   res.status(200).json({ message: `A verification code has been sent to email ${email}. You will now be redirected` });
 });
 
+// controller to verify password reset code
 export const resetPasswordVerifyCode = asyncHandler(async (req: Request, res: Response) => {
   const { code, email } = req.body;
 
@@ -440,24 +523,23 @@ export const resetPasswordVerifyCode = asyncHandler(async (req: Request, res: Re
     );
   }
 
-  const resetPasswordDoc = await ResetPassword.findOne({ accountEmail: email });
+  const resetPasswordDoc = await VerificationCode.findOne({ accountEmail: email });
   if (!resetPasswordDoc) {
     throwError("No code has been sent to this email in the last 15 minutes. Please resend code", 409);
   }
 
-  const { resetCode, expiresAt } = resetPasswordDoc as {
-    resetCode: string;
+  const { verificationCode, expiresAt } = resetPasswordDoc as {
+    verificationCode: string;
     expiresAt: Date;
   };
 
-  const hashedResetCode = crypto.createHash("sha256").update(code).digest("hex");
-  if (hashedResetCode !== resetCode) {
-    await ResetPassword.deleteOne({ resetCode: hashedResetCode });
+  if (!codeMatches(code, verificationCode)) {
+    await VerificationCode.deleteOne({ verificationCode });
     throwError(`Please use the latest code that was sent to ${email}`, 400);
   }
 
   if (expiresAt < new Date()) {
-    await ResetPassword.deleteOne({ resetCode: hashedResetCode });
+    await VerificationCode.deleteOne({ verificationCode });
     throwError(`This code is expired. Please request a new one`, 409);
   }
 
@@ -498,24 +580,24 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
     );
   }
 
-  const resetPasswordDoc = await ResetPassword.findOne({ accountEmail: organisationEmail });
+  const resetPasswordDoc = await VerificationCode.findOne({ accountEmail: organisationEmail });
   if (!resetPasswordDoc) {
     throwError("Invalid request. Please request a code to reset password", 409);
   }
 
-  const { resetCode, expiresAt } = resetPasswordDoc as {
-    resetCode: string;
+  const { verificationCode, expiresAt } = resetPasswordDoc as {
+    verificationCode: string;
     expiresAt: Date;
   };
 
   const hashedResetCode = crypto.createHash("sha256").update(code).digest("hex");
-  if (hashedResetCode !== resetCode) {
-    await ResetPassword.deleteOne({ resetCode: hashedResetCode });
+  if (hashedResetCode !== verificationCode) {
+    await VerificationCode.deleteOne({ verificationCode: hashedResetCode });
     throwError(`Invalid code, Please request a new one`, 400);
   }
 
   if (expiresAt < new Date()) {
-    await ResetPassword.deleteOne({ resetCode: hashedResetCode });
+    await VerificationCode.deleteOne({ verificationCode: hashedResetCode });
     throwError(`Associated code for this session is expired. Please request a new one`, 409);
   }
 
@@ -573,7 +655,7 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
     sameSite: "lax"
   });
 
-  await ResetPassword.deleteOne({ resetCode: hashedResetCode });
+  await VerificationCode.deleteOne({ resetCode: hashedResetCode });
 
   const parsedAccount = updatedAccountPassword?.toObject();
 

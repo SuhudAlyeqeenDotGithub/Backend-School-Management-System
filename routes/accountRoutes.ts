@@ -7,10 +7,14 @@ import {
   resetPasswordVerifyCode,
   resetPasswordNewPassword,
   signoutAccount,
-  refreshAccessToken
+  refreshAccessToken,
+  verifyAccount,
+  getEmailVerificationCode
 } from "../controllers/accountControllers";
 import { refreshTokenChecker } from "../middleware/checkAccess";
 
+router.post("/orgaccount/verifyaccount", getEmailVerificationCode);
+router.post("/orgaccount/verifysignupcode", verifyAccount);
 router.post("/orgaccount/signup", signupOrgAccount);
 router.post("/orgaccount/signin", signinAccount);
 router.get("/orgaccount/signout", signoutAccount);

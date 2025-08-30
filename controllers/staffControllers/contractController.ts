@@ -329,7 +329,7 @@ export const deleteStaffContract = asyncHandler(async (req: Request, res: Respon
   }
 
   const emitRoom = deletedStaffContract?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "staffcontracts");
+  emitToOrganisation(emitRoom, "staffcontracts", deletedStaffContract, "delete");
 
   await logActivity(
     account?.organisationId,

@@ -281,9 +281,8 @@ export const deleteAcademicYear = asyncHandler(async (req: Request, res: Respons
   if (!deletedAcademicYear) {
     throwError("Error deleting academic year - Please try again", 500);
   }
-
   const emitRoom = deletedAcademicYear?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "academicyears");
+  emitToOrganisation(emitRoom, "academicyears", deletedAcademicYear, "delete");
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;

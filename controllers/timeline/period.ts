@@ -223,7 +223,7 @@ export const deletePeriod = asyncHandler(async (req: Request, res: Response) => 
   }
 
   const emitRoom = deletedPeriod?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "periods");
+  emitToOrganisation(emitRoom, "periods", deletedPeriod, "delete");
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;

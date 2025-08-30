@@ -7,9 +7,41 @@ import { Staff } from "../models/staff/profile.ts";
 import { io } from "../server";
 import { StaffContract } from "../models/staff/contracts.ts";
 import { AcademicYear } from "../models/timeline/academicYear.ts";
+import nodemailer from "nodemailer";
+import crypto from "crypto";
+import { customAlphabet } from "nanoid";
 
-export const emitToOrganisation = (organisationId: string, collection: any) => {
-  io.to(organisationId).emit("databaseChange", collection);
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL,
+    pass: process.env.PASSWORD
+  }
+});
+
+export async function sendEmail(to: string, subject: string, text: string, html?: string) {
+  const mailOptions = {
+    from: process.env.EMAIL,
+    to,
+    subject,
+    text,
+    html
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+  } catch (error: any) {
+    throwError(error.message || "Error sending email", 500);
+  }
+}
+
+export const emitToOrganisation = (
+  organisationId: string,
+  collection: string,
+  fullDocument: any,
+  changeOperation: string
+) => {
+  io.to(organisationId).emit("databaseChange", { collection, fullDocument, changeOperation });
 };
 
 export const toNegative = (value: number) => {
@@ -48,9 +80,13 @@ export const generateSearchText = (fields: any[]) => {
 };
 
 // generateCustomId
-export const generateCustomId = (prefix: string | string[]) => {
-  const joined = Array.isArray(prefix) ? prefix.join("") : prefix;
-  return `${joined.trim().toUpperCase()}-${nanoid()}`;
+export const generateCustomId = (prefix?: string, neat = false, numberOfCharacters = 7) => {
+  if (neat) {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    const nanoid = customAlphabet(alphabet, numberOfCharacters);
+    return `${prefix ? prefix + "-" : ""}${nanoid()}`;
+  }
+  return `${prefix ? prefix + "-" : ""}${nanoid()}`;
 };
 
 export const generateAccessToken = (accountData: any) => {
@@ -63,6 +99,17 @@ export const generateRefreshToken = (accountData: any) => {
   return jwt.sign(accountData, process.env.JWT_REFRESH_TOKEN_SECRET_KEY as string, {
     expiresIn: "30d"
   });
+};
+
+export const getVerificationCode = () => {
+  const verificationCode = generateCustomId("", true, 5);
+  const hashedVerificationCode = crypto.createHash("sha256").update(verificationCode).digest("hex");
+  return { verificationCode, hashedVerificationCode };
+};
+
+export const codeMatches = (code: string, hashedCode: string) => {
+  const hashedVerificationCode = crypto.createHash("sha256").update(code).digest("hex");
+  return hashedVerificationCode === hashedCode;
 };
 
 // function to log acitivy

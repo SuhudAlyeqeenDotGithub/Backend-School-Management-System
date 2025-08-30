@@ -196,7 +196,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
 
   const newStaff = await Staff.create({
     ...copyBody,
-    staffCustomId: staffCustomId === "" ? generateCustomId(["STF", accountName.trim().slice(0, 4)]) : staffCustomId,
+    staffCustomId: staffCustomId === "" ? generateCustomId("STF" + organisation!.organisationInitial) : staffCustomId,
     organisationId: orgParsedId,
     searchText: generateSearchText([
       staffCustomId,
@@ -239,9 +239,7 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
   const { accountId } = req.userToken;
   const {
     staffCustomId,
-    staffFirstName,
-    staffMiddleName,
-    staffLastName,
+    staffFullName,
     staffDateOfBirth,
     staffGender,
     staffPhone,
@@ -264,9 +262,7 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
 
   const copyBody = {
     staffCustomId,
-    staffFirstName,
-    staffMiddleName,
-    staffLastName,
+    staffFullName,
     staffDateOfBirth,
     staffGender,
     staffPhone,
@@ -324,10 +320,8 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
       ...copyBody,
       searchText: generateSearchText([
         staffCustomId,
-        staffFirstName,
         staffGender,
-        staffMiddleName,
-        staffLastName,
+        staffFullName,
         staffEmail,
         staffDateOfBirth,
         staffNationality,
@@ -342,8 +336,6 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
   }
 
   const difference = diff(originalStaff, updatedStaff);
-  const staffFullName =
-    updatedStaff?.staffFirstName + " " + updatedStaff?.staffMiddleName + " " + updatedStaff?.staffLastName.trim();
 
   await logActivity(
     account?.organisationId,
@@ -397,14 +389,7 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
   }
 
   const emitRoom = deletedStaffProfile?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "staffs");
-
-  const staffFullName =
-    deletedStaffProfile?.staffFirstName +
-    " " +
-    deletedStaffProfile?.staffMiddleName +
-    " " +
-    deletedStaffProfile?.staffLastName;
+  emitToOrganisation(emitRoom, "staffs", deletedStaffProfile, "delete");
 
   await logActivity(
     account?.organisationId,
@@ -412,14 +397,14 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
     "Staff Delete",
     "Staff",
     deletedStaffProfile?._id,
-    staffFullName.trim(),
+    deletedStaffProfile?.staffFullName,
     [
       {
         kind: "D" as any,
         lhs: {
           _id: deletedStaffProfile?._id,
           staffCustomId: deletedStaffProfile?.staffCustomId,
-          staffFullName: staffFullName.trim(),
+          staffFullName: deletedStaffProfile?.staffFullName,
           staffEmail: deletedStaffProfile?.staffEmail,
           staffNextOfKinName: deletedStaffProfile?.staffNextOfKinName,
           staffQualification: deletedStaffProfile?.staffQualification

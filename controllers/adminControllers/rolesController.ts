@@ -274,7 +274,7 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const emitRoom = deletedRole?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "roles");
+  emitToOrganisation(emitRoom, "roles", deletedRole, "delete");
 
   await logActivity(
     account?.organisationId,

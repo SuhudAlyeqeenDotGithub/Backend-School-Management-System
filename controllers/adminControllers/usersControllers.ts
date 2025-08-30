@@ -338,7 +338,7 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const emitRoom = deletedUser?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "accounts");
+  emitToOrganisation(emitRoom, "accounts", deletedUser, "delete");
 
   await logActivity(
     account?.organisationId,

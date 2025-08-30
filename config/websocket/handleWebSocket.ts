@@ -1,7 +1,39 @@
-import { Server } from "socket.io";
+import { Server, Socket } from "socket.io";
 import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
+import * as cookie from "cookie";
+
+declare module "socket.io" {
+  interface Socket {
+    userToken?: any;
+  }
+}
 
 const handleWebSocket = (io: Server) => {
+  io.use(async (socket, next) => {
+    try {
+      const cookies = socket.handshake.headers.cookie;
+      if (!cookies) throw new Error("No Cookies");
+
+      const parsed = cookie.parse(cookies);
+      const accessToken = parsed.accessToken;
+      if (!accessToken) throw new Error("No Access Token");
+
+      const decoded = await new Promise((resolve, reject) => {
+        jwt.verify(accessToken, process.env.JWT_ACCESS_TOKEN_SECRET_KEY as string, (err, decoded) => {
+          if (err) return reject(err);
+          resolve(decoded);
+        });
+      });
+
+      socket.userToken = decoded;
+
+      next();
+    } catch (err: any) {
+      next(err);
+    }
+  });
+
   const socketHandler = () => {
     io.on("connection", (socket) => {
       socket.on("joinOrgRoom", ({ organisationId }: any) => {
@@ -32,7 +64,11 @@ const handleWebSocket = (io: Server) => {
         if (!collectionOnQueue.has(collection)) {
           collectionOnQueue.add(collection);
           setTimeout(() => {
-            io.to(organisationId).emit("databaseChange", collection);
+            io.to(organisationId).emit("databaseChange", {
+              collection,
+              fullDocument: change.fullDocument,
+              changeOperation
+            });
             collectionOnQueue.delete(collection);
           }, 200);
         }

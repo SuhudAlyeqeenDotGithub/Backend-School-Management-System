@@ -5,9 +5,7 @@ const staffSchema = new Schema(
   {
     organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
     staffCustomId: { type: String, unique: true },
-    staffFirstName: { type: String, required: true },
-    staffMiddleName: { type: String },
-    staffLastName: { type: String, required: true },
+    staffFullName: { type: String, required: true },
     staffDateOfBirth: { type: String, required: true },
     staffGender: { type: String, required: true },
     staffPhone: { type: String, required: true },
@@ -57,7 +55,7 @@ const staffSchema = new Schema(
 );
 
 staffSchema.index({ organisationId: 1 });
-staffSchema.index({ organisationId: 1, staffCustomId: 1 });
+staffSchema.index({ organisationId: 1, staffCustomId: 1 }, { unique: true });
 staffSchema.index({ staffMaritalStatus: 1 });
 staffSchema.index({ staffGender: 1 });
 staffSchema.index({ searchText: 1 });
