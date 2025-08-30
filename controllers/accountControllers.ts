@@ -3,7 +3,16 @@ import asyncHandler from "express-async-handler";
 import bcrypt from "bcryptjs";
 
 import { Account, defaultSettings } from "../models/admin/accountModel.ts";
-import { codeMatches, getObjectSize, getVerificationCode, sendEmail, throwError } from "../utils/utilsFunctions.ts";
+import {
+  codeMatches,
+  getObjectSize,
+  getVerificationCode,
+  sendEmail,
+  throwError,
+  validateEmail,
+  validatePassword,
+  validatePhoneNumber
+} from "../utils/utilsFunctions.ts";
 import { Role } from "../models/admin/roleModel.ts";
 import { generateRefreshToken, generateAccessToken, generateSearchText } from "../utils/utilsFunctions.ts";
 import { diff } from "deep-diff";
@@ -15,6 +24,7 @@ import { registerBillings } from "../utils/billingFunctions.ts";
 
 export const signupOrgAccount = asyncHandler(async (req: Request, res: Response) => {
   const {
+    organisationVerificationCode,
     organisationName,
     organisationInitial,
     organisationEmail,
@@ -22,6 +32,13 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     organisationPassword,
     organisationConfirmPassword
   } = req.body;
+
+  if (!organisationVerificationCode) {
+    throwError(
+      "We could not read your verification code - Please make sure you are using the same browser you used to request it or enter the code again",
+      400
+    );
+  }
 
   if (
     !organisationName ||
@@ -38,18 +55,56 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     throwError("Passwords does not match", 400);
   }
 
+  if (!validateEmail(organisationEmail)) {
+    throwError("Please enter a valid email address.", 400);
+  }
+
+  if (!validatePassword(organisationPassword)) {
+    throwError(
+      "Password must be at least 8 characters long and include uppercase, lowercase, number, and at least one special character [!@#$%^&~*].",
+      400
+    );
+  }
+
+  if (!validatePhoneNumber(organisationPhone)) {
+    throwError("Please enter a valid phone number.", 400);
+  }
+
   const organisationEmailExists = await Account.findOne({ accountEmail: organisationEmail });
   if (organisationEmailExists) {
     throwError(`Organization already has an account with this email: ${organisationEmail}. Please sign in.`, 409);
   }
 
+  const verificationCodeDoc = await VerificationCode.findOne({ accountEmail: organisationEmail });
+  if (!verificationCodeDoc) {
+    throwError(
+      "No code has been sent to this email in the last 15 minutes. Please - refresh page and resend code",
+      409
+    );
+  }
+
+  const { verificationCode, expiresAt } = verificationCodeDoc as {
+    verificationCode: string;
+    expiresAt: Date;
+  };
+
+  if (!codeMatches(organisationVerificationCode, verificationCode)) {
+    throwError(`Wrong Code. Please use the latest code that was sent to ${organisationEmail}`, 400);
+  }
+
+  if (expiresAt < new Date()) {
+    await VerificationCode.deleteOne({ verificationCode });
+    throwError(`Your verification code is expired. Please request a new one`, 409);
+  }
+
+  // begin account creation process
   const hashedPassword = await bcrypt.hash(organisationPassword, 10);
 
   //   create initial organization account
   const orgAccount = await Account.create({
     accountType: "Organization",
     accountName: organisationName,
-    accountInitial: organisationInitial,
+    organisationInitial,
     accountEmail: organisationEmail,
     accountPhone: organisationPhone,
     accountPassword: hashedPassword,
@@ -214,6 +269,24 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   delete reshapedAccount._id;
   delete reshapedAccount.accountPassword;
 
+  await VerificationCode.deleteOne({ verificationCode });
+  const emailSent = await sendEmail(
+    orgAccount.accountEmail,
+    "Welcome to Al-Yeqeen School Management App - Account Created Successfully",
+    `Hi ${updatedOrgAccount?.accountName}, your account has been created successfully.`,
+    `   <h1 style="color:blue;">Welcome!</h1>
+    <p>Thank you for creating an account with Al-Yeqeen School Management App. We are glad to have you.</p>
+    <a href="https://suhud-ayodeji-yekini-portfolio.vercel.app/"  style="
+           display: inline-block;
+           padding: 12px 20px;
+           background-color: #64748b; /* Slate colour */
+           color: white;
+           text-decoration: none;
+           border-radius: 6px;
+           font-weight: bold;
+         ">Sign in</a>`
+  );
+
   res.status(201).json(reshapedAccount);
 });
 
@@ -231,21 +304,26 @@ export const getEmailVerificationCode = asyncHandler(async (req: Request, res: R
 
   const { verificationCode, hashedVerificationCode } = getVerificationCode();
 
+  if (!hashedVerificationCode || !verificationCode) {
+    throwError("Error creating verification code. Please try again", 500);
+  }
+
   const verificationCodeDoc = await VerificationCode.create({
     accountEmail: organisationEmail,
-    resetCode: hashedVerificationCode,
-    expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+    verificationCode: hashedVerificationCode,
+    expiresAt: new Date(Date.now() + 30 * 60 * 1000)
   });
 
   if (!verificationCodeDoc) {
     throwError("Error creating verification code. Please try again", 500);
   }
+  console.log(verificationCodeDoc);
 
   // send token to account email
   await sendEmail(
     organisationEmail,
     "Email Verification Code - From Al-Yeqeen School Management App",
-    `Hello ${organisationName}, your code is: ${verificationCode}. Please do not share this with anyone and use within 8 minutes`
+    `Hello ${organisationName}, your code is: ${verificationCode}. Please do not share this with anyone and use within 20 minutes`
   );
 
   res
@@ -281,16 +359,13 @@ export const verifyAccount = asyncHandler(async (req: Request, res: Response) =>
   };
 
   if (!codeMatches(code, verificationCode)) {
-    await VerificationCode.deleteOne({ verificationCode });
-    throwError(`Please use the latest code that was sent to ${email}`, 400);
+    throwError(`Wrong Code. Please use the latest code that was sent to ${email}`, 400);
   }
 
   if (expiresAt < new Date()) {
     await VerificationCode.deleteOne({ verificationCode });
     throwError(`This code is expired. Please request a new one`, 409);
   }
-
-  await VerificationCode.deleteOne({ verificationCode });
 
   res.status(200).json({ message: `Code verification successful. You will now be redirected to signup` });
 });
@@ -479,7 +554,7 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
 
   const resetPasswordDoc = await VerificationCode.create({
     accountEmail: email,
-    resetCode: hashedVerificationCode,
+    verificationCode: hashedVerificationCode,
     expiresAt: new Date(Date.now() + 10 * 60 * 1000)
   });
 
@@ -535,7 +610,7 @@ export const resetPasswordVerifyCode = asyncHandler(async (req: Request, res: Re
 
   if (!codeMatches(code, verificationCode)) {
     await VerificationCode.deleteOne({ verificationCode });
-    throwError(`Please use the latest code that was sent to ${email}`, 400);
+    throwError(`Wrong Code. Please use the latest code that was sent to ${email}`, 400);
   }
 
   if (expiresAt < new Date()) {
@@ -592,7 +667,6 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
 
   const hashedResetCode = crypto.createHash("sha256").update(code).digest("hex");
   if (hashedResetCode !== verificationCode) {
-    await VerificationCode.deleteOne({ verificationCode: hashedResetCode });
     throwError(`Invalid code, Please request a new one`, 400);
   }
 

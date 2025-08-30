@@ -10,6 +10,7 @@ import { AcademicYear } from "../models/timeline/academicYear.ts";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
 import { customAlphabet } from "nanoid";
+import parsePhoneNumberFromString from "libphonenumber-js";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -72,6 +73,23 @@ export const throwError = (message: string, statusCode: number) => {
   const error = new Error(message);
   (error as any).statusCode = statusCode;
   throw error;
+};
+
+export const validatePassword = (password: string) => {
+  const passwordStrengthRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>~+\-]).{8,}$/;
+  return passwordStrengthRegex.test(password.trim());
+};
+
+export const validateEmail = (email: string) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email.trim());
+};
+
+export const validatePhoneNumber = (phoneNumber: string) => {
+  const trimmedPhoneNumber = phoneNumber.trim();
+  const startsWithPlus = trimmedPhoneNumber.startsWith("+");
+  const libParsed = parsePhoneNumberFromString(trimmedPhoneNumber);
+  return startsWithPlus && libParsed?.isValid();
 };
 
 // generateSearchTextFunction

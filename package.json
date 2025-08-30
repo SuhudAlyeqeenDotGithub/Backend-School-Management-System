@@ -23,6 +23,7 @@
     "express": "^5.1.0",
     "express-async-handler": "^1.2.0",
     "jsonwebtoken": "^9.0.2",
+    "libphonenumber-js": "^1.12.15",
     "mongoose": "^8.15.1",
     "nanoid": "^5.1.5",
     "nodemailer": "^7.0.3",

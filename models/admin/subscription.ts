@@ -7,11 +7,11 @@ const subscriptionSchema = new Schema(
     organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
     freemiumStartDate: { type: Date, required: true },
     freemiumEndDate: { type: Date, required: true },
-    premiumStartDate: { type: Date, required: true },
-    premiumEndDate: { type: Date, required: true },
-    subscriptionStatus: { type: String, required: true, enum: ["Active", "Inactive"] },
-    billingAddress: { type: String, required: true, default: "" },
-    billingPostcode: { type: String, default: "" },
+    premiumStartDate: { type: Date },
+    premiumEndDate: { type: Date },
+    subscriptionStatus: { type: String, required: true, enum: ["Active", "Inactive"], default: "Active" },
+    billingAddress: { type: String, required: true, default: "Organisation Address" },
+    billingPostcode: { type: String, default: "Organisation PostCode" },
     paymentDetails: { type: Schema.Types.Mixed, default: {} }
   },
   { timestamps: true }
