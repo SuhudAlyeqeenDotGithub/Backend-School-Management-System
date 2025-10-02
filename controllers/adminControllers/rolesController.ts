@@ -2,12 +2,13 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { Role } from "../../models/admin/roleModel.ts";
 import {
-  confirmAccount,
-  confirmRole,
   throwError,
   fetchRoles,
   emitToOrganisation,
-  logActivity
+  logActivity,
+  checkOrgAndUserActiveness,
+  checkAccess,
+  confirmUserOrgRole
 } from "../../utils/utilsFunctions.ts";
 
 import { diff } from "deep-diff";
@@ -16,24 +17,18 @@ export const getRoles = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
 
   // confirm user
-  const account = await confirmAccount(accountId);
-
-  // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
-
-  // confirm role
-  const role = await confirmRole(account!.roleId!._id.toString());
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess, _id: selfRoleId } = roleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
 
-  const hasAccess = tabAccess
-    .filter(({ tab, actions }: any) => tab === "Admin")[0]
-    .actions.some(({ name, permission }: any) => name === "View Roles" && permission === true);
+  const hasAccess = checkAccess(account, tabAccess, "View Roles");
 
   if (absoluteAdmin || hasAccess) {
     const roles = await fetchRoles(
@@ -62,20 +57,18 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // confirm user
-  const account = await confirmAccount(accountId);
-
-  // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess, _id: selfRoleId } = roleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
-  const hasAccess = creatorTabAccess
-    .filter(({ tab, actions }: any) => tab === "Admin")[0]
-    .actions.some(({ name, permission }: any) => name === "Create Role" && permission === true);
+
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create Role");
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to create roles - Please contact your admin", 403);
@@ -141,21 +134,18 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // confirm user
-  const account = await confirmAccount(accountId);
-
-  // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId: creatorRoleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess, _id: selfRoleId } = creatorRoleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
 
-  const hasAccess = creatorTabAccess
-    .filter(({ tab, actions }: any) => tab === "Admin")[0]
-    .actions.some(({ name, permission }: any) => name === "Edit Role" && permission === true);
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Role");
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to edit roles - Please contact your admin", 403);
@@ -241,21 +231,18 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // confirm user
-  const account = await confirmAccount(accountId);
-
-  // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId: creatorRoleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess, _id: selfRoleId } = creatorRoleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
 
-  const hasAccess = creatorTabAccess
-    .filter(({ tab, actions }: any) => tab === "Admin")[0]
-    .actions.some(({ name, permission }: any) => name === "Delete Role" && permission === true);
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Role");
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete roles - Please contact your admin", 403);

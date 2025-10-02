@@ -274,12 +274,12 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     orgAccount.accountEmail,
     "Welcome to Al-Yeqeen School Management App - Account Created Successfully",
     `Hi ${updatedOrgAccount?.accountName}, your account has been created successfully.`,
-    `   <h1 style="color:blue;">Welcome!</h1>
+    `   <h1 >Welcome!</h1>
     <p>Thank you for creating an account with Al-Yeqeen School Management App. We are glad to have you.</p>
     <a href="https://suhud-ayodeji-yekini-portfolio.vercel.app/"  style="
            display: inline-block;
            padding: 12px 20px;
-           background-color: #64748b; /* Slate colour */
+           background-color: #64748b;
            color: white;
            text-decoration: none;
            border-radius: 6px;
@@ -456,6 +456,10 @@ export const fetchAccount = asyncHandler(async (req: Request, res: Response) => 
 
   if (!account) {
     throwError("Error fetching account data", 500);
+  }
+
+  if (account?.accountStatus !== "Active") {
+    throwError("You account is not active - Please contact your admin if you need help", 409);
   }
   const roleId = account?.roleId;
   const noRole = roleId === null || roleId === undefined || !roleId;

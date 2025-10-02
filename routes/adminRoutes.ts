@@ -2,24 +2,17 @@ import express from "express";
 const router = express.Router();
 import { getRoles, createRole, updateRole, deleteRole } from "../controllers/adminControllers/rolesController";
 import { getUsers, createUser, updateUser, deleteUser } from "../controllers/adminControllers/usersControllers";
-import {
-  getSignedUrlForStaffProfile,
-  deleteStaffImageInBucket
-} from "../controllers/googleCloudStorage/staffSignedURL";
 
 // admin roles endpoints
-router.get("/admin/getroles", getRoles);
-router.post("/admin/createrole", createRole);
-router.put("/admin/updaterole", updateRole);
-router.delete("/admin/deleterole", deleteRole);
+router.get("/admin/roles", getRoles);
+router.post("/admin/roles", createRole);
+router.put("/admin/roles", updateRole);
+router.delete("/admin/roles", deleteRole);
 
 // admin users endpoints
-router.get("/admin/getusers", getUsers);
-router.post("/admin/createuser", createUser);
-router.put("/admin/updateuser", updateUser);
-router.delete("/admin/deleteuser", deleteUser);
+router.get("/admin/users", getUsers);
+router.post("/admin/users", createUser);
+router.put("/admin/users", updateUser);
+router.delete("/admin/users", deleteUser);
 
-// request signed url
-router.post("/signedurl", getSignedUrlForStaffProfile);
-router.delete("/staffimage", deleteStaffImageInBucket);
 export default router;

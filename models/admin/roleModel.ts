@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { Schema, model } from "mongoose";
+import { defaultTabAccess } from "../../utils/defaultVariables";
 
 const roleSchema = new Schema(
   {
@@ -18,56 +19,9 @@ const roleSchema = new Schema(
 
 roleSchema.pre("save", function (next) {
   if (this.absoluteAdmin === true) {
-    const allTabActions = {
-      Admin: [
-        "Create Role",
-        "Edit Role",
-        "Delete Role",
-        "View Roles",
-        "Create User",
-        "Edit User",
-        "Delete User",
-        "View Users",
-        "View Activity Logs"
-      ],
-      Course: [
-        "Create Course",
-        "Edit Course",
-        "Delete Course",
-        "View Courses",
-        "Create Level",
-        "Edit Level",
-        "Delete Level",
-        "View Levels",
-        "Create Subject",
-        "Edit Subject",
-        "Delete Subject",
-        "View Subjects"
-      ],
-      Student: ["Create Student", "Edit Student", "Delete Student", "View Students"],
-      Enrollment: ["Create Enrollment", "Edit Enrollment", "Delete Enrollment", "View Enrollments"],
-      Attendance: ["Create Attendance", "Edit Attendance", "Delete Attendance", "View Attendances"],
-      Staff: [
-        "Create Staff",
-        "Edit Staff",
-        "Delete Staff",
-        "View Staff",
-        "Create Staff Contract",
-        "Edit Staff Contract",
-        "Delete Staff Contract",
-        "View Staff Contracts"
-      ],
-      Timeline: ["Create Academic Year", "Edit Academic Year", "Delete Academic Year", "View Academic Years"]
-    };
-
-    this.tabAccess = Object.entries(allTabActions).map(([tab, actions]) => ({
-      tab,
-      actions: actions.map((name) => ({ name, permission: true }))
-    }));
+    this.tabAccess = defaultTabAccess;
   }
-
   next();
 });
 
 export const Role = model("Role", roleSchema);
-

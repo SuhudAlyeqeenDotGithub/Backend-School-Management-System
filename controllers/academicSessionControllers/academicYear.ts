@@ -7,11 +7,13 @@ import {
   throwError,
   generateSearchText,
   fetchAcademicYears,
-  userIsStaff,
   emitToOrganisation,
   logActivity,
   getObjectSize,
-  toNegative
+  toNegative,
+  confirmUserOrgRole,
+  checkOrgAndUserActiveness,
+  checkAccess
 } from "../../utils/utilsFunctions.ts";
 
 import { diff } from "deep-diff";
@@ -22,24 +24,18 @@ export const getAcademicYears = asyncHandler(async (req: Request, res: Response)
   const { accountId } = req.userToken;
 
   // confirm user
-  const account = await confirmAccount(accountId);
-
-  // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
-
-  // confirm role
-  const role = await confirmRole(account!.roleId!._id.toString());
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, accountStatus, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
 
-  const hasAccess = tabAccess
-    .filter(({ tab }: any) => tab === "Timeline")[0]
-    .actions.some(({ name }: any) => name === "View Academic Years");
+  const hasAccess = checkAccess(account, tabAccess, "View Academic Years");
 
   if (absoluteAdmin || hasAccess) {
     const academicYears = await fetchAcademicYears(organisation!._id.toString());
@@ -74,28 +70,31 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
   }
 
   // confirm user
-  const account = await confirmAccount(accountId);
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
-  const organisation = await confirmAccount(orgParsedId);
 
   const yearNameExists = await AcademicYear.findOne({ academicYear, organisationId: orgParsedId });
   if (yearNameExists) {
     throwError("This academic year name is already in use in this organisation - Please use a different name", 409);
   }
 
-  const role = await confirmRole(account!.roleId!._id.toString());
-
   const { roleId, accountStatus, accountName, staffId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
 
-  const hasAccess = creatorTabAccess
-    .filter(({ tab }: any) => tab === "Timeline")[0]
-    .actions.some(({ name, permission }: any) => name === "Create Academic Year" && permission === true);
+  const hasAccess = checkAccess(
+    account,
+
+    creatorTabAccess,
+
+    "Edit Academic Year"
+  );
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to create academic year - Please contact your admin", 403);
@@ -178,22 +177,19 @@ export const updateAcademicYear = asyncHandler(async (req: Request, res: Respons
     throwError("Please fill in all required fields", 400);
   }
   // confirm user
-  const account = await confirmAccount(accountId);
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
-  const organisation = await confirmAccount(orgParsedId);
-  const role = await confirmRole(account!.roleId!._id.toString());
 
   const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
-  }
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
-  const hasAccess = creatorTabAccess
-    .filter(({ tab }: any) => tab === "Timeline")[0]
-    .actions.some(({ name, permission }: any) => name === "Edit Academic Year" && permission === true);
+  if (!checkPassed) {
+    throwError(message, 409);
+  }
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Academic Year");
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to edit academic year - Please contact your admin", 403);
@@ -253,18 +249,19 @@ export const deleteAcademicYear = asyncHandler(async (req: Request, res: Respons
     throwError("Unknown delete request - Please try again", 400);
   }
   // confirm user
-  const account = await confirmAccount(accountId);
-  // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
-  const role = await confirmRole(account!.roleId!._id.toString());
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+
   const { roleId: creatorRoleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
-  const hasAccess = creatorTabAccess
-    .filter(({ tab, actions }: any) => tab === "Timeline")[0]
-    .actions.some(({ name, permission }: any) => name === "Delete Academic Year" && permission === true);
+
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Academic Year");
+
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete academic year - Please contact your admin", 403);
   }

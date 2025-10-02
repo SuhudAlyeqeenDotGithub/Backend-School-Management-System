@@ -36,6 +36,49 @@ export async function sendEmail(to: string, subject: string, text: string, html?
   }
 }
 
+export const checkAccess = (accountData: any, tabAccess: any, action: string) => {
+  const assignedTabAccess = tabAccess;
+
+  const uniqueTabs = accountData.uniqueTabAccess;
+
+  // all tabs of each group with access of true
+  const assignedTabAccessTabs = assignedTabAccess.flatMap((group: any) => group.tabs);
+  const mergedTabs = [...assignedTabAccessTabs, ...uniqueTabs];
+
+  const accountPermittedActions = mergedTabs
+    .map((tab: any) => {
+      return tab.actions.filter(({ permission }: any) => permission === true);
+    })
+    .map((tab: any) => tab.map(({ action }: any) => action))
+    .flat();
+
+  return accountPermittedActions.includes(action);
+};
+
+export const confirmUserOrgRole = async (accountId: string) => {
+  const account = await confirmAccount(accountId);
+
+  const organisation = await confirmAccount(account!.organisationId!._id.toString());
+
+  const role = await confirmRole(account!.roleId!._id.toString());
+
+  return { account, role, organisation };
+};
+
+export const checkOrgAndUserActiveness = (organisationDoc: any, userDoc: any) => {
+  if (organisationDoc.accountStatus !== "Active") {
+    return {
+      message: "Your organisation is not active - Please contact your admin if you need help",
+      checkPassed: false
+    };
+  }
+
+  if (userDoc.accountStatus !== "Active") {
+    return { message: "You account is not active - Please contact your admin if you need help", checkPassed: false };
+  }
+
+  return { message: "Active", checkPassed: true };
+};
 export const emitToOrganisation = (
   organisationId: string,
   collection: string,
@@ -200,22 +243,69 @@ export const fetchRoles = async (asWho: string, orgId: string, selfId: string) =
   }
 };
 
-export const fetchUsers = async (asWho: string, orgId: string, selfId: string) => {
+export const fetchUsers = async (
+  query: any,
+  cursorType: string,
+  limit: number,
+  asWho: string,
+  orgId: string,
+  selfId: string
+) => {
+  let users;
+  let totalCount;
   if (asWho === "Absolute Admin") {
-    const users = await Account.find({ organisationId: orgId }).populate("roleId").populate("staffId", "staffCustomId");
-    if (!users) {
-      throwError("Error fetching users", 500);
-    }
-    return users;
+    users = await Account.find(
+      { ...query, organisationId: orgId },
+      "_id organisationId staffId roleId uniqueTabAccess searchText accountStatus accountEmail accountName"
+    )
+      .sort({ _id: -1 })
+      .limit(limit + 1)
+      .populate([{ path: "staffId" }, { path: "roleId" }]);
+    totalCount = await Account.countDocuments({ ...query, organisationId: orgId });
   } else {
-    const users = await Account.find({ organisationId: orgId, accountType: "User", _id: { $ne: selfId } })
-      .populate("roleId")
-      .populate("staffId", "staffCustomId");
-    if (!users) {
-      throwError("Error fetching users", 500);
-    }
-    return users;
+    users = await Account.find(
+      { ...query, organisationId: orgId, staffId: { $ne: selfId } },
+      "_id organisationId staffId roleId uniqueTabAccess searchText accountStatus accountEmail accountName"
+    )
+      .sort({ _id: -1 })
+      .limit(limit + 1)
+      .populate([{ path: "staffId" }, { path: "roleId" }]);
+    totalCount = await Account.countDocuments({ ...query, organisationId: orgId, staffId: { $ne: selfId } });
   }
+
+  if (!users) {
+    throwError("Error fetching users", 500);
+  }
+  const hasNext = users.length > limit || cursorType === "prev";
+
+  if (users.length > limit) {
+    users.pop();
+  }
+  const chunkCount = users.length;
+
+  return {
+    users,
+    totalCount,
+    chunkCount,
+    nextCursor: users[users.length - 1]?._id,
+    prevCursor: users[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchAllStaffProfiles = async (asWho: string, orgId: string, selfId: string) => {
+  let staffProfiles;
+  if (asWho === "Absolute Admin") {
+    staffProfiles = await Staff.find({ organisationId: orgId }).sort({ _id: -1 });
+  } else {
+    staffProfiles = await Staff.find({ organisationId: orgId, staffCustomId: { $ne: selfId } }).sort({ _id: -1 });
+  }
+
+  if (!staffProfiles) {
+    throwError("Error fetching staff profiles", 500);
+  }
+
+  return staffProfiles;
 };
 
 export const fetchStaffProfiles = async (
@@ -227,20 +317,22 @@ export const fetchStaffProfiles = async (
   selfId: string
 ) => {
   let staffProfiles;
+  let totalCount;
   if (asWho === "Absolute Admin") {
     staffProfiles = await Staff.find({ ...query, organisationId: orgId })
       .sort({ _id: -1 })
       .limit(limit + 1);
+    totalCount = await Staff.countDocuments({ ...query, organisationId: orgId });
   } else {
     staffProfiles = await Staff.find({ ...query, organisationId: orgId, staffCustomId: { $ne: selfId } })
       .sort({ _id: -1 })
       .limit(limit + 1);
+    totalCount = await Staff.countDocuments({ ...query, organisationId: orgId, staffCustomId: { $ne: selfId } });
   }
 
   if (!staffProfiles) {
     throwError("Error fetching staff profiles", 500);
   }
-  const totalCount = await Staff.countDocuments();
   const hasNext = staffProfiles.length > limit || cursorType === "prev";
 
   if (staffProfiles.length > limit) {
@@ -258,14 +350,6 @@ export const fetchStaffProfiles = async (
   };
 };
 
-export const userIsStaff = async (customId: string, orgId: string) => {
-  const staff = await Staff.findOne({ staffCustomId: customId, organisationId: orgId });
-  if (!staff) {
-    return null;
-  }
-  return staff;
-};
-
 export const fetchStaffContracts = async (
   query: any,
   cursorType: string,
@@ -275,10 +359,12 @@ export const fetchStaffContracts = async (
   selfId: string
 ) => {
   let staffContracts;
+  let totalCount;
   if (asWho === "Absolute Admin") {
     staffContracts = await StaffContract.find({ ...query, organisationId: orgId })
       .sort({ _id: -1 })
       .limit(limit + 1);
+    totalCount = await StaffContract.countDocuments({ ...query, organisationId: orgId });
   } else {
     staffContracts = await StaffContract.find({
       ...query,
@@ -287,12 +373,17 @@ export const fetchStaffContracts = async (
     })
       .sort({ _id: -1 })
       .limit(limit + 1);
+    totalCount = await StaffContract.countDocuments({
+      ...query,
+      organisationId: orgId,
+      staffCustomId: { $ne: selfId }
+    });
   }
 
   if (!staffContracts) {
     throwError("Error fetching staff contracts", 500);
   }
-  const totalCount = await StaffContract.countDocuments();
+
   const hasNext = staffContracts.length > limit || cursorType === "prev";
 
   if (staffContracts.length > limit) {
@@ -308,6 +399,23 @@ export const fetchStaffContracts = async (
     prevCursor: staffContracts[0]?._id,
     hasNext
   };
+};
+
+export const fetchAllStaffContracts = async (asWho: string, orgId: string, selfId: string) => {
+  let staffContracts;
+  if (asWho === "Absolute Admin") {
+    staffContracts = await StaffContract.find({ organisationId: orgId }).sort({ _id: -1 });
+  } else {
+    staffContracts = await StaffContract.find({ organisationId: orgId, staffCustomId: { $ne: selfId } }).sort({
+      _id: -1
+    });
+  }
+  ``;
+  if (!staffContracts) {
+    throwError("Error fetching staff profiles", 500);
+  }
+
+  return staffContracts;
 };
 
 export const fetchAcademicYears = async (orgId: string) => {

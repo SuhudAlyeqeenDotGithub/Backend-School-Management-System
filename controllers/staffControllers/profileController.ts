@@ -7,9 +7,14 @@ import {
   throwError,
   generateSearchText,
   fetchStaffProfiles,
-  userIsStaff,
   generateCustomId,
-  emitToOrganisation
+  emitToOrganisation,
+  checkAccess,
+  checkOrgAndUserActiveness,
+  confirmUserOrgRole,
+  validateEmail,
+  validatePhoneNumber,
+  fetchAllStaffProfiles
 } from "../../utils/utilsFunctions.ts";
 import { logActivity } from "../../utils/utilsFunctions.ts";
 import { diff } from "deep-diff";
@@ -18,15 +23,26 @@ import { Staff } from "../../models/staff/profile.ts";
 
 const validateStaffProfile = (staffDataParam: any) => {
   const {
-    staffCustomId,
-    staffImage,
-    staffImageDestination,
-    staffMiddleName,
+    staffImageUrl,
+    imageLocalDestination,
     staffQualification,
+    workExperience,
+    identification,
+    skills,
     staffPostCode,
     staffEndDate,
     ...copyLocalData
   } = staffDataParam;
+
+  if (!validateEmail(staffDataParam.staffEmail)) {
+    throwError("Please enter a valid email address.", 400);
+    return;
+  }
+
+  if (!validatePhoneNumber(staffDataParam.staffPhone)) {
+    throwError("Please enter a valid phone number with the country code. e.g +234, +447", 400);
+    return;
+  }
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -38,9 +54,43 @@ const validateStaffProfile = (staffDataParam: any) => {
   return true;
 };
 
+export const getAllStaffProfiles = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId } = req.userToken;
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+
+  const { roleId, accountStatus, staffId } = account as any;
+  const { absoluteAdmin, tabAccess } = roleId;
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
+  }
+
+  const hasAccess = checkAccess(account, tabAccess, "View Staff Profiles");
+
+  if (absoluteAdmin || hasAccess) {
+    const staffProfiles = await fetchAllStaffProfiles(
+      absoluteAdmin ? "Absolute Admin" : "User",
+      organisation!._id.toString(),
+      absoluteAdmin ? "" : staffId.staffCustomId.toString()
+    );
+
+    if (!staffProfiles) {
+      throwError("Error fetching staff profiles", 500);
+    }
+    res.status(201).json(staffProfiles);
+    return;
+  }
+
+  throwError("Unauthorised Action: You do not have access to view staff profile - Please contact your admin", 403);
+});
+
 export const getStaffProfiles = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { search = "", limit = 15, cursorType = "next", nextCursor, prevCursor, ...filters } = req.query;
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+
+  const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
   const query: any = {};
@@ -63,25 +113,16 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
     }
   }
 
-  // confirm user
-  const account = await confirmAccount(accountId);
-
-  // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
-
-  // confirm role
-  const role = await confirmRole(account!.roleId!._id.toString());
-
   const { roleId, accountStatus, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
 
-  const hasAccess = tabAccess
-    .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name }: any) => name === "View Staff");
+  const hasAccess = checkAccess(account, tabAccess, "View Staff Profiles");
 
   if (absoluteAdmin || hasAccess) {
     const result = await fetchStaffProfiles(
@@ -106,19 +147,18 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
 // controller to handle role creation
 export const createStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
+  const body = req.body;
   const {
     staffCustomId,
-    staffFirstName,
-    staffMiddleName,
-    staffLastName,
+    staffFullName,
     staffDateOfBirth,
     staffGender,
     staffPhone,
     staffEmail,
     staffAddress,
     staffPostCode,
-    staffImage,
-    staffImageDestination,
+    staffImageUrl,
+    imageLocalDestination,
     staffMaritalStatus,
     staffStartDate,
     staffEndDate,
@@ -128,50 +168,26 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
     staffNextOfKinRelationship,
     staffNextOfKinPhone,
     staffNextOfKinEmail,
-    staffQualification
-  } = req.body;
+    staffQualification,
+    workExperience,
+    identification,
+    skills
+  } = body;
 
-  const copyBody = {
-    staffCustomId,
-    staffFirstName,
-    staffMiddleName,
-    staffLastName,
-    staffDateOfBirth,
-    staffGender,
-    staffPhone,
-    staffEmail,
-    staffAddress,
-    staffPostCode,
-    staffImage,
-    staffImageDestination,
-    staffMaritalStatus,
-    staffStartDate,
-    staffEndDate,
-    staffNationality,
-    staffAllergies,
-    staffNextOfKinName,
-    staffNextOfKinRelationship,
-    staffNextOfKinPhone,
-    staffNextOfKinEmail,
-    staffQualification
-  };
-
-  if (!validateStaffProfile(copyBody)) {
+  if (!validateStaffProfile(body)) {
     throwError("Please fill in all required fields", 400);
   }
 
-  // confirm user
-  const account = await confirmAccount(accountId);
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
-  const organisation = await confirmAccount(orgParsedId);
 
   const usedEmail = await Account.findOne({ staffEmail, organisationId: orgParsedId });
   if (usedEmail) {
     throwError("This email is already in use by another staff member - Please use a different email", 409);
   }
 
-  const staffExists = await userIsStaff(staffCustomId, orgParsedId);
+  const staffExists = await Staff.findOne({ staffCustomId, organisationId: orgParsedId });
   if (staffExists) {
     throwError(
       "A staff with this Custom Id already exist - Either refer to that record or change the staff custom Id",
@@ -182,28 +198,25 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
   const { roleId, accountStatus, accountName, staffId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
 
-  const hasAccess = creatorTabAccess
-    .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name, permission }: any) => name === "Create Staff" && permission === true);
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create Staff Profile");
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to create staff - Please contact your admin", 403);
   }
 
   const newStaff = await Staff.create({
-    ...copyBody,
-    staffCustomId: staffCustomId === "" ? generateCustomId("STF" + organisation!.organisationInitial) : staffCustomId,
+    ...body,
     organisationId: orgParsedId,
     searchText: generateSearchText([
       staffCustomId,
-      staffFirstName,
+      staffFullName,
       staffGender,
-      staffMiddleName,
-      staffLastName,
       staffEmail,
       staffDateOfBirth,
       staffNationality,
@@ -217,14 +230,14 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
     "Staff Profile Creation",
     "Staff",
     newStaff?._id,
-    staffFirstName + " " + staffLastName,
+    staffFullName,
     [
       {
         kind: "N",
         rhs: {
           _id: newStaff._id,
           staffId: newStaff.staffCustomId,
-          staffFullName: staffFirstName + " " + staffLastName
+          staffFullName
         }
       }
     ],
@@ -237,6 +250,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
 // controller to handle role update
 export const updateStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
+  const body = req.body;
   const {
     staffCustomId,
     staffFullName,
@@ -246,8 +260,8 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
     staffEmail,
     staffAddress,
     staffPostCode,
-    staffImage,
-    staffImageDestination,
+    staffImageUrl,
+    imageLocalDestination,
     staffMaritalStatus,
     staffStartDate,
     staffEndDate,
@@ -257,58 +271,37 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
     staffNextOfKinRelationship,
     staffNextOfKinPhone,
     staffNextOfKinEmail,
-    staffQualification
-  } = req.body;
+    staffQualification,
+    workExperience,
+    identification,
+    skills
+  } = body;
 
-  const copyBody = {
-    staffCustomId,
-    staffFullName,
-    staffDateOfBirth,
-    staffGender,
-    staffPhone,
-    staffEmail,
-    staffAddress,
-    staffPostCode,
-    staffImage,
-    staffImageDestination,
-    staffMaritalStatus,
-    staffStartDate,
-    staffEndDate,
-    staffNationality,
-    staffAllergies,
-    staffNextOfKinName,
-    staffNextOfKinRelationship,
-    staffNextOfKinPhone,
-    staffNextOfKinEmail,
-    staffQualification
-  };
-
-  if (!validateStaffProfile(copyBody)) {
+  if (!validateStaffProfile(body)) {
     throwError("Please fill in all required fields", 400);
   }
 
   // confirm user
-  const account = await confirmAccount(accountId);
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
-  const orgParsedId = account!.organisationId!._id.toString();
-  const organisation = await confirmAccount(orgParsedId);
+  const orgParsedId = account!.organisationId!.toString();
 
   const { roleId, accountStatus, staffId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
 
-  const hasAccess = creatorTabAccess
-    .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name, permission }: any) => name === "Edit Staff" && permission === true);
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Staff Profile");
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to edit staff - Please contact your admin", 403);
   }
 
-  const originalStaff = await Staff.findOne({ staffCustomId });
+  const originalStaff = await Staff.findOne({ organisationId: orgParsedId, staffCustomId });
 
   if (!originalStaff) {
     throwError("An error occured whilst getting old staff data", 500);
@@ -317,7 +310,7 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
   const updatedStaff = await Staff.findByIdAndUpdate(
     originalStaff?._id.toString(),
     {
-      ...copyBody,
+      ...body,
       searchText: generateSearchText([
         staffCustomId,
         staffGender,
@@ -358,18 +351,20 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
   if (!staffIDToDelete) {
     throwError("Unknown delete request - Please try again", 400);
   }
-  // confirm user
-  const account = await confirmAccount(accountId);
-  // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
+
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+
   const { roleId: creatorRoleId, accountStatus } = account as any;
+
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
-  const hasAccess = creatorTabAccess
-    .filter(({ tab, actions }: any) => tab === "Staff")[0]
-    .actions.some(({ name, permission }: any) => name === "Delete Sta" && permission === true);
+
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Staff Profile");
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete staff profile - Please contact your admin", 403);
   }

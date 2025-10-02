@@ -10,7 +10,7 @@ import cookieParser from "cookie-parser";
 import accountRoutes from "./routes/accountRoutes.ts";
 import adminRoutes from "./routes/adminRoutes.ts";
 import staffRoutes from "./routes/staffRoutes.ts";
-import timelineRoutes from "./routes/timelineRoutes.ts";
+import timelineRoutes from "./routes/academicsessionRoutes.ts";
 import { accessTokenChecker } from "./middleware/checkAccess.ts";
 import { Server } from "socket.io";
 import handleWebSocket from "./config/websocket/handleWebSocket.ts";
@@ -52,7 +52,7 @@ app.use(trackResponseSize);
 app.get("/alyeqeenschoolapp/api/orgaccount/fetchaccount", fetchAccount);
 app.use("/alyeqeenschoolapp/api/", adminRoutes);
 app.use("/alyeqeenschoolapp/api/", staffRoutes);
-app.use("/alyeqeenschoolapp/api/timeline/", timelineRoutes);
+app.use("/alyeqeenschoolapp/api/academicsession/", timelineRoutes);
 
 app.use(errorHandler);
 

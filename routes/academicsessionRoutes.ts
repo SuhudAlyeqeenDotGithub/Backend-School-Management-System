@@ -6,8 +6,8 @@ import {
   createAcademicYear,
   updateAcademicYear,
   deleteAcademicYear
-} from "../controllers/timeline/academicYear";
-import { createPeriod, updatePeriod, deletePeriod } from "../controllers/timeline/period";
+} from "../controllers/academicSessionControllers/academicYear";
+import { createPeriod, updatePeriod, deletePeriod } from "../controllers/academicSessionControllers/period";
 
 router.get("/academicyear", getAcademicYears);
 router.post("/academicyear", createAcademicYear);

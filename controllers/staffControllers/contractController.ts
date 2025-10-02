@@ -6,9 +6,12 @@ import {
   throwError,
   generateSearchText,
   fetchStaffContracts,
-  userIsStaff,
   emitToOrganisation,
-  logActivity
+  logActivity,
+  confirmUserOrgRole,
+  checkOrgAndUserActiveness,
+  checkAccess,
+  fetchAllStaffContracts
 } from "../../utils/utilsFunctions.ts";
 
 import { diff } from "deep-diff";
@@ -16,7 +19,20 @@ import { Staff } from "../../models/staff/profile.ts";
 import { StaffContract } from "../../models/staff/contracts.ts";
 
 const validateStaffContract = (staffDataParam: any) => {
-  const { contractEndDate, workingSchedule, responsibilities, searchText, ...copyLocalData } = staffDataParam;
+  const {
+    contractEndDate,
+    workingSchedule,
+    responsibilities,
+    probationStartDate,
+    probationEndDate,
+    department,
+    allowances,
+    probationMonths,
+    terminationNoticePeriod,
+    reportingManagerCustomId,
+    searchText,
+    ...copyLocalData
+  } = staffDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -31,7 +47,7 @@ const validateStaffContract = (staffDataParam: any) => {
 export const getStaffContracts = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
 
-  const { search = "", limit = 15, cursorType = "next", nextCursor, prevCursor, ...filters } = req.query;
+  const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
   const parsedLimit = parseInt(limit as string);
   const query: any = {};
 
@@ -54,10 +70,7 @@ export const getStaffContracts = asyncHandler(async (req: Request, res: Response
   }
 
   // confirm user
-  const account = await confirmAccount(accountId);
-
-  // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   // confirm role
   await confirmRole(account!.roleId!._id.toString());
@@ -65,13 +78,13 @@ export const getStaffContracts = asyncHandler(async (req: Request, res: Response
   const { roleId, accountStatus, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
 
-  const hasAccess = tabAccess
-    .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name }: any) => name === "View Staff Contracts");
+  const hasAccess = checkAccess(account, tabAccess, "View Staff Contracts");
 
   if (absoluteAdmin || hasAccess) {
     const result = await fetchStaffContracts(
@@ -95,6 +108,44 @@ export const getStaffContracts = asyncHandler(async (req: Request, res: Response
   throwError("Unauthorised Action: You do not have access to view staff contracts - Please contact your admin", 403);
 });
 
+export const getAllStaffContracts = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId } = req.userToken;
+
+  // confirm user
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+
+  // confirm role
+  await confirmRole(account!.roleId!._id.toString());
+
+  const { roleId, accountStatus, staffId } = account as any;
+  const { absoluteAdmin, tabAccess } = roleId;
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
+  }
+
+  const hasAccess = checkAccess(account, tabAccess, "View Staff Contracts");
+
+  if (absoluteAdmin || hasAccess) {
+    const staffContracts = await fetchAllStaffContracts(
+      absoluteAdmin ? "Absolute Admin" : "User",
+      organisation!._id.toString(),
+      absoluteAdmin ? "" : staffId.staffCustomId.toString()
+    );
+
+    if (!staffContracts) {
+      throwError("Error fetching staff contracts", 500);
+    }
+    deleteStaffContract;
+
+    res.status(201).json(staffContracts);
+    return;
+  }
+
+  throwError("Unauthorised Action: You do not have access to view staff contracts - Please contact your admin", 403);
+});
 // controller to handle role creation
 export const createStaffContract = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
@@ -107,11 +158,8 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
     jobTitle,
     contractStartDate,
     contractEndDate,
-    responsibilities,
     contractType,
-    contractStatus,
-    contractSalary,
-    workingSchedule
+    contractStatus
   } = req.body;
 
   if (!validateStaffContract({ ...req.body })) {
@@ -119,19 +167,9 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
   }
 
   // confirm user
-  const account = await confirmAccount(accountId);
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
-  const organisation = await confirmAccount(orgParsedId);
-
-  const contractExists = await StaffContract.findOne({
-    academicYearId: academicYearId,
-    organisationId: orgParsedId,
-    jobTitle
-  });
-  if (contractExists) {
-    throwError("This contract probably already exist - Please use a different job title", 409);
-  }
 
   const staffExists = await Staff.findOne({ _id: staffId, organisationId: orgParsedId });
   if (!staffExists) {
@@ -144,13 +182,13 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
   const { roleId, accountStatus, staffId: userStaffId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
 
-  const hasAccess = creatorTabAccess
-    .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name, permission }: any) => name === "Create Staff Contract" && permission === true);
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create Staff Contract");
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to create staff contract - Please contact your admin", 403);
@@ -209,7 +247,6 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
 export const updateStaffContract = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const {
-    _id: contractId,
     academicYearId,
     academicYear,
     staffId,
@@ -230,34 +267,36 @@ export const updateStaffContract = asyncHandler(async (req: Request, res: Respon
   }
 
   // confirm user
-  const account = await confirmAccount(accountId);
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
-  const organisation = await confirmAccount(orgParsedId);
 
   const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
 
-  const hasAccess = creatorTabAccess
-    .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name, permission }: any) => name === "Edit Staff Contract" && permission === true);
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Staff Contract");
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to edit staff contract - Please contact your admin", 403);
   }
 
-  const originalStaff = await StaffContract.findOne({ staffCustomId });
+  const originalStaff = await StaffContract.findOne({ organisationId: orgParsedId, staffCustomId });
 
   if (!originalStaff) {
-    throwError("An error occured whilst getting old staff data", 500);
+    throwError(
+      "An error occured whilst getting old staff data - Please ensure this contract exists with the correct Id",
+      500
+    );
   }
 
   const updatedStaffContract = await StaffContract.findByIdAndUpdate(
-    contractId,
+    originalStaff?._id,
     {
       ...req.body,
       searchText: generateSearchText([
@@ -301,21 +340,18 @@ export const deleteStaffContract = asyncHandler(async (req: Request, res: Respon
     throwError("Unknown delete request - Please try again", 400);
   }
   // confirm user
-  const account = await confirmAccount(accountId);
-  // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+
   const { roleId: creatorRoleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
-  const hasAccess = creatorTabAccess
-    .filter(({ tab, actions }: any) => tab === "Staff")[0]
-    .actions.some(({ name, permission }: any) => name === "Delete Staff Contract" && permission === true);
-  if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to delete staff contract - Please contact your admin", 403);
-  }
+
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Staff Contract");
 
   const StaffContractToDelete = await StaffContract.findById(staffContractIDToDelete);
 

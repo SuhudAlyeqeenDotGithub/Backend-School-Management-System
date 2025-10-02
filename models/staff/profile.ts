@@ -12,8 +12,8 @@ const staffSchema = new Schema(
     staffEmail: { type: String, unique: true, required: true, index: true },
     staffAddress: { type: String, required: true },
     staffPostCode: { type: String },
-    staffImage: { type: String },
-    staffImageDestination: { type: String },
+    staffImageUrl: { type: String },
+    imageLocalDestination: { type: String },
     staffMaritalStatus: { type: String, required: true },
     staffStartDate: { type: String, required: true },
     staffEndDate: { type: String },
@@ -27,12 +27,7 @@ const staffSchema = new Schema(
     skills: { type: [String] },
     identification: {
       type: [
-        {
-          idType: String,
-          idNumber: String,
-          issueDate: Date,
-          expiryDate: Date
-        }
+        { _id: String, identificationType: String, identificationValue: String, issueDate: Date, expiryDate: Date }
       ]
     },
     staffQualification: {

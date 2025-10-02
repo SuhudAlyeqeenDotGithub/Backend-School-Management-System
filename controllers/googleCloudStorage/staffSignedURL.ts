@@ -1,7 +1,7 @@
 import { Storage } from "@google-cloud/storage";
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { throwError, confirmAccount, confirmRole } from "../../utils/utilsFunctions.ts";
+import { throwError, confirmUserOrgRole, checkOrgAndUserActiveness, checkAccess } from "../../utils/utilsFunctions.ts";
 import { nanoid } from "nanoid";
 
 const storage = new Storage({
@@ -11,7 +11,7 @@ const storage = new Storage({
 
 const bucketName = "alyeqeenappsimages";
 
-export const getSignedUrlForStaffProfile = asyncHandler(async (req: Request, res: Response) => {
+export const getStaffImageUploadSignedUrl = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { imageName, imageType } = req.body;
 
@@ -20,24 +20,18 @@ export const getSignedUrlForStaffProfile = asyncHandler(async (req: Request, res
     throwError("Unsupported image type", 400);
   }
   // confirm user
-  const account = await confirmAccount(accountId);
-
-  // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
-
-  // confirm role
-  const role = await confirmRole(account!.roleId!._id.toString());
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
 
-  const hasCreateStaffAccess = tabAccess
-    .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name, permission }: any) => name === "Create Staff" && permission === true);
+  const hasCreateStaffAccess = checkAccess(account, tabAccess, "Create Staff Profile");
 
   if (!hasCreateStaffAccess && !absoluteAdmin) {
     throwError("Unauthorised Action: You do not have access to upload image- Please contact your admin", 403);
@@ -64,39 +58,68 @@ export const getSignedUrlForStaffProfile = asyncHandler(async (req: Request, res
   }
 });
 
+export const getStaffImageViewSignedUrl = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId } = req.userToken;
+  const { imageLocalDestination } = req.body;
+
+
+  // confirm user
+  const { account, organisation } = await confirmUserOrgRole(accountId);
+
+  const { roleId } = account as any;
+  const { absoluteAdmin, tabAccess } = roleId;
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
+  }
+
+  const hasCreateStaffAccess = checkAccess(account, tabAccess, "View Staff Profile");
+
+  if (!hasCreateStaffAccess && !absoluteAdmin) {
+    throwError("Unauthorised Action: You do not have access to upload image- Please contact your admin", 403);
+  }
+
+  const [url] = await storage
+    .bucket("my-bucket")
+    .file(imageLocalDestination)
+    .getSignedUrl({
+      action: "read",
+      expires: Date.now() + 60 * 60 * 1000
+    });
+
+  res.json({ url });
+});
+
 export const deleteStaffImageInBucket = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { staffImageDestination } = req.body;
+  const { imageLocalDestination } = req.body;
 
-  if (!staffImageDestination) {
-    throwError("Unknown Image to Delete", 400);
+  if (!imageLocalDestination) {
+    res.status(200).json("No image to delete");
+    return;
   }
   // confirm user
-  const account = await confirmAccount(accountId);
-
-  // confirm organisation
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
-
-  // confirm role
-  const role = await confirmRole(account!.roleId!._id.toString());
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
-  if (accountStatus === "Locked" || accountStatus !== "Active") {
-    throwError("Your account is no longer active - Please contact your admin", 409);
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
   }
 
-  const hasCreateStaffAccess = tabAccess
-    .filter(({ tab }: any) => tab === "Staff")[0]
-    .actions.some(({ name, permission }: any) => name === "Edit Staff" && permission === true);
+  const hasCreateStaffAccess = checkAccess(account, tabAccess, "Edit Staff Profile");
 
   if (!hasCreateStaffAccess && !absoluteAdmin) {
     throwError("Unauthorised Action: You do not have access to upload image- Please contact your admin", 403);
   }
 
   try {
-    await storage.bucket(bucketName).file(staffImageDestination).delete();
+    await storage.bucket(bucketName).file(imageLocalDestination).delete();
 
     res.status(200).json("delete successful");
   } catch (err: any) {
