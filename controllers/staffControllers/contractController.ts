@@ -17,6 +17,7 @@ import {
 import { diff } from "deep-diff";
 import { Staff } from "../../models/staff/profile.ts";
 import { StaffContract } from "../../models/staff/contracts.ts";
+import { AcademicYear } from "../../models/timeline/academicYear.ts";
 
 const validateStaffContract = (staffDataParam: any) => {
   const {
@@ -179,6 +180,14 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
     );
   }
 
+  const academicYearExists = await AcademicYear.findOne({ _id: academicYearId, organisationId: orgParsedId });
+  if (!academicYearExists) {
+    throwError(
+      "This academic year does not exist in this organisation - Ensure it has been created or has not been deleted",
+      409
+    );
+  }
+
   const { roleId, accountStatus, staffId: userStaffId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
@@ -292,6 +301,14 @@ export const updateStaffContract = asyncHandler(async (req: Request, res: Respon
     throwError(
       "An error occured whilst getting old staff data - Please ensure this contract exists with the correct Id",
       500
+    );
+  }
+
+  const academicYearExists = await AcademicYear.findOne({ _id: academicYearId, organisationId: orgParsedId });
+  if (!academicYearExists) {
+    throwError(
+      "This academic year does not exist in this organisation - Ensure it has been created or has not been deleted",
+      409
     );
   }
 

@@ -31,7 +31,16 @@ const staffSchema = new Schema(
       ]
     },
     staffQualification: {
-      type: [{ _id: String, qualificationName: String, schoolName: String, startDate: String, endDate: String }]
+      type: [
+        {
+          _id: String,
+          qualificationName: String,
+          schoolName: String,
+          grade: String,
+          startDate: String,
+          endDate: String
+        }
+      ]
     },
     workExperience: {
       type: [

@@ -11,6 +11,8 @@ import nodemailer from "nodemailer";
 import crypto from "crypto";
 import { customAlphabet } from "nanoid";
 import parsePhoneNumberFromString from "libphonenumber-js";
+import { Student } from "../models/student/studentProfile.ts";
+import { Programme } from "../models/curriculum/programme.ts";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -256,7 +258,7 @@ export const fetchUsers = async (
   if (asWho === "Absolute Admin") {
     users = await Account.find(
       { ...query, organisationId: orgId },
-      "_id organisationId staffId roleId uniqueTabAccess searchText accountStatus accountEmail accountName"
+      "_id organisationId staffId roleId uniqueTabAccess searchText accountStatus accountEmail accountName createdAt updatedAt"
     )
       .sort({ _id: -1 })
       .limit(limit + 1)
@@ -265,7 +267,7 @@ export const fetchUsers = async (
   } else {
     users = await Account.find(
       { ...query, organisationId: orgId, staffId: { $ne: selfId } },
-      "_id organisationId staffId roleId uniqueTabAccess searchText accountStatus accountEmail accountName"
+      "_id organisationId staffId roleId uniqueTabAccess searchText accountStatus accountEmail accountName createdAt updatedAt"
     )
       .sort({ _id: -1 })
       .limit(limit + 1)
@@ -346,6 +348,99 @@ export const fetchStaffProfiles = async (
     chunkCount,
     nextCursor: staffProfiles[staffProfiles.length - 1]?._id,
     prevCursor: staffProfiles[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchAllStudentProfiles = async (asWho: string, orgId: string, selfId: string) => {
+  let studentProfiles;
+  if (asWho === "Absolute Admin") {
+    studentProfiles = await Student.find({ organisationId: orgId }).sort({ _id: -1 });
+  } else {
+    studentProfiles = await Student.find({ organisationId: orgId, studentCustomId: { $ne: selfId } }).sort({ _id: -1 });
+  }
+
+  if (!studentProfiles) {
+    throwError("Error fetching student profiles", 500);
+  }
+
+  return studentProfiles;
+};
+
+export const fetchStudentProfiles = async (
+  query: any,
+  cursorType: string,
+  limit: number,
+  asWho: string,
+  orgId: string,
+  selfId: string
+) => {
+  let studentProfiles;
+  let totalCount;
+  if (asWho === "Absolute Admin") {
+    studentProfiles = await Student.find({ ...query, organisationId: orgId })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+    totalCount = await Student.countDocuments({ ...query, organisationId: orgId });
+  } else {
+    studentProfiles = await Student.find({ ...query, organisationId: orgId, studentCustomId: { $ne: selfId } })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+    totalCount = await Student.countDocuments({ ...query, organisationId: orgId, studentCustomId: { $ne: selfId } });
+  }
+
+  if (!studentProfiles) {
+    throwError("Error fetching student profiles", 500);
+  }
+  const hasNext = studentProfiles.length > limit || cursorType === "prev";
+
+  if (studentProfiles.length > limit) {
+    studentProfiles.pop();
+  }
+  const chunkCount = studentProfiles.length;
+
+  return {
+    studentProfiles,
+    totalCount,
+    chunkCount,
+    nextCursor: studentProfiles[studentProfiles.length - 1]?._id,
+    prevCursor: studentProfiles[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchAllProgrammes = async (orgId: string) => {
+  const programmes = await Programme.find({ organisationId: orgId }).sort({ _id: -1 });
+
+  if (!programmes) {
+    throwError("Error fetching student profiles", 500);
+  }
+
+  return programmes;
+};
+
+export const fetchProgrammes = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const programmes = await Programme.find({ ...query, organisationId: orgId })
+    .sort({ _id: -1 })
+    .limit(limit + 1);
+  const totalCount = await Programme.countDocuments({ ...query, organisationId: orgId });
+
+  if (!programmes) {
+    throwError("Error fetching student profiles", 500);
+  }
+  const hasNext = programmes.length > limit || cursorType === "prev";
+
+  if (programmes.length > limit) {
+    programmes.pop();
+  }
+  const chunkCount = programmes.length;
+
+  return {
+    programmes,
+    totalCount,
+    chunkCount,
+    nextCursor: programmes[programmes.length - 1]?._id,
+    prevCursor: programmes[0]?._id,
     hasNext
   };
 };

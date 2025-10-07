@@ -13,6 +13,7 @@ const activityLogSchema = new Schema(
         "Course",
         "Student",
         "Staff",
+        "Programme",
         "Subject",
         "Account",
         "Role",

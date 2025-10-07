@@ -51,7 +51,7 @@ export const getAcademicYears = asyncHandler(async (req: Request, res: Response)
         value: getObjectSize([academicYears, organisation, role, account])
       }
     ]);
-
+   
     res.status(201).json(academicYears);
     return;
   }

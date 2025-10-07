@@ -44,8 +44,6 @@ const staffContractSchema = new Schema(
   { timestamps: true }
 );
 
-staffContractSchema.index({ organisationId: 1 });
-staffContractSchema.index({ academicYear: 1 });
 staffContractSchema.index({ organisationId: 1, staffCustomId: 1 });
 staffContractSchema.index({ staffId: 1, contractStatus: 1 });
 staffContractSchema.index({ contractType: 1 });
