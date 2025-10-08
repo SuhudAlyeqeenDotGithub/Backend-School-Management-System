@@ -12,7 +12,7 @@ import crypto from "crypto";
 import { customAlphabet } from "nanoid";
 import parsePhoneNumberFromString from "libphonenumber-js";
 import { Student } from "../models/student/studentProfile.ts";
-import { Programme } from "../models/curriculum/programme.ts";
+import { Programme, ProgrammeManager } from "../models/curriculum/programme.ts";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -441,6 +441,56 @@ export const fetchProgrammes = async (query: any, cursorType: string, limit: num
     chunkCount,
     nextCursor: programmes[programmes.length - 1]?._id,
     prevCursor: programmes[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchProgrammeManagers = async (
+  query: any,
+  cursorType: string,
+  limit: number,
+  asWho: string,
+  orgId: string,
+  selfId: string
+) => {
+  let programmeManagers;
+  let totalCount;
+  if (asWho === "Absolute Admin") {
+    programmeManagers = await ProgrammeManager.find({ ...query, organisationId: orgId })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+    totalCount = await ProgrammeManager.countDocuments({ ...query, organisationId: orgId });
+  } else {
+    programmeManagers = await ProgrammeManager.find({
+      ...query,
+      organisationId: orgId,
+      programmeManagerStaffId: { $ne: selfId }
+    })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+    totalCount = await ProgrammeManager.countDocuments({
+      ...query,
+      organisationId: orgId,
+      programmeManagerStaffId: { $ne: selfId }
+    });
+  }
+
+  if (!programmeManagers) {
+    throwError("Error fetching programme managers", 500);
+  }
+  const hasNext = programmeManagers.length > limit || cursorType === "prev";
+
+  if (programmeManagers.length > limit) {
+    programmeManagers.pop();
+  }
+  const chunkCount = programmeManagers.length;
+
+  return {
+    programmeManagers,
+    totalCount,
+    chunkCount,
+    nextCursor: programmeManagers[programmeManagers.length - 1]?._id,
+    prevCursor: programmeManagers[0]?._id,
     hasNext
   };
 };

@@ -187,7 +187,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
     throwError("This email is already in use by another staff member - Please use a different email", 409);
   }
 
-  const staffExists = await Staff.findOne({ staffCustomId, organisationId: orgParsedId });
+  const staffExists = await Staff.findOne({ organisationId: orgParsedId, staffCustomId });
   if (staffExists) {
     throwError(
       "A staff with this Custom Id already exist - Either refer to that record or change the staff custom Id",
@@ -370,8 +370,8 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
   }
 
   const staffProfileToDelete = await Staff.findOne({
-    staffCustomId: staffIDToDelete,
-    organisationId: organisation?._id.toString()
+    organisationId: organisation?._id.toString(),
+    staffCustomId: staffIDToDelete
   });
 
   if (!staffProfileToDelete) {

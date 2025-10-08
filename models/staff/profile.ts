@@ -58,7 +58,6 @@ const staffSchema = new Schema(
   { timestamps: true }
 );
 
-staffSchema.index({ organisationId: 1 });
 staffSchema.index({ organisationId: 1, staffCustomId: 1 }, { unique: true });
 staffSchema.index({ staffMaritalStatus: 1 });
 staffSchema.index({ staffGender: 1 });

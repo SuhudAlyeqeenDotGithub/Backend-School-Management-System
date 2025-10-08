@@ -1,6 +1,6 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { Account } from "../../models/admin/accountModel";
+import { Account } from "../../../models/admin/accountModel";
 import {
   confirmAccount,
   confirmRole,
@@ -15,11 +15,11 @@ import {
   validateEmail,
   validatePhoneNumber,
   fetchAllProgrammes
-} from "../../utils/utilsFunctions";
-import { logActivity } from "../../utils/utilsFunctions";
+} from "../../../utils/utilsFunctions";
+import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
-import { Programme } from "../../models/curriculum/programme";
+import { Programme } from "../../../models/curriculum/programme";
 
 const validateProgramme = (programmeDataParam: any) => {
   const { description, programmeDuration, ...copyLocalData } = programmeDataParam;
@@ -124,7 +124,7 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const programmeExists = await Programme.findOne({ programmeCustomId, organisationId: orgParsedId });
+  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, programmeCustomId });
   if (programmeExists) {
     throwError(
       "A programme with this Custom Id already exist - Either refer to that record or change the programme custom Id",
@@ -132,7 +132,7 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
     );
   }
 
-  const { roleId, accountStatus, accountName, programmeId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -270,8 +270,8 @@ export const deleteProgramme = asyncHandler(async (req: Request, res: Response) 
   }
 
   const programmeToDelete = await Programme.findOne({
-    programmeCustomId: programmeCustomId,
-    organisationId: organisation?._id.toString()
+    organisationId: organisation?._id.toString(),
+    programmeCustomId: programmeCustomId
   });
 
   if (!programmeToDelete) {

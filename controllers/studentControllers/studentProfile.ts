@@ -187,7 +187,7 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
     throwError("This email is already in use by another student member - Please use a different email", 409);
   }
 
-  const studentExists = await Student.findOne({ studentCustomId, organisationId: orgParsedId });
+  const studentExists = await Student.findOne({ organisationId: orgParsedId, studentCustomId });
   if (studentExists) {
     throwError(
       "A student with this Custom Id already exist - Either refer to that record or change the student custom Id",

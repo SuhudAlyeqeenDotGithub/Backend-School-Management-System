@@ -23,6 +23,7 @@ const activityLogSchema = new Schema(
         "Attendance",
         "AcademicYear",
         "StaffContract",
+        "ProgrammeManager",
         "None"
       ]
     },

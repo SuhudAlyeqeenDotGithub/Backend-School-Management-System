@@ -370,6 +370,10 @@ export const deleteStaffContract = asyncHandler(async (req: Request, res: Respon
 
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Staff Contract");
 
+  if (!absoluteAdmin && !hasAccess) {
+    throwError("Unauthorised Action: You do not have access to delete staff contract - Please contact your admin", 403);
+  }
+
   const StaffContractToDelete = await StaffContract.findById(staffContractIDToDelete);
 
   if (!StaffContractToDelete) {

@@ -36,7 +36,8 @@ const handleWebSocket = (io: Server) => {
 
   const socketHandler = () => {
     io.on("connection", (socket) => {
-      socket.on("joinOrgRoom", ({ organisationId }: any) => {
+      socket.on("joinOrgRoom", ({ organisationId, accountName }: any) => {
+        console.log(`${accountName} connected to org room: ${organisationId}`);
         if (!organisationId) return;
         socket.join(organisationId);
       });
@@ -57,7 +58,6 @@ const handleWebSocket = (io: Server) => {
       const changeExist = "ns" in change && change.ns && "coll" in change.ns && change.ns.coll;
       const organisationIdExists =
         "fullDocument" in change && change.fullDocument && "organisationId" in change.fullDocument;
-
       if (changeExist && organisationIdExists) {
         const collection = change.ns?.coll;
         const organisationId = change.fullDocument.organisationId.toString();
@@ -69,6 +69,7 @@ const handleWebSocket = (io: Server) => {
               fullDocument: change.fullDocument,
               changeOperation
             });
+            console.log(`Emitted to org ${organisationId} on collection ${collection}`);
             collectionOnQueue.delete(collection);
           }, 200);
         }
