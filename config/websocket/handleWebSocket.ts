@@ -37,7 +37,6 @@ const handleWebSocket = (io: Server) => {
   const socketHandler = () => {
     io.on("connection", (socket) => {
       socket.on("joinOrgRoom", ({ organisationId, accountName }: any) => {
-        console.log(`${accountName} connected to org room: ${organisationId}`);
         if (!organisationId) return;
         socket.join(organisationId);
       });
@@ -69,7 +68,6 @@ const handleWebSocket = (io: Server) => {
               fullDocument: change.fullDocument,
               changeOperation
             });
-            console.log(`Emitted to org ${organisationId} on collection ${collection}`);
             collectionOnQueue.delete(collection);
           }, 200);
         }

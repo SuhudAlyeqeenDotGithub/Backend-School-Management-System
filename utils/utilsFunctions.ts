@@ -13,6 +13,7 @@ import { customAlphabet } from "nanoid";
 import parsePhoneNumberFromString from "libphonenumber-js";
 import { Student } from "../models/student/studentProfile.ts";
 import { Programme, ProgrammeManager } from "../models/curriculum/programme.ts";
+import { Course, CourseManager } from "../models/curriculum/course.ts";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -491,6 +492,92 @@ export const fetchProgrammeManagers = async (
     chunkCount,
     nextCursor: programmeManagers[programmeManagers.length - 1]?._id,
     prevCursor: programmeManagers[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchAllCourses = async (orgId: string) => {
+  const courses = await Course.find({ organisationId: orgId }).sort({ _id: -1 });
+
+  if (!courses) {
+    throwError("Error fetching student profiles", 500);
+  }
+
+  return courses;
+};
+
+export const fetchCourses = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const courses = await Course.find({ ...query, organisationId: orgId })
+    .sort({ _id: -1 })
+    .limit(limit + 1);
+  const totalCount = await Course.countDocuments({ ...query, organisationId: orgId });
+
+  if (!courses) {
+    throwError("Error fetching student profiles", 500);
+  }
+  const hasNext = courses.length > limit || cursorType === "prev";
+
+  if (courses.length > limit) {
+    courses.pop();
+  }
+  const chunkCount = courses.length;
+
+  return {
+    courses,
+    totalCount,
+    chunkCount,
+    nextCursor: courses[courses.length - 1]?._id,
+    prevCursor: courses[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchCourseManagers = async (
+  query: any,
+  cursorType: string,
+  limit: number,
+  asWho: string,
+  orgId: string,
+  selfId: string
+) => {
+  let courseManagers;
+  let totalCount;
+  if (asWho === "Absolute Admin") {
+    courseManagers = await CourseManager.find({ ...query, organisationId: orgId })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+    totalCount = await CourseManager.countDocuments({ ...query, organisationId: orgId });
+  } else {
+    courseManagers = await CourseManager.find({
+      ...query,
+      organisationId: orgId,
+      courseManagerStaffId: { $ne: selfId }
+    })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+    totalCount = await CourseManager.countDocuments({
+      ...query,
+      organisationId: orgId,
+      courseManagerStaffId: { $ne: selfId }
+    });
+  }
+
+  if (!courseManagers) {
+    throwError("Error fetching course managers", 500);
+  }
+  const hasNext = courseManagers.length > limit || cursorType === "prev";
+
+  if (courseManagers.length > limit) {
+    courseManagers.pop();
+  }
+  const chunkCount = courseManagers.length;
+
+  return {
+    courseManagers,
+    totalCount,
+    chunkCount,
+    nextCursor: courseManagers[courseManagers.length - 1]?._id,
+    prevCursor: courseManagers[0]?._id,
     hasNext
   };
 };

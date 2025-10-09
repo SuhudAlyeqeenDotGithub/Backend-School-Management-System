@@ -93,8 +93,14 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { programmeCustomId, programmeId, programmeName, programmeManagerCustomStaffId, programmeManagerFullName } =
-    body;
+  const {
+    programmeCustomId,
+    status,
+    programmeId,
+    programmeName,
+    programmeManagerCustomStaffId,
+    programmeManagerFullName
+  } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
@@ -108,17 +114,19 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
     throwError("The staff has no contract with this organisation - Please create one for them", 409);
   }
 
-  const programmeAlreadyManaged = await ProgrammeManager.findOne({
-    organisationId: orgParsedId,
-    programmeId,
-    programmeManagerCustomStaffId,
-    status: "Active"
-  });
-  if (programmeAlreadyManaged) {
-    throwError(
-      "The staff is already an active manager of this programme - Please assign another staff or deactivate their current management",
-      409
-    );
+  if (status === "Active") {
+    const programmeAlreadyManaged = await ProgrammeManager.findOne({
+      organisationId: orgParsedId,
+      programmeId,
+      programmeManagerCustomStaffId,
+      status: "Active"
+    });
+    if (programmeAlreadyManaged) {
+      throwError(
+        "The staff is already an active manager of this programme - Please assign another staff or deactivate their current management",
+        409
+      );
+    }
   }
 
   const { roleId } = account as any;

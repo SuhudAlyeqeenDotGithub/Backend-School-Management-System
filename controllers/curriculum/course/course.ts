@@ -6,7 +6,7 @@ import {
   confirmRole,
   throwError,
   generateSearchText,
-  fetchProgrammes,
+  fetchCourses,
   generateCustomId,
   emitToOrganisation,
   checkAccess,
@@ -14,15 +14,16 @@ import {
   confirmUserOrgRole,
   validateEmail,
   validatePhoneNumber,
-  fetchAllProgrammes
+  fetchAllCourses
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
+import { Course } from "../../../models/curriculum/course";
 import { Programme } from "../../../models/curriculum/programme";
 
-const validateProgramme = (programmeDataParam: any) => {
-  const { description, programmeDuration, ...copyLocalData } = programmeDataParam;
+const validateCourse = (courseDataParam: any) => {
+  const { description, courseDuration, programmeName, ...copyLocalData } = courseDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -34,11 +35,11 @@ const validateProgramme = (programmeDataParam: any) => {
   return true;
 };
 
-export const getAllProgrammes = asyncHandler(async (req: Request, res: Response) => {
+export const getAllCourses = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus, programmeId } = account as any;
+  const { roleId, accountStatus, courseId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -47,22 +48,22 @@ export const getAllProgrammes = asyncHandler(async (req: Request, res: Response)
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, tabAccess, "View Programmes");
+  const hasAccess = checkAccess(account, tabAccess, "View Courses");
 
   if (absoluteAdmin || hasAccess) {
-    const programmeProfiles = await fetchAllProgrammes(organisation!._id.toString());
+    const courseProfiles = await fetchAllCourses(organisation!._id.toString());
 
-    if (!programmeProfiles) {
-      throwError("Error fetching programme profiles", 500);
+    if (!courseProfiles) {
+      throwError("Error fetching course profiles", 500);
     }
-    res.status(201).json(programmeProfiles);
+    res.status(201).json(courseProfiles);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view programme profile - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view course profile - Please contact your admin", 403);
 });
 
-export const getProgrammes = asyncHandler(async (req: Request, res: Response) => {
+export const getCourses = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
@@ -89,7 +90,7 @@ export const getProgrammes = asyncHandler(async (req: Request, res: Response) =>
     }
   }
 
-  const { roleId, accountStatus, programmeId } = account as any;
+  const { roleId, accountStatus, courseId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -98,27 +99,27 @@ export const getProgrammes = asyncHandler(async (req: Request, res: Response) =>
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, tabAccess, "View Programmes");
+  const hasAccess = checkAccess(account, tabAccess, "View Courses");
 
   if (absoluteAdmin || hasAccess) {
-    const result = await fetchProgrammes(query, cursorType as string, parsedLimit, organisation!._id.toString());
+    const result = await fetchCourses(query, cursorType as string, parsedLimit, organisation!._id.toString());
 
-    if (!result || !result.programmes) {
-      throwError("Error fetching programmes", 500);
+    if (!result || !result.courses) {
+      throwError("Error fetching courses", 500);
     }
     res.status(201).json(result);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view programme profile - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view course profile - Please contact your admin", 403);
 });
 
 // controller to handle role creation
-export const createProgramme = asyncHandler(async (req: Request, res: Response) => {
+export const createCourse = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { programmeCustomId, programmeName } = body;
+  const { courseCustomId, courseName, programmeCustomId, courseFullTitle } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
@@ -132,40 +133,48 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, creatorTabAccess, "Create Programme");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create Course");
 
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to create programme - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to create course - Please contact your admin", 403);
   }
 
-  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, programmeCustomId });
-  if (programmeExists) {
+  const courseExists = await Course.findOne({ organisationId: orgParsedId, courseCustomId });
+  if (courseExists) {
     throwError(
-      "A programme with this Custom Id already exist - Either refer to that record or change the programme custom Id",
+      "A course with this Custom Id already exist - Either refer to that record or change the course custom Id",
       409
     );
   }
 
-  const newProgramme = await Programme.create({
+  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, programmeCustomId });
+  if (!programmeExists) {
+    throwError(
+      "No programme with the provided Custom Id exist - Please create the programme or change the programme custom Id",
+      409
+    );
+  }
+
+  const newCourse = await Course.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([programmeCustomId, programmeName])
+    searchText: generateSearchText([courseCustomId, courseName, courseFullTitle])
   });
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "Programme Creation",
-    "Programme",
-    newProgramme?._id,
-    programmeName,
+    "Course Creation",
+    "Course",
+    newCourse?._id,
+    courseName,
     [
       {
         kind: "N",
         rhs: {
-          _id: newProgramme._id,
-          programmeId: newProgramme.programmeCustomId,
-          programmeName
+          _id: newCourse._id,
+          courseId: newCourse.courseCustomId,
+          courseName
         }
       }
     ],
@@ -176,12 +185,12 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
 });
 
 // controller to handle role update
-export const updateProgramme = asyncHandler(async (req: Request, res: Response) => {
+export const updateCourse = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { programmeCustomId, programmeName } = body;
+  const { courseCustomId, courseName, programmeCustomId, courseFullTitle } = body;
 
-  if (!validateProgramme(body)) {
+  if (!validateCourse(body)) {
     throwError("Please fill in all required fields", 400);
   }
 
@@ -199,40 +208,48 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Programme");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Course");
 
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to edit programme - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to edit course - Please contact your admin", 403);
   }
 
-  const originalProgramme = await Programme.findOne({ organisationId: orgParsedId, programmeCustomId });
-
-  if (!originalProgramme) {
-    throwError("An error occured whilst getting old programme data, Ensure it has not been deleted", 500);
+  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, programmeCustomId });
+  if (!programmeExists) {
+    throwError(
+      "No programme with the provided Custom Id exist - Please create the programme or change the programme custom Id",
+      409
+    );
   }
 
-  const updatedProgramme = await Programme.findByIdAndUpdate(
-    originalProgramme?._id.toString(),
+  const originalCourse = await Course.findOne({ organisationId: orgParsedId, courseCustomId });
+
+  if (!originalCourse) {
+    throwError("An error occured whilst getting old course data, Ensure it has not been deleted", 500);
+  }
+
+  const updatedCourse = await Course.findByIdAndUpdate(
+    originalCourse?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([programmeCustomId, programmeName])
+      searchText: generateSearchText([courseCustomId, courseName, courseFullTitle])
     },
     { new: true }
   );
 
-  if (!updatedProgramme) {
-    throwError("Error updating programme", 500);
+  if (!updatedCourse) {
+    throwError("Error updating course", 500);
   }
 
-  const difference = diff(originalProgramme, updatedProgramme);
+  const difference = diff(originalCourse, updatedCourse);
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "Programme Update",
-    "Programme",
-    updatedProgramme?._id,
-    programmeName,
+    "Course Update",
+    "Course",
+    updatedCourse?._id,
+    courseName,
     difference,
     new Date()
   );
@@ -241,10 +258,10 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
 });
 
 // controller to handle deleting roles
-export const deleteProgramme = asyncHandler(async (req: Request, res: Response) => {
+export const deleteCourse = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { programmeCustomId } = req.body;
-  if (!programmeCustomId) {
+  const { courseCustomId } = req.body;
+  if (!courseCustomId) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
@@ -260,42 +277,39 @@ export const deleteProgramme = asyncHandler(async (req: Request, res: Response) 
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Programme Profile");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Course Profile");
   if (!absoluteAdmin && !hasAccess) {
-    throwError(
-      "Unauthorised Action: You do not have access to delete programme profile - Please contact your admin",
-      403
-    );
+    throwError("Unauthorised Action: You do not have access to delete course profile - Please contact your admin", 403);
   }
 
-  const programmeToDelete = await Programme.findOne({
+  const courseToDelete = await Course.findOne({
     organisationId: organisation?._id.toString(),
-    programmeCustomId: programmeCustomId
+    courseCustomId: courseCustomId
   });
 
-  if (!programmeToDelete) {
-    throwError("Error finding programme with provided Custom Id - Please try again", 404);
+  if (!courseToDelete) {
+    throwError("Error finding course with provided Custom Id - Please try again", 404);
   }
 
-  const deletedProgramme = await Programme.findByIdAndDelete(programmeToDelete?._id.toString());
-  if (!deletedProgramme) {
-    throwError("Error deleting programme - Please try again", 500);
+  const deletedCourse = await Course.findByIdAndDelete(courseToDelete?._id.toString());
+  if (!deletedCourse) {
+    throwError("Error deleting course - Please try again", 500);
   }
 
-  const emitRoom = deletedProgramme?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "programmes", deletedProgramme, "delete");
+  const emitRoom = deletedCourse?.organisationId?.toString() ?? "";
+  emitToOrganisation(emitRoom, "courses", deletedCourse, "delete");
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "Programme Delete",
-    "Programme",
-    deletedProgramme?._id,
-    deletedProgramme?.programmeName,
+    "Course Delete",
+    "Course",
+    deletedCourse?._id,
+    deletedCourse?.courseName,
     [
       {
         kind: "D" as any,
-        lhs: deletedProgramme
+        lhs: deletedCourse
       }
     ],
     new Date()
