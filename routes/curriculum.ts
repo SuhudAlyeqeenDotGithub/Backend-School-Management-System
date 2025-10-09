@@ -40,6 +40,21 @@ import {
   deleteLevelManager
 } from "../controllers/curriculum/level/manager";
 
+import {
+  getBaseSubjects,
+  createBaseSubject,
+  updateBaseSubject,
+  deleteBaseSubject,
+  getAllBaseSubjects
+} from "../controllers/curriculum/basesubject/basesubject";
+
+import {
+  getBaseSubjectManagers,
+  createBaseSubjectManager,
+  updateBaseSubjectManager,
+  deleteBaseSubjectManager
+} from "../controllers/curriculum/basesubject/manager";
+
 // end point for curriculum / programme
 router.get("/curriculum/programmes", getProgrammes);
 router.get("/curriculum/allprogrammes", getAllProgrammes);
@@ -75,5 +90,17 @@ router.get("/curriculum/level/managers", getLevelManagers);
 router.post("/curriculum/level/manager", createLevelManager);
 router.put("/curriculum/level/manager", updateLevelManager);
 router.delete("/curriculum/level/manager", deleteLevelManager);
+
+// end point for curriculum / basesubject
+router.get("/curriculum/basesubjects", getBaseSubjects);
+router.get("/curriculum/allbasesubjects", getAllBaseSubjects);
+router.post("/curriculum/basesubject", createBaseSubject);
+router.put("/curriculum/basesubject", updateBaseSubject);
+router.delete("/curriculum/basesubject", deleteBaseSubject);
+
+router.get("/curriculum/basesubject/managers", getBaseSubjectManagers);
+router.post("/curriculum/basesubject/manager", createBaseSubjectManager);
+router.put("/curriculum/basesubject/manager", updateBaseSubjectManager);
+router.delete("/curriculum/basesubject/manager", deleteBaseSubjectManager);
 
 export default router;

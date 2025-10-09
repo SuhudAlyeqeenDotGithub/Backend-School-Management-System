@@ -26,6 +26,9 @@ const activityLogSchema = new Schema(
         "ProgrammeManager",
         "CourseManager",
         "LevelManager",
+        "SubjectTeacher",
+        "BaseSubject",
+        "BaseSubjectManager",
         "None"
       ]
     },

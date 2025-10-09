@@ -15,6 +15,7 @@ import { Student } from "../models/student/studentProfile.ts";
 import { Programme, ProgrammeManager } from "../models/curriculum/programme.ts";
 import { Course, CourseManager } from "../models/curriculum/course.ts";
 import { Level, LevelManager } from "../models/curriculum/level.ts";
+import { BaseSubject, BaseSubjectManager } from "../models/curriculum/basesubject.ts";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -665,6 +666,92 @@ export const fetchLevelManagers = async (
     chunkCount,
     nextCursor: levelManagers[levelManagers.length - 1]?._id,
     prevCursor: levelManagers[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchAllBaseSubjects = async (orgId: string) => {
+  const baseSubjects = await BaseSubject.find({ organisationId: orgId }).sort({ _id: -1 });
+
+  if (!baseSubjects) {
+    throwError("Error fetching baseSubjects", 500);
+  }
+
+  return baseSubjects;
+};
+
+export const fetchBaseSubjects = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const baseSubjects = await BaseSubject.find({ ...query, organisationId: orgId })
+    .sort({ _id: -1 })
+    .limit(limit + 1);
+  const totalCount = await BaseSubject.countDocuments({ ...query, organisationId: orgId });
+
+  if (!baseSubjects) {
+    throwError("Error fetching baseSubjects", 500);
+  }
+  const hasNext = baseSubjects.length > limit || cursorType === "prev";
+
+  if (baseSubjects.length > limit) {
+    baseSubjects.pop();
+  }
+  const chunkCount = baseSubjects.length;
+
+  return {
+    baseSubjects,
+    totalCount,
+    chunkCount,
+    nextCursor: baseSubjects[baseSubjects.length - 1]?._id,
+    prevCursor: baseSubjects[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchBaseSubjectManagers = async (
+  query: any,
+  cursorType: string,
+  limit: number,
+  asWho: string,
+  orgId: string,
+  selfId: string
+) => {
+  let baseSubjectManagers;
+  let totalCount;
+  if (asWho === "Absolute Admin") {
+    baseSubjectManagers = await BaseSubjectManager.find({ ...query, organisationId: orgId })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+    totalCount = await BaseSubjectManager.countDocuments({ ...query, organisationId: orgId });
+  } else {
+    baseSubjectManagers = await BaseSubjectManager.find({
+      ...query,
+      organisationId: orgId,
+      baseSubjectManagerStaffId: { $ne: selfId }
+    })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+    totalCount = await BaseSubjectManager.countDocuments({
+      ...query,
+      organisationId: orgId,
+      baseSubjectManagerStaffId: { $ne: selfId }
+    });
+  }
+
+  if (!baseSubjectManagers) {
+    throwError("Error fetching baseSubject managers", 500);
+  }
+  const hasNext = baseSubjectManagers.length > limit || cursorType === "prev";
+
+  if (baseSubjectManagers.length > limit) {
+    baseSubjectManagers.pop();
+  }
+  const chunkCount = baseSubjectManagers.length;
+
+  return {
+    baseSubjectManagers,
+    totalCount,
+    chunkCount,
+    nextCursor: baseSubjectManagers[baseSubjectManagers.length - 1]?._id,
+    prevCursor: baseSubjectManagers[0]?._id,
     hasNext
   };
 };

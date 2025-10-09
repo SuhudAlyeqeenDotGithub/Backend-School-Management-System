@@ -6,7 +6,7 @@ import {
   confirmRole,
   throwError,
   generateSearchText,
-  fetchProgrammes,
+  fetchBaseSubjects,
   generateCustomId,
   emitToOrganisation,
   checkAccess,
@@ -14,15 +14,15 @@ import {
   confirmUserOrgRole,
   validateEmail,
   validatePhoneNumber,
-  fetchAllProgrammes
+  fetchAllBaseSubjects
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
-import { Programme } from "../../../models/curriculum/programme";
+import { BaseSubject } from "../../../models/curriculum/basesubject";
 
-const validateProgramme = (programmeDataParam: any) => {
-  const { description, programmeDuration, ...copyLocalData } = programmeDataParam;
+const validateBaseSubject = (baseSubjectDataParam: any) => {
+  const { description, ...copyLocalData } = baseSubjectDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -34,11 +34,11 @@ const validateProgramme = (programmeDataParam: any) => {
   return true;
 };
 
-export const getAllProgrammes = asyncHandler(async (req: Request, res: Response) => {
+export const getAllBaseSubjects = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus, programmeId } = account as any;
+  const { roleId, accountStatus, baseSubjectId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -47,22 +47,25 @@ export const getAllProgrammes = asyncHandler(async (req: Request, res: Response)
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, tabAccess, "View Programmes");
+  const hasAccess = checkAccess(account, tabAccess, "View Base Subjects");
 
   if (absoluteAdmin || hasAccess) {
-    const programmeProfiles = await fetchAllProgrammes(organisation!._id.toString());
+    const baseSubjectProfiles = await fetchAllBaseSubjects(organisation!._id.toString());
 
-    if (!programmeProfiles) {
-      throwError("Error fetching programme profiles", 500);
+    if (!baseSubjectProfiles) {
+      throwError("Error fetching base subject profiles", 500);
     }
-    res.status(201).json(programmeProfiles);
+    res.status(201).json(baseSubjectProfiles);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view programme profile - Please contact your admin", 403);
+  throwError(
+    "Unauthorised Action: You do not have access to view base subject profile - Please contact your admin",
+    403
+  );
 });
 
-export const getProgrammes = asyncHandler(async (req: Request, res: Response) => {
+export const getBaseSubjects = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
@@ -89,7 +92,7 @@ export const getProgrammes = asyncHandler(async (req: Request, res: Response) =>
     }
   }
 
-  const { roleId, accountStatus, programmeId } = account as any;
+  const { roleId, accountStatus, baseSubjectId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -98,27 +101,30 @@ export const getProgrammes = asyncHandler(async (req: Request, res: Response) =>
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, tabAccess, "View Programmes");
+  const hasAccess = checkAccess(account, tabAccess, "View Base Subjects");
 
   if (absoluteAdmin || hasAccess) {
-    const result = await fetchProgrammes(query, cursorType as string, parsedLimit, organisation!._id.toString());
+    const result = await fetchBaseSubjects(query, cursorType as string, parsedLimit, organisation!._id.toString());
 
-    if (!result || !result.programmes) {
-      throwError("Error fetching programmes", 500);
+    if (!result || !result.baseSubjects) {
+      throwError("Error fetching base subjects", 500);
     }
     res.status(201).json(result);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view programme profile - Please contact your admin", 403);
+  throwError(
+    "Unauthorised Action: You do not have access to view base subject profile - Please contact your admin",
+    403
+  );
 });
 
 // controller to handle role creation
-export const createProgramme = asyncHandler(async (req: Request, res: Response) => {
+export const createBaseSubject = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { programmeCustomId, programmeName } = body;
+  const { baseSubjectCustomId, baseSubjectName } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
@@ -132,40 +138,40 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, creatorTabAccess, "Create Programme");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create Base Subject");
 
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to create programme - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to create base subject - Please contact your admin", 403);
   }
 
-  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, programmeCustomId });
-  if (programmeExists) {
+  const baseSubjectExists = await BaseSubject.findOne({ organisationId: orgParsedId, baseSubjectCustomId });
+  if (baseSubjectExists) {
     throwError(
-      "A programme with this Custom Id already exist - Either refer to that record or change the programme custom Id",
+      "A baseSubject with this Custom Id already exist - Either refer to that record or change the baseSubject custom Id",
       409
     );
   }
 
-  const newProgramme = await Programme.create({
+  const newBaseSubject = await BaseSubject.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([programmeCustomId, programmeName])
+    searchText: generateSearchText([baseSubjectCustomId, baseSubjectName])
   });
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "Programme Creation",
-    "Programme",
-    newProgramme?._id,
-    programmeName,
+    "BaseSubject Creation",
+    "BaseSubject",
+    newBaseSubject?._id,
+    baseSubjectName,
     [
       {
         kind: "N",
         rhs: {
-          _id: newProgramme._id,
-          programmeId: newProgramme.programmeCustomId,
-          programmeName
+          _id: newBaseSubject._id,
+          baseSubjectId: newBaseSubject.baseSubjectCustomId,
+          baseSubjectName
         }
       }
     ],
@@ -176,12 +182,12 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
 });
 
 // controller to handle role update
-export const updateProgramme = asyncHandler(async (req: Request, res: Response) => {
+export const updateBaseSubject = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { programmeCustomId, programmeName } = body;
+  const { baseSubjectCustomId, baseSubjectName } = body;
 
-  if (!validateProgramme(body)) {
+  if (!validateBaseSubject(body)) {
     throwError("Please fill in all required fields", 400);
   }
 
@@ -199,40 +205,40 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Programme");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Base Subject");
 
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to edit programme - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to edit base subject - Please contact your admin", 403);
   }
 
-  const originalProgramme = await Programme.findOne({ organisationId: orgParsedId, programmeCustomId });
+  const originalBaseSubject = await BaseSubject.findOne({ organisationId: orgParsedId, baseSubjectCustomId });
 
-  if (!originalProgramme) {
-    throwError("An error occured whilst getting old programme data, Ensure it has not been deleted", 500);
+  if (!originalBaseSubject) {
+    throwError("An error occured whilst getting old base subject data, Ensure it has not been deleted", 500);
   }
 
-  const updatedProgramme = await Programme.findByIdAndUpdate(
-    originalProgramme?._id.toString(),
+  const updatedBaseSubject = await BaseSubject.findByIdAndUpdate(
+    originalBaseSubject?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([programmeCustomId, programmeName])
+      searchText: generateSearchText([baseSubjectCustomId, baseSubjectName])
     },
     { new: true }
   );
 
-  if (!updatedProgramme) {
-    throwError("Error updating programme", 500);
+  if (!updatedBaseSubject) {
+    throwError("Error updating base subject", 500);
   }
 
-  const difference = diff(originalProgramme, updatedProgramme);
+  const difference = diff(originalBaseSubject, updatedBaseSubject);
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "Programme Update",
-    "Programme",
-    updatedProgramme?._id,
-    programmeName,
+    "Base Subject Update",
+    "BaseSubject",
+    updatedBaseSubject?._id,
+    baseSubjectName,
     difference,
     new Date()
   );
@@ -241,10 +247,10 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
 });
 
 // controller to handle deleting roles
-export const deleteProgramme = asyncHandler(async (req: Request, res: Response) => {
+export const deleteBaseSubject = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { programmeCustomId } = req.body;
-  if (!programmeCustomId) {
+  const { baseSubjectCustomId } = req.body;
+  if (!baseSubjectCustomId) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
@@ -260,39 +266,42 @@ export const deleteProgramme = asyncHandler(async (req: Request, res: Response) 
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Programme");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Base Subject");
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to delete programme - Please contact your admin", 403);
+    throwError(
+      "Unauthorised Action: You do not have access to delete base subject profile - Please contact your admin",
+      403
+    );
   }
 
-  const programmeToDelete = await Programme.findOne({
+  const baseSubjectToDelete = await BaseSubject.findOne({
     organisationId: organisation?._id.toString(),
-    programmeCustomId: programmeCustomId
+    baseSubjectCustomId: baseSubjectCustomId
   });
 
-  if (!programmeToDelete) {
-    throwError("Error finding programme with provided Custom Id - Please try again", 404);
+  if (!baseSubjectToDelete) {
+    throwError("Error finding base subject with provided Custom Id - Please try again", 404);
   }
 
-  const deletedProgramme = await Programme.findByIdAndDelete(programmeToDelete?._id.toString());
-  if (!deletedProgramme) {
-    throwError("Error deleting programme - Please try again", 500);
+  const deletedBaseSubject = await BaseSubject.findByIdAndDelete(baseSubjectToDelete?._id.toString());
+  if (!deletedBaseSubject) {
+    throwError("Error deleting base subject - Please try again", 500);
   }
 
-  const emitRoom = deletedProgramme?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "programmes", deletedProgramme, "delete");
+  const emitRoom = deletedBaseSubject?.organisationId?.toString() ?? "";
+  emitToOrganisation(emitRoom, "basesubjects", deletedBaseSubject, "delete");
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "Programme Delete",
-    "Programme",
-    deletedProgramme?._id,
-    deletedProgramme?.programmeName,
+    "BasesSubject Delete",
+    "BaseSubject",
+    deletedBaseSubject?._id,
+    deletedBaseSubject?.baseSubjectName,
     [
       {
         kind: "D" as any,
-        lhs: deletedProgramme
+        lhs: deletedBaseSubject
       }
     ],
     new Date()
