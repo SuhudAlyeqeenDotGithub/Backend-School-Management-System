@@ -25,6 +25,7 @@ const activityLogSchema = new Schema(
         "StaffContract",
         "ProgrammeManager",
         "CourseManager",
+        "LevelManager",
         "None"
       ]
     },

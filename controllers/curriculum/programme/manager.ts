@@ -123,7 +123,7 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
     });
     if (programmeAlreadyManaged) {
       throwError(
-        "The staff is already an active manager of this programme - Please assign another staff or deactivate their current management",
+        "The staff is already an active manager of this programme - Please assign another staff or deactivate their current management, or set this current one to inactive",
         409
       );
     }
@@ -232,7 +232,7 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
     });
     if (programmeAlreadyManaged) {
       throwError(
-        "The staff is already an active manager of this programme - Please assign another staff or deactivate their current management",
+        "The staff is already an active manager of this programme - Please assign another staff or deactivate their current management, or set this current one to inactive",
         409
       );
     }

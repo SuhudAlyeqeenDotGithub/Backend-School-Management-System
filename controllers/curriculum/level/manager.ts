@@ -3,7 +3,7 @@ import { Request, Response } from "express";
 import {
   throwError,
   generateSearchText,
-  fetchCourseManagers,
+  fetchLevelManagers,
   generateCustomId,
   emitToOrganisation,
   checkAccess,
@@ -15,10 +15,10 @@ import {
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 import { StaffContract } from "../../../models/staff/contracts";
-import { CourseManager } from "../../../models/curriculum/course";
+import { LevelManager } from "../../../models/curriculum/level";
 
-const validateCourseManager = (courseManagerDataParam: any) => {
-  const { managedUntil, _id, ...copyLocalData } = courseManagerDataParam;
+const validateLevelManager = (levelManagerDataParam: any) => {
+  const { managedUntil, _id, ...copyLocalData } = levelManagerDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -30,7 +30,7 @@ const validateCourseManager = (courseManagerDataParam: any) => {
   return true;
 };
 
-export const getCourseManagers = asyncHandler(async (req: Request, res: Response) => {
+export const getLevelManagers = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
@@ -57,7 +57,7 @@ export const getCourseManagers = asyncHandler(async (req: Request, res: Response
     }
   }
 
-  const { roleId, accountStatus, courseId, staffId } = account as any;
+  const { roleId, accountStatus, levelId, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -66,10 +66,10 @@ export const getCourseManagers = asyncHandler(async (req: Request, res: Response
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, tabAccess, "View Course Managers");
+  const hasAccess = checkAccess(account, tabAccess, "View Level Managers");
 
   if (absoluteAdmin || hasAccess) {
-    const result = await fetchCourseManagers(
+    const result = await fetchLevelManagers(
       query,
       cursorType as string,
       parsedLimit,
@@ -78,22 +78,22 @@ export const getCourseManagers = asyncHandler(async (req: Request, res: Response
       staffId
     );
 
-    if (!result || !result.courseManagers) {
-      throwError("Error fetching course managers", 500);
+    if (!result || !result.levelManagers) {
+      throwError("Error fetching level managers", 500);
     }
     res.status(201).json(result);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view course profile - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view level profile - Please contact your admin", 403);
 });
 
 // controller to handle role creation
-export const createCourseManager = asyncHandler(async (req: Request, res: Response) => {
+export const createLevelManager = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { courseCustomId, status, courseId, courseFullTitle, courseManagerCustomStaffId, courseManagerFullName } = body;
+  const { levelCustomId, status, levelId, levelFullTitle, levelManagerCustomStaffId, levelManagerFullName } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
@@ -101,22 +101,22 @@ export const createCourseManager = asyncHandler(async (req: Request, res: Respon
 
   const staffHasContract = await StaffContract.findOne({
     organisationId: orgParsedId,
-    staffCustomId: courseManagerCustomStaffId
+    staffCustomId: levelManagerCustomStaffId
   });
   if (!staffHasContract) {
     throwError("The staff has no contract with this organisation - Please create one for them", 409);
   }
 
   if (status === "Active") {
-    const courseAlreadyManaged = await CourseManager.findOne({
+    const levelAlreadyManaged = await LevelManager.findOne({
       organisationId: orgParsedId,
-      courseId,
-      courseManagerCustomStaffId,
+      levelId,
+      levelManagerCustomStaffId,
       status: "Active"
     });
-    if (courseAlreadyManaged) {
+    if (levelAlreadyManaged) {
       throwError(
-        "The staff is already an active manager of this course - Please assign another staff or deactivate their current management, or set this current one to inactive",
+        "The staff is already an active manager of this level - Please assign another staff or deactivate their current management, or set this current one to inactive",
         409
       );
     }
@@ -131,29 +131,29 @@ export const createCourseManager = asyncHandler(async (req: Request, res: Respon
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, creatorTabAccess, "Create Course Manager");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create Level Manager");
 
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to create course manager - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to create level manager - Please contact your admin", 403);
   }
 
-  const newCourseManager = await CourseManager.create({
+  const newLevelManager = await LevelManager.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([courseCustomId, courseFullTitle, courseManagerCustomStaffId, courseManagerFullName])
+    searchText: generateSearchText([levelCustomId, levelFullTitle, levelManagerCustomStaffId, levelManagerFullName])
   });
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "Course Manager Creation",
-    "CourseManager",
-    newCourseManager?._id,
-    courseManagerFullName,
+    "Level Manager Creation",
+    "LevelManager",
+    newLevelManager?._id,
+    levelManagerFullName,
     [
       {
         kind: "N",
-        rhs: newCourseManager
+        rhs: newLevelManager
       }
     ],
     new Date()
@@ -163,12 +163,12 @@ export const createCourseManager = asyncHandler(async (req: Request, res: Respon
 });
 
 // controller to handle role update
-export const updateCourseManager = asyncHandler(async (req: Request, res: Response) => {
+export const updateLevelManager = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { courseCustomId, courseId, status, courseFullTitle, courseManagerCustomStaffId, courseManagerFullName } = body;
+  const { levelCustomId, levelId, status, levelFullTitle, levelManagerCustomStaffId, levelManagerFullName } = body;
 
-  if (!validateCourseManager(body)) {
+  if (!validateLevelManager(body)) {
     throwError("Please fill in all required fields", 400);
   }
 
@@ -186,60 +186,55 @@ export const updateCourseManager = asyncHandler(async (req: Request, res: Respon
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Course Manager");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Level Manager");
 
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to edit course manager - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to edit level manager - Please contact your admin", 403);
   }
 
-  const originalCourseManager = await CourseManager.findOne({ _id: body._id });
+  const originalLevelManager = await LevelManager.findOne({ _id: body._id });
 
-  if (!originalCourseManager) {
-    throwError("An error occured whilst getting old course manager data, Ensure it has not been deleted", 500);
+  if (!originalLevelManager) {
+    throwError("An error occured whilst getting old level manager data, Ensure it has not been deleted", 500);
   }
 
   if (status === "Active") {
-    const courseAlreadyManaged = await CourseManager.findOne({
+    const levelAlreadyManaged = await LevelManager.findOne({
       organisationId: orgParsedId,
-      courseId,
-      courseManagerCustomStaffId,
+      levelId,
+      levelManagerCustomStaffId,
       status: "Active"
     });
-    if (courseAlreadyManaged) {
+    if (levelAlreadyManaged) {
       throwError(
-        "The staff is already an active manager of this course - Please assign another staff or deactivate their current management, or set this current one to inactive",
+        "The staff is already an active manager of this level - Please assign another staff or deactivate their current management, or set this current one to inactive",
         409
       );
     }
   }
 
-  const updatedCourseManager = await CourseManager.findByIdAndUpdate(
-    originalCourseManager?._id.toString(),
+  const updatedLevelManager = await LevelManager.findByIdAndUpdate(
+    originalLevelManager?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([
-        courseCustomId,
-        courseFullTitle,
-        courseManagerCustomStaffId,
-        courseManagerFullName
-      ])
+      searchText: generateSearchText([levelCustomId, levelFullTitle, levelManagerCustomStaffId, levelManagerFullName])
     },
     { new: true }
   );
 
-  if (!updatedCourseManager) {
-    throwError("Error updating course", 500);
+  if (!updatedLevelManager) {
+    throwError("Error updating level", 500);
   }
 
-  const difference = diff(originalCourseManager, updatedCourseManager);
+  const difference = diff(originalLevelManager, updatedLevelManager);
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "CourseManager Update",
-    "CourseManager",
-    updatedCourseManager?._id,
-    courseFullTitle,
+    "LevelManager Update",
+    "LevelManager",
+    updatedLevelManager?._id,
+    levelFullTitle,
     difference,
     new Date()
   );
@@ -248,10 +243,10 @@ export const updateCourseManager = asyncHandler(async (req: Request, res: Respon
 });
 
 // controller to handle deleting roles
-export const deleteCourseManager = asyncHandler(async (req: Request, res: Response) => {
+export const deleteLevelManager = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { courseManagerId } = req.body;
-  if (!courseManagerId) {
+  const { levelManagerId } = req.body;
+  if (!levelManagerId) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
@@ -267,38 +262,38 @@ export const deleteCourseManager = asyncHandler(async (req: Request, res: Respon
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Course Manager");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Level Manager");
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to delete course manager - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to delete level manager - Please contact your admin", 403);
   }
 
-  const courseManagerToDelete = await CourseManager.findOne({
-    _id: courseManagerId
+  const levelManagerToDelete = await LevelManager.findOne({
+    _id: levelManagerId
   });
 
-  if (!courseManagerToDelete) {
-    throwError("Error finding course Manager with provided Custom Id - Please try again", 404);
+  if (!levelManagerToDelete) {
+    throwError("Error finding level Manager with provided Custom Id - Please try again", 404);
   }
 
-  const deletedCourseManager = await CourseManager.findByIdAndDelete(courseManagerToDelete?._id.toString());
-  if (!deletedCourseManager) {
-    throwError("Error deleting course Manager - Please try again", 500);
+  const deletedLevelManager = await LevelManager.findByIdAndDelete(levelManagerToDelete?._id.toString());
+  if (!deletedLevelManager) {
+    throwError("Error deleting level Manager - Please try again", 500);
   }
 
-  const emitRoom = deletedCourseManager?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "coursemanagers", deletedCourseManager, "delete");
+  const emitRoom = deletedLevelManager?.organisationId?.toString() ?? "";
+  emitToOrganisation(emitRoom, "levelmanagers", deletedLevelManager, "delete");
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "Course Manager Deletion",
-    "CourseManager",
-    deletedCourseManager?._id,
-    deletedCourseManager?.courseManagerFullName,
+    "Level Manager Deletion",
+    "LevelManager",
+    deletedLevelManager?._id,
+    deletedLevelManager?.levelManagerFullName,
     [
       {
         kind: "D" as any,
-        lhs: deletedCourseManager
+        lhs: deletedLevelManager
       }
     ],
     new Date()

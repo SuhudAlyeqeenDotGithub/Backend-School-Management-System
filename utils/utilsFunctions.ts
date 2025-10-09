@@ -14,6 +14,7 @@ import parsePhoneNumberFromString from "libphonenumber-js";
 import { Student } from "../models/student/studentProfile.ts";
 import { Programme, ProgrammeManager } from "../models/curriculum/programme.ts";
 import { Course, CourseManager } from "../models/curriculum/course.ts";
+import { Level, LevelManager } from "../models/curriculum/level.ts";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -414,7 +415,7 @@ export const fetchAllProgrammes = async (orgId: string) => {
   const programmes = await Programme.find({ organisationId: orgId }).sort({ _id: -1 });
 
   if (!programmes) {
-    throwError("Error fetching student profiles", 500);
+    throwError("Error fetching programmes", 500);
   }
 
   return programmes;
@@ -427,7 +428,7 @@ export const fetchProgrammes = async (query: any, cursorType: string, limit: num
   const totalCount = await Programme.countDocuments({ ...query, organisationId: orgId });
 
   if (!programmes) {
-    throwError("Error fetching student profiles", 500);
+    throwError("Error fetching programmes", 500);
   }
   const hasNext = programmes.length > limit || cursorType === "prev";
 
@@ -513,7 +514,7 @@ export const fetchCourses = async (query: any, cursorType: string, limit: number
   const totalCount = await Course.countDocuments({ ...query, organisationId: orgId });
 
   if (!courses) {
-    throwError("Error fetching student profiles", 500);
+    throwError("Error fetching courses", 500);
   }
   const hasNext = courses.length > limit || cursorType === "prev";
 
@@ -578,6 +579,92 @@ export const fetchCourseManagers = async (
     chunkCount,
     nextCursor: courseManagers[courseManagers.length - 1]?._id,
     prevCursor: courseManagers[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchAllLevels = async (orgId: string) => {
+  const levels = await Level.find({ organisationId: orgId }).sort({ _id: -1 });
+
+  if (!levels) {
+    throwError("Error fetching levels", 500);
+  }
+
+  return levels;
+};
+
+export const fetchLevels = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const levels = await Level.find({ ...query, organisationId: orgId })
+    .sort({ _id: -1 })
+    .limit(limit + 1);
+  const totalCount = await Level.countDocuments({ ...query, organisationId: orgId });
+
+  if (!levels) {
+    throwError("Error fetching levels", 500);
+  }
+  const hasNext = levels.length > limit || cursorType === "prev";
+
+  if (levels.length > limit) {
+    levels.pop();
+  }
+  const chunkCount = levels.length;
+
+  return {
+    levels,
+    totalCount,
+    chunkCount,
+    nextCursor: levels[levels.length - 1]?._id,
+    prevCursor: levels[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchLevelManagers = async (
+  query: any,
+  cursorType: string,
+  limit: number,
+  asWho: string,
+  orgId: string,
+  selfId: string
+) => {
+  let levelManagers;
+  let totalCount;
+  if (asWho === "Absolute Admin") {
+    levelManagers = await LevelManager.find({ ...query, organisationId: orgId })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+    totalCount = await LevelManager.countDocuments({ ...query, organisationId: orgId });
+  } else {
+    levelManagers = await LevelManager.find({
+      ...query,
+      organisationId: orgId,
+      levelManagerStaffId: { $ne: selfId }
+    })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+    totalCount = await LevelManager.countDocuments({
+      ...query,
+      organisationId: orgId,
+      levelManagerStaffId: { $ne: selfId }
+    });
+  }
+
+  if (!levelManagers) {
+    throwError("Error fetching level managers", 500);
+  }
+  const hasNext = levelManagers.length > limit || cursorType === "prev";
+
+  if (levelManagers.length > limit) {
+    levelManagers.pop();
+  }
+  const chunkCount = levelManagers.length;
+
+  return {
+    levelManagers,
+    totalCount,
+    chunkCount,
+    nextCursor: levelManagers[levelManagers.length - 1]?._id,
+    prevCursor: levelManagers[0]?._id,
     hasNext
   };
 };
