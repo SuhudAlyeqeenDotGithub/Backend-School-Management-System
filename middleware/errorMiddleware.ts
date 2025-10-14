@@ -10,7 +10,7 @@ const errorHandler = (err: any, req: Request, res: Response, next: NextFunction)
   if (err.name === "MongoServerError" && err.code === 11000) {
     const field = Object.keys(err.keyValue).join(" and ");
     res.status(400).json({
-      message: `${field} combination already exists. Please ensure you have not entered the same exact data/combination as before.`
+      message: `${field} combination already exist. Please ensure you have not entered the same exact data/combination as before.`
     });
     return;
   }

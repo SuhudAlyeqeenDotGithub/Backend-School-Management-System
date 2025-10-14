@@ -51,7 +51,7 @@ export const getAcademicYears = asyncHandler(async (req: Request, res: Response)
         value: getObjectSize([academicYears, organisation, role, account])
       }
     ]);
-   
+
     res.status(201).json(academicYears);
     return;
   }
@@ -74,7 +74,7 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const yearNameExists = await AcademicYear.findOne({ academicYear, organisationId: orgParsedId });
+  const yearNameExists = await AcademicYear.findOne({ organisationId: orgParsedId, academicYear });
   if (yearNameExists) {
     throwError("This academic year name is already in use in this organisation - Please use a different name", 409);
   }

@@ -9,13 +9,13 @@ import {
   getAllStudentProfiles
 } from "../controllers/studentControllers/studentProfile";
 
-// import {
-//   getStudentContracts,
-//   createStudentContract,
-//   updateStudentContract,
-//   deleteStudentContract,
-//   getAllStudentContracts
-// } from "../controllers/studentControllers/contractController";
+import {
+  getStudentEnrollments,
+  createStudentEnrollment,
+  updateStudentEnrollment,
+  deleteStudentEnrollment,
+  getAllStudentEnrollments
+} from "../controllers/studentControllers/enrollment";
 
 import {
   getStudentImageViewSignedUrl,
@@ -31,11 +31,11 @@ router.put("/student/profile", updateStudentProfile);
 router.delete("/student/profile", deleteStudentProfile);
 
 // end point for student / contracts
-// router.get("/student/contract", getStudentContracts);
-// router.get("/student/allcontract", getAllStudentContracts);
-// router.post("/student/contract", createStudentContract);
-// router.put("/student/contract", updateStudentContract);
-// router.delete("/student/contract", deleteStudentContract);
+router.get("/student/enrollment", getStudentEnrollments);
+router.get("/student/allenrollment", getAllStudentEnrollments);
+router.post("/student/enrollment", createStudentEnrollment);
+router.put("/student/enrollment", updateStudentEnrollment);
+router.delete("/student/enrollment", deleteStudentEnrollment);
 
 // request signed url
 router.post("/studentimageuploadsignedurl", getStudentImageUploadSignedUrl);

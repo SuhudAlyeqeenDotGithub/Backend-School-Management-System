@@ -182,19 +182,6 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const usedEmail = await Account.findOne({ studentEmail, organisationId: orgParsedId });
-  if (usedEmail) {
-    throwError("This email is already in use by another student member - Please use a different email", 409);
-  }
-
-  const studentExists = await Student.findOne({ organisationId: orgParsedId, studentCustomId });
-  if (studentExists) {
-    throwError(
-      "A student with this Custom Id already exist - Either refer to that record or change the student custom Id",
-      409
-    );
-  }
-
   const { roleId, accountStatus, accountName, studentId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
@@ -208,6 +195,19 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to create student - Please contact your admin", 403);
+  }
+
+  const usedEmail = await Account.findOne({ studentEmail, organisationId: orgParsedId });
+  if (usedEmail) {
+    throwError("This email is already in use by another student member - Please use a different email", 409);
+  }
+
+  const studentExists = await Student.findOne({ organisationId: orgParsedId, studentCustomId });
+  if (studentExists) {
+    throwError(
+      "A student with this Custom Id already exist - Either refer to that record or change the student custom Id",
+      409
+    );
   }
 
   const newStudent = await Student.create({

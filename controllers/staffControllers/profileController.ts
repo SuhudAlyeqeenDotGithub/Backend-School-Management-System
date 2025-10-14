@@ -182,19 +182,6 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const usedEmail = await Account.findOne({ staffEmail, organisationId: orgParsedId });
-  if (usedEmail) {
-    throwError("This email is already in use by another staff member - Please use a different email", 409);
-  }
-
-  const staffExists = await Staff.findOne({ organisationId: orgParsedId, staffCustomId });
-  if (staffExists) {
-    throwError(
-      "A staff with this Custom Id already exist - Either refer to that record or change the staff custom Id",
-      409
-    );
-  }
-
   const { roleId, accountStatus, accountName, staffId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
@@ -208,6 +195,19 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to create staff - Please contact your admin", 403);
+  }
+
+  const usedEmail = await Account.findOne({ staffEmail, organisationId: orgParsedId });
+  if (usedEmail) {
+    throwError("This email is already in use by another staff member - Please use a different email", 409);
+  }
+
+  const staffExists = await Staff.findOne({ organisationId: orgParsedId, staffCustomId });
+  if (staffExists) {
+    throwError(
+      "A staff with this Custom Id already exist - Either refer to that record or change the staff custom Id",
+      409
+    );
   }
 
   const newStaff = await Staff.create({

@@ -172,6 +172,21 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
 
+  const { roleId, accountStatus, staffId: userStaffId } = account as any;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
+  }
+
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create Staff Contract");
+
+  if (!absoluteAdmin && !hasAccess) {
+    throwError("Unauthorised Action: You do not have access to create staff contract - Please contact your admin", 403);
+  }
+
   const staffExists = await Staff.findOne({ _id: staffId, organisationId: orgParsedId });
   if (!staffExists) {
     throwError(
@@ -186,21 +201,6 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
       "This academic year does not exist in this organisation - Ensure it has been created or has not been deleted",
       409
     );
-  }
-
-  const { roleId, accountStatus, staffId: userStaffId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
-
-  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
-
-  if (!checkPassed) {
-    throwError(message, 409);
-  }
-
-  const hasAccess = checkAccess(account, creatorTabAccess, "Create Staff Contract");
-
-  if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to create staff contract - Please contact your admin", 403);
   }
 
   const newStaffContract = await StaffContract.create({

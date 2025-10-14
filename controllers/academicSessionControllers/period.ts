@@ -39,7 +39,7 @@ export const createPeriod = asyncHandler(async (req: Request, res: Response) => 
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const periodNameExists = await AcademicYear.findOne({ period: period, academicYearId });
+  const periodNameExists = await Period.findOne({ academicYearId, period: period });
   if (periodNameExists) {
     throwError("This period name is already in use under a same academic year - Please use a different name", 409);
   }

@@ -1,28 +1,31 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { Account } from "../../../models/admin/accountModel";
 import {
-  confirmAccount,
-  confirmRole,
   throwError,
   generateSearchText,
-  fetchProgrammes,
-  generateCustomId,
+  fetchTopics,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  validateEmail,
-  validatePhoneNumber,
-  fetchAllProgrammes
+  fetchAllTopics
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
-import { Programme } from "../../../models/curriculum/programme";
+import { Topic } from "../../../models/curriculum/topic";
 
-const validateProgramme = (programmeDataParam: any) => {
-  const { description, programmeDuration, ...copyLocalData } = programmeDataParam;
+const validateTopic = (topicDataParam: any) => {
+  const {
+    description,
+    topicDuration,
+    offeringStartDate,
+    offeringEndDate,
+    resources,
+    learningObjectives,
+
+    ...copyLocalData
+  } = topicDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -34,11 +37,11 @@ const validateProgramme = (programmeDataParam: any) => {
   return true;
 };
 
-export const getAllProgrammes = asyncHandler(async (req: Request, res: Response) => {
+export const getAllTopics = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus, programmeId } = account as any;
+  const { roleId, accountStatus, topicId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -47,22 +50,22 @@ export const getAllProgrammes = asyncHandler(async (req: Request, res: Response)
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, tabAccess, "View Programmes");
+  const hasAccess = checkAccess(account, tabAccess, "View Topics");
 
   if (absoluteAdmin || hasAccess) {
-    const programmeProfiles = await fetchAllProgrammes(organisation!._id.toString());
+    const topicProfiles = await fetchAllTopics(organisation!._id.toString());
 
-    if (!programmeProfiles) {
-      throwError("Error fetching programme", 500);
+    if (!topicProfiles) {
+      throwError("Error fetching topic", 500);
     }
-    res.status(201).json(programmeProfiles);
+    res.status(201).json(topicProfiles);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view programme - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view topic- Please contact your admin", 403);
 });
 
-export const getProgrammes = asyncHandler(async (req: Request, res: Response) => {
+export const getTopics = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
@@ -89,7 +92,7 @@ export const getProgrammes = asyncHandler(async (req: Request, res: Response) =>
     }
   }
 
-  const { roleId, accountStatus, programmeId } = account as any;
+  const { roleId, accountStatus, topicId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -98,27 +101,27 @@ export const getProgrammes = asyncHandler(async (req: Request, res: Response) =>
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, tabAccess, "View Programmes");
+  const hasAccess = checkAccess(account, tabAccess, "View Topics");
 
   if (absoluteAdmin || hasAccess) {
-    const result = await fetchProgrammes(query, cursorType as string, parsedLimit, organisation!._id.toString());
+    const result = await fetchTopics(query, cursorType as string, parsedLimit, organisation!._id.toString());
 
-    if (!result || !result.programmes) {
-      throwError("Error fetching programmes", 500);
+    if (!result || !result.topics) {
+      throwError("Error fetching topics", 500);
     }
     res.status(201).json(result);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view programme - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view topic- Please contact your admin", 403);
 });
 
 // controller to handle role creation
-export const createProgramme = asyncHandler(async (req: Request, res: Response) => {
+export const createTopic = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { programmeCustomId, programmeName } = body;
+  const { topicCustomId, topic } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
@@ -132,40 +135,40 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, creatorTabAccess, "Create Programme");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create Topic");
 
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to create programme - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to create topic - Please contact your admin", 403);
   }
 
-  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, programmeCustomId });
-  if (programmeExists) {
+  const topicExists = await Topic.findOne({ organisationId: orgParsedId, topicCustomId });
+  if (topicExists) {
     throwError(
-      "A programme with this Custom Id already exist - Either refer to that record or change the programme custom Id",
+      "A topic with this Custom Id already exist - Either refer to that record or change the topic custom Id",
       409
     );
   }
 
-  const newProgramme = await Programme.create({
+  const newTopic = await Topic.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([programmeCustomId, programmeName])
+    searchText: generateSearchText([topicCustomId, topic])
   });
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "Programme Creation",
-    "Programme",
-    newProgramme?._id,
-    programmeName,
+    "Topic Creation",
+    "Topic",
+    newTopic?._id,
+    topic,
     [
       {
         kind: "N",
         rhs: {
-          _id: newProgramme._id,
-          programmeId: newProgramme.programmeCustomId,
-          programmeName
+          _id: newTopic._id,
+          topicId: newTopic.topicCustomId,
+          topic
         }
       }
     ],
@@ -176,12 +179,12 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
 });
 
 // controller to handle role update
-export const updateProgramme = asyncHandler(async (req: Request, res: Response) => {
+export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { programmeCustomId, programmeName } = body;
+  const { topicCustomId, topic } = body;
 
-  if (!validateProgramme(body)) {
+  if (!validateTopic(body)) {
     throwError("Please fill in all required fields", 400);
   }
 
@@ -199,40 +202,40 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Programme");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Topic");
 
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to edit programme - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to edit topic - Please contact your admin", 403);
   }
 
-  const originalProgramme = await Programme.findOne({ organisationId: orgParsedId, programmeCustomId });
+  const originalTopic = await Topic.findOne({ organisationId: orgParsedId, topicCustomId });
 
-  if (!originalProgramme) {
-    throwError("An error occured whilst getting old programme data, Ensure it has not been deleted", 500);
+  if (!originalTopic) {
+    throwError("An error occured whilst getting old topic data, Ensure it has not been deleted", 500);
   }
 
-  const updatedProgramme = await Programme.findByIdAndUpdate(
-    originalProgramme?._id.toString(),
+  const updatedTopic = await Topic.findByIdAndUpdate(
+    originalTopic?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([programmeCustomId, programmeName])
+      searchText: generateSearchText([topicCustomId, topic])
     },
     { new: true }
   );
 
-  if (!updatedProgramme) {
-    throwError("Error updating programme", 500);
+  if (!updatedTopic) {
+    throwError("Error updating topic", 500);
   }
 
-  const difference = diff(originalProgramme, updatedProgramme);
+  const difference = diff(originalTopic, updatedTopic);
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "Programme Update",
-    "Programme",
-    updatedProgramme?._id,
-    programmeName,
+    "Topic Update",
+    "Topic",
+    updatedTopic?._id,
+    topic,
     difference,
     new Date()
   );
@@ -241,10 +244,10 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
 });
 
 // controller to handle deleting roles
-export const deleteProgramme = asyncHandler(async (req: Request, res: Response) => {
+export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { programmeCustomId } = req.body;
-  if (!programmeCustomId) {
+  const { topicCustomId } = req.body;
+  if (!topicCustomId) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
@@ -260,39 +263,39 @@ export const deleteProgramme = asyncHandler(async (req: Request, res: Response) 
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Programme");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Topic");
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to delete programme - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to delete topic - Please contact your admin", 403);
   }
 
-  const programmeToDelete = await Programme.findOne({
+  const topicToDelete = await Topic.findOne({
     organisationId: organisation?._id.toString(),
-    programmeCustomId: programmeCustomId
+    topicCustomId: topicCustomId
   });
 
-  if (!programmeToDelete) {
-    throwError("Error finding programme with provided Custom Id - Please try again", 404);
+  if (!topicToDelete) {
+    throwError("Error finding topic with provided Custom Id - Please try again", 404);
   }
 
-  const deletedProgramme = await Programme.findByIdAndDelete(programmeToDelete?._id.toString());
-  if (!deletedProgramme) {
-    throwError("Error deleting programme - Please try again", 500);
+  const deletedTopic = await Topic.findByIdAndDelete(topicToDelete?._id.toString());
+  if (!deletedTopic) {
+    throwError("Error deleting topic - Please try again", 500);
   }
 
-  const emitRoom = deletedProgramme?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "programmes", deletedProgramme, "delete");
+  const emitRoom = deletedTopic?.organisationId?.toString() ?? "";
+  emitToOrganisation(emitRoom, "topics", deletedTopic, "delete");
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "Programme Delete",
-    "Programme",
-    deletedProgramme?._id,
-    deletedProgramme?.programmeName,
+    "Topic Delete",
+    "Topic",
+    deletedTopic?._id,
+    deletedTopic?.topic,
     [
       {
         kind: "D" as any,
-        lhs: deletedProgramme
+        lhs: deletedTopic
       }
     ],
     new Date()

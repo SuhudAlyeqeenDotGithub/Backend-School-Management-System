@@ -16,6 +16,10 @@ import { Programme, ProgrammeManager } from "../models/curriculum/programme.ts";
 import { Course, CourseManager } from "../models/curriculum/course.ts";
 import { Level, LevelManager } from "../models/curriculum/level.ts";
 import { BaseSubject, BaseSubjectManager } from "../models/curriculum/basesubject.ts";
+import { Topic } from "../models/curriculum/topic.ts";
+import { Syllabus } from "../models/curriculum/syllabus.ts";
+import { Subject, SubjectTeacher } from "../models/curriculum/subject.ts";
+import { StudentEnrollment } from "../models/student/enrollment.ts";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -756,6 +760,163 @@ export const fetchBaseSubjectManagers = async (
   };
 };
 
+export const fetchAllTopics = async (orgId: string) => {
+  const topics = await Topic.find({ organisationId: orgId }).sort({ _id: -1 });
+
+  if (!topics) {
+    throwError("Error fetching topics", 500);
+  }
+
+  return topics;
+};
+
+export const fetchTopics = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const topics = await Topic.find({ ...query, organisationId: orgId })
+    .sort({ _id: -1 })
+    .limit(limit + 1);
+  const totalCount = await Topic.countDocuments({ ...query, organisationId: orgId });
+
+  if (!topics) {
+    throwError("Error fetching topics", 500);
+  }
+  const hasNext = topics.length > limit || cursorType === "prev";
+
+  if (topics.length > limit) {
+    topics.pop();
+  }
+  const chunkCount = topics.length;
+
+  return {
+    topics,
+    totalCount,
+    chunkCount,
+    nextCursor: topics[topics.length - 1]?._id,
+    prevCursor: topics[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchAllSubjects = async (orgId: string) => {
+  const subjects = await Subject.find({ organisationId: orgId }).sort({ _id: -1 });
+
+  if (!subjects) {
+    throwError("Error fetching subjects", 500);
+  }
+
+  return subjects;
+};
+
+export const fetchSubjects = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const subjects = await Subject.find({ ...query, organisationId: orgId })
+    .sort({ _id: -1 })
+    .limit(limit + 1);
+  const totalCount = await Subject.countDocuments({ ...query, organisationId: orgId });
+
+  if (!subjects) {
+    throwError("Error fetching subjects", 500);
+  }
+  const hasNext = subjects.length > limit || cursorType === "prev";
+
+  if (subjects.length > limit) {
+    subjects.pop();
+  }
+  const chunkCount = subjects.length;
+
+  return {
+    subjects,
+    totalCount,
+    chunkCount,
+    nextCursor: subjects[subjects.length - 1]?._id,
+    prevCursor: subjects[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchSubjectTeachers = async (
+  query: any,
+  cursorType: string,
+  limit: number,
+  asWho: string,
+  orgId: string,
+  selfId: string
+) => {
+  let subjectTeachers;
+  let totalCount;
+  if (asWho === "Absolute Admin") {
+    subjectTeachers = await SubjectTeacher.find({ ...query, organisationId: orgId })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+    totalCount = await SubjectTeacher.countDocuments({ ...query, organisationId: orgId });
+  } else {
+    subjectTeachers = await SubjectTeacher.find({
+      ...query,
+      organisationId: orgId,
+      subjectTeacherStaffId: { $ne: selfId }
+    })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+    totalCount = await SubjectTeacher.countDocuments({
+      ...query,
+      organisationId: orgId,
+      subjectTeacherStaffId: { $ne: selfId }
+    });
+  }
+
+  if (!subjectTeachers) {
+    throwError("Error fetching level managers", 500);
+  }
+  const hasNext = subjectTeachers.length > limit || cursorType === "prev";
+
+  if (subjectTeachers.length > limit) {
+    subjectTeachers.pop();
+  }
+  const chunkCount = subjectTeachers.length;
+
+  return {
+    subjectTeachers,
+    totalCount,
+    chunkCount,
+    nextCursor: subjectTeachers[subjectTeachers.length - 1]?._id,
+    prevCursor: subjectTeachers[0]?._id,
+    hasNext
+  };
+};
+export const fetchAllSyllabuses = async (orgId: string) => {
+  const syllabuses = await Syllabus.find({ organisationId: orgId }).sort({ _id: -1 });
+
+  if (!syllabuses) {
+    throwError("Error fetching syllabuses", 500);
+  }
+
+  return syllabuses;
+};
+
+export const fetchSyllabuses = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const syllabuses = await Syllabus.find({ ...query, organisationId: orgId })
+    .sort({ _id: -1 })
+    .limit(limit + 1);
+  const totalCount = await Syllabus.countDocuments({ ...query, organisationId: orgId });
+
+  if (!syllabuses) {
+    throwError("Error fetching syllabuses", 500);
+  }
+  const hasNext = syllabuses.length > limit || cursorType === "prev";
+
+  if (syllabuses.length > limit) {
+    syllabuses.pop();
+  }
+  const chunkCount = syllabuses.length;
+
+  return {
+    syllabuses,
+    totalCount,
+    chunkCount,
+    nextCursor: syllabuses[syllabuses.length - 1]?._id,
+    prevCursor: syllabuses[0]?._id,
+    hasNext
+  };
+};
+
 export const fetchStaffContracts = async (
   query: any,
   cursorType: string,
@@ -818,10 +979,54 @@ export const fetchAllStaffContracts = async (asWho: string, orgId: string, selfI
   }
   ``;
   if (!staffContracts) {
-    throwError("Error fetching staff profiles", 500);
+    throwError("Error fetching staff contracts", 500);
   }
 
   return staffContracts;
+};
+
+export const fetchStudentEnrollments = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const studentEnrollments = await StudentEnrollment.find({
+    ...query,
+    organisationId: orgId
+  })
+    .sort({ _id: -1 })
+    .limit(limit + 1);
+  const totalCount = await StudentEnrollment.countDocuments({
+    ...query,
+    organisationId: orgId
+  });
+
+  if (!studentEnrollments) {
+    throwError("Error fetching student contracts", 500);
+  }
+
+  const hasNext = studentEnrollments.length > limit || cursorType === "prev";
+
+  if (studentEnrollments.length > limit) {
+    studentEnrollments.pop();
+  }
+  const chunkCount = studentEnrollments.length;
+
+  return {
+    studentEnrollments,
+    totalCount,
+    chunkCount,
+    nextCursor: studentEnrollments[studentEnrollments.length - 1]?._id,
+    prevCursor: studentEnrollments[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchAllStudentEnrollments = async (orgId: string) => {
+  const studentEnrollments = await StudentEnrollment.find({ organisationId: orgId }).sort({
+    _id: -1
+  });
+  if (!studentEnrollments) {
+    throwError("Error fetching student enrollments", 500);
+  }
+
+  return studentEnrollments;
 };
 
 export const fetchAcademicYears = async (orgId: string) => {

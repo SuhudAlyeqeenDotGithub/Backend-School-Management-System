@@ -12,6 +12,7 @@ const activityLogSchema = new Schema(
       enum: [
         "Course",
         "Student",
+        "StudentEnrollment",
         "Staff",
         "Programme",
         "Subject",
@@ -29,6 +30,8 @@ const activityLogSchema = new Schema(
         "SubjectTeacher",
         "BaseSubject",
         "BaseSubjectManager",
+        "Topic",
+        "Syllabus",
         "None"
       ]
     },

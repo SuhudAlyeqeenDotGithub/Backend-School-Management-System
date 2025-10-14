@@ -54,6 +54,36 @@ import {
   updateBaseSubjectManager,
   deleteBaseSubjectManager
 } from "../controllers/curriculum/basesubject/manager";
+import {
+  getSubjects,
+  createSubject,
+  updateSubject,
+  deleteSubject,
+  getAllSubjects
+} from "../controllers/curriculum/subject/subject";
+
+import {
+  getSubjectTeachers,
+  createSubjectTeacher,
+  updateSubjectTeacher,
+  deleteSubjectTeacher
+} from "../controllers/curriculum/subject/teacher";
+
+import {
+  getTopics,
+  createTopic,
+  updateTopic,
+  deleteTopic,
+  getAllTopics
+} from "../controllers/curriculum/learningplan/topic";
+
+import {
+  getSyllabuses,
+  createSyllabus,
+  updateSyllabus,
+  deleteSyllabus,
+  getAllSyllabuses
+} from "../controllers/curriculum/learningplan/syllabus";
 
 // end point for curriculum / programme
 router.get("/curriculum/programmes", getProgrammes);
@@ -102,5 +132,31 @@ router.get("/curriculum/basesubject/managers", getBaseSubjectManagers);
 router.post("/curriculum/basesubject/manager", createBaseSubjectManager);
 router.put("/curriculum/basesubject/manager", updateBaseSubjectManager);
 router.delete("/curriculum/basesubject/manager", deleteBaseSubjectManager);
+
+// end point for curriculum / subjects
+router.get("/curriculum/subjects", getSubjects);
+router.get("/curriculum/allsubjects", getAllSubjects);
+router.post("/curriculum/subject", createSubject);
+router.put("/curriculum/subject", updateSubject);
+router.delete("/curriculum/subject", deleteSubject);
+
+router.get("/curriculum/subject/teachers", getSubjectTeachers);
+router.post("/curriculum/subject/teacher", createSubjectTeacher);
+router.put("/curriculum/subject/teacher", updateSubjectTeacher);
+router.delete("/curriculum/subject/teacher", deleteSubjectTeacher);
+
+// end point for curriculum / topics
+router.get("/curriculum/topics", getTopics);
+router.get("/curriculum/alltopics", getAllTopics);
+router.post("/curriculum/topic", createTopic);
+router.put("/curriculum/topic", updateTopic);
+router.delete("/curriculum/topic", deleteTopic);
+
+// end point for curriculum / syllabus
+router.get("/curriculum/syllabuses", getSyllabuses);
+router.get("/curriculum/allyllabuses", getAllSyllabuses);
+router.post("/curriculum/syllabus", createSyllabus);
+router.put("/curriculum/syllabus", updateSyllabus);
+router.delete("/curriculum/syllabus", deleteSyllabus);
 
 export default router;
