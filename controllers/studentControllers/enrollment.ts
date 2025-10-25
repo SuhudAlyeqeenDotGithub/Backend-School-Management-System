@@ -35,12 +35,12 @@ const validateStudentEnrollment = (studentDataParam: any) => {
 };
 
 export const getStudentEnrollments = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
   const parsedLimit = parseInt(limit as string);
-  const query: any = {};
 
+  const query: any = { organisationId: userTokenOrgId };
   if (search) {
     query.searchText = { $regex: search, $options: "i" };
   }
@@ -100,7 +100,7 @@ export const getStudentEnrollments = asyncHandler(async (req: Request, res: Resp
 });
 
 export const getAllStudentEnrollments = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
@@ -138,7 +138,7 @@ export const getAllStudentEnrollments = asyncHandler(async (req: Request, res: R
 });
 // controller to handle role creation
 export const createStudentEnrollment = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const {
     academicYearId,
     academicYear,
@@ -266,7 +266,7 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
 
 // controller to handle role update
 export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const {
     academicYearId,
     academicYear,
@@ -392,9 +392,8 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
 
 // controller to handle deleting roles
 export const deleteStudentEnrollment = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { studentEnrollmentIDToDelete } = req.body;
-  console.log("studentEnrollmentIDToDelete", studentEnrollmentIDToDelete);
   if (!studentEnrollmentIDToDelete) {
     throwError("Unknown delete request - Please try again", 400);
   }

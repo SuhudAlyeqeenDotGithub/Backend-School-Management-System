@@ -31,14 +31,14 @@ const validateProgrammeManager = (programmeManagerDataParam: any) => {
 };
 
 export const getProgrammeManagers = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
-  const query: any = {};
 
+  const query: any = { organisationId: userTokenOrgId };
   if (search) {
     query.searchText = { $regex: search, $options: "i" };
   }
@@ -90,7 +90,7 @@ export const getProgrammeManagers = asyncHandler(async (req: Request, res: Respo
 
 // controller to handle role creation
 export const createProgrammeManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
 
   const {
@@ -179,7 +179,7 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
 
 // controller to handle role update
 export const updateProgrammeManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const {
     programmeCustomId,
@@ -223,21 +223,6 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
     throwError("An error occured whilst getting old programme manager data, Ensure it has not been deleted", 500);
   }
 
-  if (status === "Active") {
-    const programmeAlreadyManaged = await ProgrammeManager.findOne({
-      organisationId: orgParsedId,
-      programmeId,
-      programmeManagerCustomStaffId,
-      status: "Active"
-    });
-    if (programmeAlreadyManaged) {
-      throwError(
-        "The staff is already an active manager of this programme - Please assign another staff or deactivate their current management, or set this current one to inactive",
-        409
-      );
-    }
-  }
-
   const updatedProgrammeManager = await ProgrammeManager.findByIdAndUpdate(
     originalProgrammeManager?._id.toString(),
     {
@@ -274,7 +259,7 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
 
 // controller to handle deleting roles
 export const deleteProgrammeManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { programmeManagerId } = req.body;
   if (!programmeManagerId) {
     throwError("Unknown delete request - Please try again", 400);

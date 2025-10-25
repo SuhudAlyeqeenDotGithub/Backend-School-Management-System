@@ -20,6 +20,6 @@ academicYearSchema.set("toObject", { virtuals: true });
 academicYearSchema.set("toJSON", { virtuals: true });
 
 academicYearSchema.index({ organisationId: 1, academicYear: 1 }, { unique: true });
-academicYearSchema.index({ searchText: 1 });
+
 
 export const AcademicYear = model("AcademicYear", academicYearSchema);

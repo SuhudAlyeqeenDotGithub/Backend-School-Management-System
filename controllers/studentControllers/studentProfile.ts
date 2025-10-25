@@ -55,7 +55,7 @@ const validateStudentProfile = (studentDataParam: any) => {
 };
 
 export const getAllStudentProfiles = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, accountStatus, studentId } = account as any;
@@ -87,14 +87,14 @@ export const getAllStudentProfiles = asyncHandler(async (req: Request, res: Resp
 });
 
 export const getStudentProfiles = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
-  const query: any = {};
 
+  const query: any = { organisationId: userTokenOrgId };
   if (search) {
     query.searchText = { $regex: search, $options: "i" };
   }
@@ -146,7 +146,7 @@ export const getStudentProfiles = asyncHandler(async (req: Request, res: Respons
 
 // controller to handle role creation
 export const createStudentProfile = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const {
     studentCustomId,
@@ -249,7 +249,7 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
 
 // controller to handle role update
 export const updateStudentProfile = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const {
     studentCustomId,
@@ -346,7 +346,7 @@ export const updateStudentProfile = asyncHandler(async (req: Request, res: Respo
 
 // controller to handle deleting roles
 export const deleteStudentProfile = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { studentIDToDelete } = req.body;
   if (!studentIDToDelete) {
     throwError("Unknown delete request - Please try again", 400);

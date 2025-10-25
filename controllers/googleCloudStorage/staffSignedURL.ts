@@ -12,7 +12,7 @@ const storage = new Storage({
 const bucketName = "alyeqeenappsimages";
 
 export const getStaffImageUploadSignedUrl = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { imageName, imageType } = req.body;
 
   const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
@@ -59,9 +59,8 @@ export const getStaffImageUploadSignedUrl = asyncHandler(async (req: Request, re
 });
 
 export const getStaffImageViewSignedUrl = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { imageLocalDestination } = req.body;
-
 
   // confirm user
   const { account, organisation } = await confirmUserOrgRole(accountId);
@@ -93,7 +92,7 @@ export const getStaffImageViewSignedUrl = asyncHandler(async (req: Request, res:
 });
 
 export const deleteStaffImageInBucket = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { imageLocalDestination } = req.body;
 
   if (!imageLocalDestination) {

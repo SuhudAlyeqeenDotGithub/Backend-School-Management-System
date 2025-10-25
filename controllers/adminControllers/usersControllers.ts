@@ -19,7 +19,7 @@ import { StaffContract } from "../../models/staff/contracts.ts";
 import { Staff } from "../../models/staff/profile.ts";
 
 export const getUsers = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
@@ -27,7 +27,9 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
-  const query: any = {};
+
+  const queryOrgId = organisation!._id.toString();
+  const query: any = { organisationId: userTokenOrgId };
 
   if (search) {
     query.searchText = { $regex: search, $options: "i" };
@@ -80,7 +82,7 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle role creation
 export const createUser = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { staffId, userName, userEmail, userPassword, userStatus, roleId: userRoleId, uniqueTabAccess } = req.body;
 
   if (!staffId || !userName || !userEmail || !userPassword || !userRoleId) {
@@ -176,7 +178,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle role update
 export const updateUser = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const { onEditUserIsAbsoluteAdmin, _id: userId, staffId, roleId: userRoleId } = body;
 
@@ -298,7 +300,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle deleting roles
 export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { accountIdToDelete, accountType, staffId, userName, userEmail, userStatus, roleId } = req.body;
 
   if (!accountIdToDelete) {

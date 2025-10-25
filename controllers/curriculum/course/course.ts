@@ -36,7 +36,7 @@ const validateCourse = (courseDataParam: any) => {
 };
 
 export const getAllCourses = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, accountStatus, courseId } = account as any;
@@ -60,18 +60,18 @@ export const getAllCourses = asyncHandler(async (req: Request, res: Response) =>
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view course profile - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view courses - Please contact your admin", 403);
 });
 
 export const getCourses = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
-  const query: any = {};
 
+  const query: any = { organisationId: userTokenOrgId };
   if (search) {
     query.searchText = { $regex: search, $options: "i" };
   }
@@ -116,7 +116,7 @@ export const getCourses = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle role creation
 export const createCourse = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
 
   const { courseCustomId, courseName, programmeCustomId, courseFullTitle } = body;
@@ -186,7 +186,7 @@ export const createCourse = asyncHandler(async (req: Request, res: Response) => 
 
 // controller to handle role update
 export const updateCourse = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const { courseCustomId, courseName, programmeCustomId, courseFullTitle } = body;
 
@@ -259,7 +259,7 @@ export const updateCourse = asyncHandler(async (req: Request, res: Response) => 
 
 // controller to handle deleting roles
 export const deleteCourse = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { courseCustomId } = req.body;
   if (!courseCustomId) {
     throwError("Unknown delete request - Please try again", 400);

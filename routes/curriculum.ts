@@ -28,7 +28,8 @@ import {
   getCourseManagers,
   createCourseManager,
   updateCourseManager,
-  deleteCourseManager
+  deleteCourseManager,
+  getAllCourseManagers
 } from "../controllers/curriculum/course/manager";
 
 import { getLevels, createLevel, updateLevel, deleteLevel, getAllLevels } from "../controllers/curriculum/level/level";
@@ -37,7 +38,8 @@ import {
   getLevelManagers,
   createLevelManager,
   updateLevelManager,
-  deleteLevelManager
+  deleteLevelManager,
+  getAllLevelManagers
 } from "../controllers/curriculum/level/manager";
 
 import {
@@ -66,7 +68,8 @@ import {
   getSubjectTeachers,
   createSubjectTeacher,
   updateSubjectTeacher,
-  deleteSubjectTeacher
+  deleteSubjectTeacher,
+  getAllSubjectTeachers
 } from "../controllers/curriculum/subject/teacher";
 
 import {
@@ -105,6 +108,7 @@ router.put("/curriculum/course", updateCourse);
 router.delete("/curriculum/course", deleteCourse);
 
 router.get("/curriculum/course/managers", getCourseManagers);
+router.get("/curriculum/course/allmanagers", getAllCourseManagers);
 router.post("/curriculum/course/manager", createCourseManager);
 router.put("/curriculum/course/manager", updateCourseManager);
 router.delete("/curriculum/course/manager", deleteCourseManager);
@@ -117,6 +121,7 @@ router.put("/curriculum/level", updateLevel);
 router.delete("/curriculum/level", deleteLevel);
 
 router.get("/curriculum/level/managers", getLevelManagers);
+router.get("/curriculum/level/allmanagers", getAllLevelManagers);
 router.post("/curriculum/level/manager", createLevelManager);
 router.put("/curriculum/level/manager", updateLevelManager);
 router.delete("/curriculum/level/manager", deleteLevelManager);
@@ -141,6 +146,7 @@ router.put("/curriculum/subject", updateSubject);
 router.delete("/curriculum/subject", deleteSubject);
 
 router.get("/curriculum/subject/teachers", getSubjectTeachers);
+router.get("/curriculum/subject/allteachers", getAllSubjectTeachers);
 router.post("/curriculum/subject/teacher", createSubjectTeacher);
 router.put("/curriculum/subject/teacher", updateSubjectTeacher);
 router.delete("/curriculum/subject/teacher", deleteSubjectTeacher);

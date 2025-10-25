@@ -14,7 +14,7 @@ import {
 import { diff } from "deep-diff";
 
 export const getRoles = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
@@ -49,7 +49,7 @@ export const getRoles = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle role creation
 export const createRole = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { roleName, roleDescription, tabAccess } = req.body;
 
   if (!roleName) {
@@ -126,7 +126,7 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle role update
 export const updateRole = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { roleId, roleName, roleDescription, tabAccess } = req.body;
 
   if (!roleName) {
@@ -215,7 +215,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle deleting roles
 export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { roleIdToDelete, roleName, roleDescription, absoluteAdmin: roleAbsoluteAdmin, tabAccess } = req.body;
 
   if (!roleIdToDelete) {

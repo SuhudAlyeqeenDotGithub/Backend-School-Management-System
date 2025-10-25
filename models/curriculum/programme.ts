@@ -17,8 +17,7 @@ const programmeSchema = new Schema(
 );
 
 programmeSchema.index({ organisationId: 1, programmeCustomId: 1 }, { unique: true });
-programmeSchema.index({ searchText: 1 });
-programmeSchema.index({ status: 1 });
+
 
 export const Programme = model("Programme", programmeSchema);
 
@@ -43,7 +42,6 @@ programmeManagerSchema.index(
   { organisationId: 1, programmeId: 1, programmeManagerCustomStaffId: 1, status: 1 },
   { unique: true }
 );
-programmeManagerSchema.index({ status: 1 });
-programmeManagerSchema.index({ searchText: 1 });
+
 
 export const ProgrammeManager = model("ProgrammeManager", programmeManagerSchema);

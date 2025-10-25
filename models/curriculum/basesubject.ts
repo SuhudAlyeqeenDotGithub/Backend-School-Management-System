@@ -16,8 +16,6 @@ const baseSubjectSchema = new Schema(
 );
 
 baseSubjectSchema.index({ organisationId: 1, baseSubjectCustomId: 1 }, { unique: true });
-baseSubjectSchema.index({ searchText: 1 });
-baseSubjectSchema.index({ status: 1 });
 
 export const BaseSubject = model("BaseSubject", baseSubjectSchema);
 
@@ -42,7 +40,5 @@ baseSubjectManagerSchema.index(
   { organisationId: 1, baseSubjectId: 1, baseSubjectManagerCustomStaffId: 1, status: 1 },
   { unique: true }
 );
-baseSubjectManagerSchema.index({ status: 1 });
-baseSubjectManagerSchema.index({ searchText: 1 });
 
 export const BaseSubjectManager = model("BaseSubjectManager", baseSubjectManagerSchema);

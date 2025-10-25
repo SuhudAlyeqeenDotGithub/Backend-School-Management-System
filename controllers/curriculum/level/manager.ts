@@ -10,7 +10,8 @@ import {
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
   validateEmail,
-  validatePhoneNumber
+  validatePhoneNumber,
+  fetchAllLevelManagers
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
@@ -30,15 +31,43 @@ const validateLevelManager = (levelManagerDataParam: any) => {
   return true;
 };
 
-export const getLevelManagers = asyncHandler(async (req: Request, res: Response) => {
+export const getAllLevelManagers = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+
+  const { roleId, accountStatus, courseId, staffId } = account as any;
+  const { absoluteAdmin, tabAccess } = roleId;
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
+  }
+
+  const hasAccess = checkAccess(account, tabAccess, "View Level Managers");
+
+  if (absoluteAdmin || hasAccess) {
+    const result = await fetchAllLevelManagers(organisation!._id.toString());
+
+    if (!result) {
+      throwError("Error fetching level managers", 500);
+    }
+    res.status(201).json(result);
+    return;
+  }
+
+  throwError("Unauthorised Action: You do not have access to view level managers - Please contact your admin", 403);
+});
+
+export const getLevelManagers = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
-  const query: any = {};
 
+  const query: any = { organisationId: userTokenOrgId };
   if (search) {
     query.searchText = { $regex: search, $options: "i" };
   }
@@ -85,12 +114,12 @@ export const getLevelManagers = asyncHandler(async (req: Request, res: Response)
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view level profile - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view level managers - Please contact your admin", 403);
 });
 
 // controller to handle role creation
 export const createLevelManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
 
   const { levelCustomId, status, levelId, levelFullTitle, levelManagerCustomStaffId, levelManagerFullName } = body;
@@ -164,7 +193,7 @@ export const createLevelManager = asyncHandler(async (req: Request, res: Respons
 
 // controller to handle role update
 export const updateLevelManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const { levelCustomId, levelId, status, levelFullTitle, levelManagerCustomStaffId, levelManagerFullName } = body;
 
@@ -198,21 +227,6 @@ export const updateLevelManager = asyncHandler(async (req: Request, res: Respons
     throwError("An error occured whilst getting old level manager data, Ensure it has not been deleted", 500);
   }
 
-  if (status === "Active") {
-    const levelAlreadyManaged = await LevelManager.findOne({
-      organisationId: orgParsedId,
-      levelId,
-      levelManagerCustomStaffId,
-      status: "Active"
-    });
-    if (levelAlreadyManaged) {
-      throwError(
-        "The staff is already an active manager of this level - Please assign another staff or deactivate their current management, or set this current one to inactive",
-        409
-      );
-    }
-  }
-
   const updatedLevelManager = await LevelManager.findByIdAndUpdate(
     originalLevelManager?._id.toString(),
     {
@@ -244,7 +258,7 @@ export const updateLevelManager = asyncHandler(async (req: Request, res: Respons
 
 // controller to handle deleting roles
 export const deleteLevelManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { levelManagerId } = req.body;
   if (!levelManagerId) {
     throwError("Unknown delete request - Please try again", 400);

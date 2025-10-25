@@ -23,13 +23,12 @@ const accountSchema = new Schema(
 
 accountSchema.pre("validate", function (next) {
   if (!this.organisationId) {
-    this.organisationId = this._id; 
+    this.organisationId = this._id;
   }
   next();
 });
 
-accountSchema.index({ accountStatus: 1 });
-accountSchema.index({ searchText: 1 });
+
 accountSchema.index({ accountEmail: 1, organisationId: 1 }, { unique: true });
 export const Account = model("Account", accountSchema);
 

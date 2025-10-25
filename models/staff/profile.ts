@@ -59,8 +59,5 @@ const staffSchema = new Schema(
 );
 
 staffSchema.index({ organisationId: 1, staffCustomId: 1 }, { unique: true });
-staffSchema.index({ staffMaritalStatus: 1 });
-staffSchema.index({ staffGender: 1 });
-staffSchema.index({ searchText: 1 });
 
 export const Staff = model("Staff", staffSchema);

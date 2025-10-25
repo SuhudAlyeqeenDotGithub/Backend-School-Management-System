@@ -20,6 +20,7 @@ import { Topic } from "../models/curriculum/topic.ts";
 import { Syllabus } from "../models/curriculum/syllabus.ts";
 import { Subject, SubjectTeacher } from "../models/curriculum/subject.ts";
 import { StudentEnrollment } from "../models/student/enrollment.ts";
+import { StudentDayAttendanceTemplate } from "../models/student/attendance.ts";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -674,6 +675,36 @@ export const fetchLevelManagers = async (
   };
 };
 
+export const fetchAllLevelManagers = async (orgId: string) => {
+  const levelManagers = await LevelManager.find({ organisationId: orgId });
+
+  if (!levelManagers) {
+    throwError("Error fetching level managers", 500);
+  }
+
+  return levelManagers;
+};
+
+export const fetchAllCourseManagers = async (orgId: string) => {
+  const courseManagers = await CourseManager.find({ organisationId: orgId });
+
+  if (!courseManagers) {
+    throwError("Error fetching course managers", 500);
+  }
+
+  return courseManagers;
+};
+
+export const fetchAllSubjectTeachers = async (orgId: string) => {
+  const subjectTeachers = await SubjectTeacher.find({ organisationId: orgId });
+
+  if (!subjectTeachers) {
+    throwError("Error fetching course teachers", 500);
+  }
+
+  return subjectTeachers;
+};
+
 export const fetchAllBaseSubjects = async (orgId: string) => {
   const baseSubjects = await BaseSubject.find({ organisationId: orgId }).sort({ _id: -1 });
 
@@ -1018,6 +1049,39 @@ export const fetchStudentEnrollments = async (query: any, cursorType: string, li
   };
 };
 
+export const fetchStudentDayAttendances = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const studentDayAttendances = await StudentDayAttendanceTemplate.find({
+    ...query,
+    organisationId: orgId
+  })
+    .populate("studentDayAttendances")
+    .sort({ _id: -1 })
+    .limit(limit + 1);
+  const totalCount = await StudentDayAttendanceTemplate.countDocuments({
+    ...query,
+    organisationId: orgId
+  });
+
+  if (!studentDayAttendances) {
+    throwError("Error fetching student contracts", 500);
+  }
+
+  const hasNext = studentDayAttendances.length > limit || cursorType === "prev";
+
+  if (studentDayAttendances.length > limit) {
+    studentDayAttendances.pop();
+  }
+  const chunkCount = studentDayAttendances.length;
+
+  return {
+    studentDayAttendances,
+    totalCount,
+    chunkCount,
+    nextCursor: studentDayAttendances[studentDayAttendances.length - 1]?._id,
+    prevCursor: studentDayAttendances[0]?._id,
+    hasNext
+  };
+};
 export const fetchAllStudentEnrollments = async (orgId: string) => {
   const studentEnrollments = await StudentEnrollment.find({ organisationId: orgId }).sort({
     _id: -1

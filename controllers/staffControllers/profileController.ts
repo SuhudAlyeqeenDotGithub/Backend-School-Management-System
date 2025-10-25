@@ -55,7 +55,7 @@ const validateStaffProfile = (staffDataParam: any) => {
 };
 
 export const getAllStaffProfiles = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, accountStatus, staffId } = account as any;
@@ -87,14 +87,14 @@ export const getAllStaffProfiles = asyncHandler(async (req: Request, res: Respon
 });
 
 export const getStaffProfiles = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
-  const query: any = {};
 
+  const query: any = { organisationId: userTokenOrgId };
   if (search) {
     query.searchText = { $regex: search, $options: "i" };
   }
@@ -146,7 +146,7 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
 
 // controller to handle role creation
 export const createStaffProfile = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const {
     staffCustomId,
@@ -249,7 +249,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
 
 // controller to handle role update
 export const updateStaffProfile = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const {
     staffCustomId,
@@ -346,7 +346,7 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
 
 // controller to handle deleting roles
 export const deleteStaffProfile = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { staffIDToDelete } = req.body;
   if (!staffIDToDelete) {
     throwError("Unknown delete request - Please try again", 400);

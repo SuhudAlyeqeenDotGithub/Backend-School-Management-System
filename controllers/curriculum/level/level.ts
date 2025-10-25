@@ -36,7 +36,7 @@ const validateLevel = (levelDataParam: any) => {
 };
 
 export const getAllLevels = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, accountStatus, levelId } = account as any;
@@ -64,14 +64,14 @@ export const getAllLevels = asyncHandler(async (req: Request, res: Response) => 
 });
 
 export const getLevels = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
-  const query: any = {};
 
+  const query: any = { organisationId: userTokenOrgId };
   if (search) {
     query.searchText = { $regex: search, $options: "i" };
   }
@@ -116,7 +116,7 @@ export const getLevels = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle role creation
 export const createLevel = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
 
   const { levelCustomId, level, courseCustomId, levelFullTitle } = body;
@@ -186,7 +186,7 @@ export const createLevel = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle role update
 export const updateLevel = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const { levelCustomId, level, courseCustomId, levelFullTitle } = body;
 
@@ -259,7 +259,7 @@ export const updateLevel = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle deleting roles
 export const deleteLevel = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { levelCustomId } = req.body;
   if (!levelCustomId) {
     throwError("Unknown delete request - Please try again", 400);

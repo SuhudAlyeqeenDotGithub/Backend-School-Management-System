@@ -4,8 +4,8 @@ const { Schema, model } = mongoose;
 const studentEnrollmentSchema = new Schema(
   {
     organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
-    enrollmentCustomId: { type: String, unique: true },
-    studentCustomId: { type: String },
+    enrollmentCustomId: { type: String, unique: true, required: true },
+    studentCustomId: { type: String, required: true },
     enrollmentStatus: { type: String, required: true, enum: ["Active", "Completed", "Withdrawn"] },
     enrollmentDate: { type: String, required: true },
     enrollmentExpiresOn: { type: String },
@@ -29,9 +29,6 @@ const studentEnrollmentSchema = new Schema(
 
 studentEnrollmentSchema.index({ organisationId: 1, enrollmentCustomId: 1 });
 studentEnrollmentSchema.index({ studentCustomId: 1, organisationId: 1 });
-studentEnrollmentSchema.index({ academicYearId: 1, organisationId: 1 });
-studentEnrollmentSchema.index({ enrollmentType: 1 });
-studentEnrollmentSchema.index({ enrollmentStatus: 1 });
-studentEnrollmentSchema.index({ searchText: 1 });
+studentEnrollmentSchema.index({ organisationId: 1, courseId: 1, levelId: 1, academicYearId: 1 });
 
 export const StudentEnrollment = model("StudentEnrollment", studentEnrollmentSchema);

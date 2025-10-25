@@ -35,7 +35,7 @@ const validateProgramme = (programmeDataParam: any) => {
 };
 
 export const getAllProgrammes = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, accountStatus, programmeId } = account as any;
@@ -63,14 +63,14 @@ export const getAllProgrammes = asyncHandler(async (req: Request, res: Response)
 });
 
 export const getProgrammes = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
-  const query: any = {};
 
+  const query: any = { organisationId: userTokenOrgId };
   if (search) {
     query.searchText = { $regex: search, $options: "i" };
   }
@@ -115,7 +115,7 @@ export const getProgrammes = asyncHandler(async (req: Request, res: Response) =>
 
 // controller to handle role creation
 export const createProgramme = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
 
   const { programmeCustomId, programmeName } = body;
@@ -177,7 +177,7 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
 
 // controller to handle role update
 export const updateProgramme = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const { programmeCustomId, programmeName } = body;
 
@@ -242,7 +242,7 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
 
 // controller to handle deleting roles
 export const deleteProgramme = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { programmeCustomId } = req.body;
   if (!programmeCustomId) {
     throwError("Unknown delete request - Please try again", 400);

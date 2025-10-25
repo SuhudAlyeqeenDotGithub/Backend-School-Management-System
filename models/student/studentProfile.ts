@@ -45,7 +45,5 @@ const studentSchema = new Schema(
 );
 
 studentSchema.index({ organisationId: 1, studentCustomId: 1 }, { unique: true });
-studentSchema.index({ studentGender: 1 });
-studentSchema.index({ searchText: 1 });
 
 export const Student = model("Student", studentSchema);

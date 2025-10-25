@@ -26,8 +26,7 @@ const subjectSchema = new Schema(
 );
 
 subjectSchema.index({ organisationId: 1, subjectCustomId: 1 }, { unique: true });
-subjectSchema.index({ searchText: 1 });
-subjectSchema.index({ status: 1 });
+
 
 export const Subject = model("Subject", subjectSchema);
 
@@ -40,6 +39,7 @@ const subjectTeacherSchema = new Schema(
     subjectTeacherStaffId: { type: mongoose.Schema.Types.ObjectId, ref: "Staff", required: true },
     subjectTeacherCustomStaffId: { type: String, required: true },
     subjectTeacherFullName: { type: String, required: true },
+    staffType: { type: String, required: true, enum: ["Main", "Assistant"], default: "Main" },
     managedFrom: { type: String, required: true },
     managedUntil: { type: String },
     status: { type: String, required: true, enum: ["Active", "Inactive"] },
@@ -52,7 +52,5 @@ subjectTeacherSchema.index(
   { organisationId: 1, subjectId: 1, subjectTeacherCustomStaffId: 1, status: 1 },
   { unique: true }
 );
-subjectTeacherSchema.index({ status: 1 });
-subjectTeacherSchema.index({ searchText: 1 });
 
 export const SubjectTeacher = model("SubjectTeacher", subjectTeacherSchema);

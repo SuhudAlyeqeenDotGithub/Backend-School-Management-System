@@ -38,7 +38,7 @@ const validateSubject = (subjectDataParam: any) => {
 };
 
 export const getAllSubjects = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, accountStatus, subjectId } = account as any;
@@ -66,14 +66,14 @@ export const getAllSubjects = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const getSubjects = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
-  const query: any = {};
 
+  const query: any = { organisationId: userTokenOrgId };
   if (search) {
     query.searchText = { $regex: search, $options: "i" };
   }
@@ -118,7 +118,7 @@ export const getSubjects = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle role creation
 export const createSubject = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
 
   const { subjectCustomId, subject, courseCustomId, subjectFullTitle, levelCustomId, baseSubjectCustomId } = body;
@@ -204,7 +204,7 @@ export const createSubject = asyncHandler(async (req: Request, res: Response) =>
 
 // controller to handle role update
 export const updateSubject = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const { subjectCustomId, subject, courseCustomId, subjectFullTitle, levelCustomId, baseSubjectCustomId } = body;
 
@@ -293,7 +293,7 @@ export const updateSubject = asyncHandler(async (req: Request, res: Response) =>
 
 // controller to handle deleting roles
 export const deleteSubject = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { subjectCustomId } = req.body;
   if (!subjectCustomId) {
     throwError("Unknown delete request - Please try again", 400);

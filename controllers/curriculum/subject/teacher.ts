@@ -10,7 +10,8 @@ import {
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
   validateEmail,
-  validatePhoneNumber
+  validatePhoneNumber,
+  fetchAllSubjectTeachers
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
@@ -30,15 +31,43 @@ const validateSubjectTeacher = (subjectTeacherDataParam: any) => {
   return true;
 };
 
+export const getAllSubjectTeachers = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+
+  const { roleId, accountStatus, courseId, staffId } = account as any;
+  const { absoluteAdmin, tabAccess } = roleId;
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
+  }
+
+  const hasAccess = checkAccess(account, tabAccess, "View Subject Teachers");
+
+  if (absoluteAdmin || hasAccess) {
+    const result = await fetchAllSubjectTeachers(organisation!._id.toString());
+
+    if (!result) {
+      throwError("Error fetching subject teachers", 500);
+    }
+    res.status(201).json(result);
+    return;
+  }
+
+  throwError("Unauthorised Action: You do not have access to view subject teachers - Please contact your admin", 403);
+});
+
 export const getSubjectTeachers = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
-  const query: any = {};
 
+  const query: any = { organisationId: userTokenOrgId };
   if (search) {
     query.searchText = { $regex: search, $options: "i" };
   }
@@ -90,7 +119,7 @@ export const getSubjectTeachers = asyncHandler(async (req: Request, res: Respons
 
 // controller to handle role creation
 export const createSubjectTeacher = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
 
   const { subjectCustomId, status, subjectId, subjectFullTitle, subjectTeacherCustomStaffId, subjectTeacherFullName } =
@@ -173,7 +202,7 @@ export const createSubjectTeacher = asyncHandler(async (req: Request, res: Respo
 
 // controller to handle role update
 export const updateSubjectTeacher = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const { subjectCustomId, subjectId, status, subjectFullTitle, subjectTeacherCustomStaffId, subjectTeacherFullName } =
     body;
@@ -206,21 +235,6 @@ export const updateSubjectTeacher = asyncHandler(async (req: Request, res: Respo
 
   if (!originalSubjectTeacher) {
     throwError("An error occured whilst getting old subject teacher data, Ensure it has not been deleted", 500);
-  }
-
-  if (status === "Active") {
-    const subjectAlreadyManaged = await SubjectTeacher.findOne({
-      organisationId: orgParsedId,
-      subjectId,
-      subjectTeacherCustomStaffId,
-      status: "Active"
-    });
-    if (subjectAlreadyManaged) {
-      throwError(
-        "The staff is already an active teacher of this subject - Please assign another staff or deactivate their current management, or set this current one to inactive",
-        409
-      );
-    }
   }
 
   const updatedSubjectTeacher = await SubjectTeacher.findByIdAndUpdate(
@@ -259,7 +273,7 @@ export const updateSubjectTeacher = asyncHandler(async (req: Request, res: Respo
 
 // controller to handle deleting roles
 export const deleteSubjectTeacher = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { subjectTeacherId } = req.body;
   if (!subjectTeacherId) {
     throwError("Unknown delete request - Please try again", 400);

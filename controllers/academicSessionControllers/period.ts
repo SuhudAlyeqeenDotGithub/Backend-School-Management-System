@@ -23,7 +23,7 @@ import { Period } from "../../models/timeline/period.ts";
 
 // controller to handle role creation
 export const createPeriod = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { period, startDate, endDate, academicYearId, customId, academicYear } = req.body;
 
   // validate input
@@ -108,7 +108,7 @@ export const createPeriod = asyncHandler(async (req: Request, res: Response) => 
 
 // controller to handle role update
 export const updatePeriod = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { _id: periodId, period, startDate, endDate, academicYearId, customId, academicYear } = req.body;
 
   // validate input
@@ -185,7 +185,7 @@ export const updatePeriod = asyncHandler(async (req: Request, res: Response) => 
 
 // controller to handle deleting roles
 export const deletePeriod = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { periodIdToDelete } = req.body;
   if (!periodIdToDelete) {
     throwError("Unknown delete request - Please try again", 400);

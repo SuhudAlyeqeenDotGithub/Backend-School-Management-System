@@ -31,14 +31,14 @@ const validateBaseSubjectManager = (baseSubjectManagerDataParam: any) => {
 };
 
 export const getBaseSubjectManagers = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
-  const query: any = {};
 
+  const query: any = { organisationId: userTokenOrgId };
   if (search) {
     query.searchText = { $regex: search, $options: "i" };
   }
@@ -90,7 +90,7 @@ export const getBaseSubjectManagers = asyncHandler(async (req: Request, res: Res
 
 // controller to handle role creation
 export const createBaseSubjectManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
 
   const {
@@ -179,7 +179,7 @@ export const createBaseSubjectManager = asyncHandler(async (req: Request, res: R
 
 // controller to handle role update
 export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const {
     baseSubjectCustomId,
@@ -223,21 +223,6 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
     throwError("An error occured whilst getting old base subject manager  data, Ensure it has not been deleted", 500);
   }
 
-  if (status === "Active") {
-    const baseSubjectAlreadyManaged = await BaseSubjectManager.findOne({
-      organisationId: orgParsedId,
-      baseSubjectId,
-      baseSubjectManagerCustomStaffId,
-      status: "Active"
-    });
-    if (baseSubjectAlreadyManaged) {
-      throwError(
-        "The staff is already an active manager of this base subject - Please assign another staff or deactivate their current management, or set this current one to inactive",
-        409
-      );
-    }
-  }
-
   const updatedBaseSubjectManager = await BaseSubjectManager.findByIdAndUpdate(
     originalBaseSubjectManager?._id.toString(),
     {
@@ -274,7 +259,7 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
 
 // controller to handle deleting roles
 export const deleteBaseSubjectManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { baseSubjectManagerId } = req.body;
   if (!baseSubjectManagerId) {
     throwError("Unknown delete request - Please try again", 400);

@@ -139,8 +139,8 @@ const billingSchema = new Schema(
 );
 
 billingSchema.index({ organisationId: 1, billingMonth: 1 }, { unique: true });
-billingSchema.index({ paymentStatus: 1 });
-billingSchema.index({ billingStatus: 1 });
+billingSchema.index({ paymentStatus: 1, organisationId: 1 });
+billingSchema.index({ billingStatus: 1, organisationId: 1 });
 
 billingSchema.pre("save", function (next) {
   if (!this.billingId) {

@@ -21,8 +21,6 @@ const courseSchema = new Schema(
 );
 
 courseSchema.index({ organisationId: 1, courseCustomId: 1 }, { unique: true });
-courseSchema.index({ searchText: 1 });
-courseSchema.index({ status: 1 });
 
 export const Course = model("Course", courseSchema);
 
@@ -47,7 +45,7 @@ courseManagerSchema.index(
   { organisationId: 1, courseId: 1, courseManagerCustomStaffId: 1, status: 1 },
   { unique: true }
 );
-courseManagerSchema.index({ status: 1 });
-courseManagerSchema.index({ searchText: 1 });
+courseManagerSchema.index({ organisationId: 1, courseId: 1, courseManagerCustomStaffId: 1 });
+courseManagerSchema.index({ organisationId: 1, courseManagerStaffId: 1, status: 1 });
 
 export const CourseManager = model("CourseManager", courseManagerSchema);

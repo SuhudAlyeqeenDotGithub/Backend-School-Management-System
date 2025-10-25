@@ -22,6 +22,14 @@ import {
   getStudentImageUploadSignedUrl,
   deleteStudentImageInBucket
 } from "../controllers/googleCloudStorage/studentSignedUrl";
+import {
+  createStudentDayAttendance,
+  deleteStudentDayAttendance,
+  fetchDayAttendanceStore,
+  getEnrolledDayAttendanceStudents,
+  getStudentDayAttendances,
+  updateStudentDayAttendance
+} from "../controllers/studentControllers/dayAttendance";
 
 // end point for student / profile
 router.get("/student/profile", getStudentProfiles);
@@ -41,5 +49,13 @@ router.delete("/student/enrollment", deleteStudentEnrollment);
 router.post("/studentimageuploadsignedurl", getStudentImageUploadSignedUrl);
 router.post("/studentimageviewsignedurl", getStudentImageViewSignedUrl);
 router.delete("/studentimage", deleteStudentImageInBucket);
+
+// end point for student / day attendance
+router.post("/student/attendance/enrolleddayattendancestudents", getEnrolledDayAttendanceStudents);
+router.get("/student/attendance/dayattendance", getStudentDayAttendances);
+router.post("/student/attendance/dayattendance", createStudentDayAttendance);
+router.put("/student/attendance/dayattendance", updateStudentDayAttendance);
+router.delete("/student/attendance/dayattendance", deleteStudentDayAttendance);
+router.post("/student/attendance/dayattendancestore", fetchDayAttendanceStore);
 
 export default router;

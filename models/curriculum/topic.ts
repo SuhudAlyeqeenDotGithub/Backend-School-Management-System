@@ -18,7 +18,6 @@ const topicSchema = new Schema(
 );
 
 topicSchema.index({ organisationId: 1, topicCustomId: 1 }, { unique: true });
-topicSchema.index({ searchText: 1 });
-topicSchema.index({ status: 1 });
+
 
 export const Topic = model("Topic", topicSchema);

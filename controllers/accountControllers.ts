@@ -317,7 +317,6 @@ export const getEmailVerificationCode = asyncHandler(async (req: Request, res: R
   if (!verificationCodeDoc) {
     throwError("Error creating verification code. Please try again", 500);
   }
-  console.log(verificationCodeDoc);
 
   // send token to account email
   await sendEmail(
@@ -445,7 +444,7 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
 });
 
 export const fetchAccount = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
 
   // find the account by email
   const account = await Account.findById(accountId).populate([
@@ -505,7 +504,7 @@ export const signoutAccount = asyncHandler(async (req: Request, res: Response) =
 
 // controller to refresh token
 export const refreshAccessToken = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
 
   const account = await Account.findById(accountId);
 

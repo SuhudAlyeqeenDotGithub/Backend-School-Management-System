@@ -21,8 +21,6 @@ const levelSchema = new Schema(
 );
 
 levelSchema.index({ organisationId: 1, levelCustomId: 1 }, { unique: true });
-levelSchema.index({ searchText: 1 });
-levelSchema.index({ status: 1 });
 
 export const Level = model("Level", levelSchema);
 
@@ -36,6 +34,7 @@ const levelManagerSchema = new Schema(
     levelManagerCustomStaffId: { type: String, required: true },
     levelManagerFullName: { type: String, required: true },
     managedFrom: { type: String, required: true },
+    staffType: { type: String, required: true, enum: ["Main", "Assistant"], default: "Main" },
     managedUntil: { type: String },
     status: { type: String, required: true, enum: ["Active", "Inactive"] },
     searchText: { type: String, required: true }
@@ -44,7 +43,6 @@ const levelManagerSchema = new Schema(
 );
 
 levelManagerSchema.index({ organisationId: 1, levelId: 1, levelManagerCustomStaffId: 1, status: 1 }, { unique: true });
-levelManagerSchema.index({ status: 1 });
-levelManagerSchema.index({ searchText: 1 });
-
+levelManagerSchema.index({ organisationId: 1, levelManagerStaffId: 1, status: 1 });
+levelManagerSchema.index({ organisationId: 1, levelId: 1, levelManagerCustomStaffId: 1 });
 export const LevelManager = model("LevelManager", levelManagerSchema);

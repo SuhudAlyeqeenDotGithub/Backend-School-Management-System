@@ -10,7 +10,8 @@ import {
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
   validateEmail,
-  validatePhoneNumber
+  validatePhoneNumber,
+  fetchAllCourseManagers
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
@@ -30,15 +31,43 @@ const validateCourseManager = (courseManagerDataParam: any) => {
   return true;
 };
 
+export const getAllCourseManagers = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+
+  const { roleId, accountStatus, courseId, staffId } = account as any;
+  const { absoluteAdmin, tabAccess } = roleId;
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
+  }
+
+  const hasAccess = checkAccess(account, tabAccess, "View Course Managers");
+
+  if (absoluteAdmin || hasAccess) {
+    const result = await fetchAllCourseManagers(organisation!._id.toString());
+
+    if (!result) {
+      throwError("Error fetching course managers", 500);
+    }
+    res.status(201).json(result);
+    return;
+  }
+
+  throwError("Unauthorised Action: You do not have access to view course managers - Please contact your admin", 403);
+});
+
 export const getCourseManagers = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
-  const query: any = {};
 
+  const query: any = { organisationId: userTokenOrgId };
   if (search) {
     query.searchText = { $regex: search, $options: "i" };
   }
@@ -85,12 +114,12 @@ export const getCourseManagers = asyncHandler(async (req: Request, res: Response
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view course profile - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view course managers - Please contact your admin", 403);
 });
 
 // controller to handle role creation
 export const createCourseManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
 
   const { courseCustomId, status, courseId, courseFullTitle, courseManagerCustomStaffId, courseManagerFullName } = body;
@@ -164,7 +193,7 @@ export const createCourseManager = asyncHandler(async (req: Request, res: Respon
 
 // controller to handle role update
 export const updateCourseManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const { courseCustomId, courseId, status, courseFullTitle, courseManagerCustomStaffId, courseManagerFullName } = body;
 
@@ -196,21 +225,6 @@ export const updateCourseManager = asyncHandler(async (req: Request, res: Respon
 
   if (!originalCourseManager) {
     throwError("An error occured whilst getting old course manager data, Ensure it has not been deleted", 500);
-  }
-
-  if (status === "Active") {
-    const courseAlreadyManaged = await CourseManager.findOne({
-      organisationId: orgParsedId,
-      courseId,
-      courseManagerCustomStaffId,
-      status: "Active"
-    });
-    if (courseAlreadyManaged) {
-      throwError(
-        "The staff is already an active manager of this course - Please assign another staff or deactivate their current management, or set this current one to inactive",
-        409
-      );
-    }
   }
 
   const updatedCourseManager = await CourseManager.findByIdAndUpdate(
@@ -249,7 +263,7 @@ export const updateCourseManager = asyncHandler(async (req: Request, res: Respon
 
 // controller to handle deleting roles
 export const deleteCourseManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { courseManagerId } = req.body;
   if (!courseManagerId) {
     throwError("Unknown delete request - Please try again", 400);

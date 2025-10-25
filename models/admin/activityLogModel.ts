@@ -30,13 +30,15 @@ const activityLogSchema = new Schema(
         "SubjectTeacher",
         "BaseSubject",
         "BaseSubjectManager",
+        "StudentDayAttendance",
+        "StudentSubjectAttendance",
+        "StudentEventAttendance",
         "Topic",
         "Syllabus",
         "None"
       ]
     },
     recordId: { type: mongoose.Schema.Types.ObjectId, required: true, refPath: "recordModel" },
-
     recordName: String,
     searchText: { type: String, required: true },
     recordChange: { type: [], required: true },

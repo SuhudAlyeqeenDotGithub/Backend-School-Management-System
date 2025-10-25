@@ -38,7 +38,7 @@ const validateSyllabus = (syllabusDataParam: any) => {
 };
 
 export const getAllSyllabuses = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, accountStatus, syllabusId } = account as any;
@@ -66,14 +66,14 @@ export const getAllSyllabuses = asyncHandler(async (req: Request, res: Response)
 });
 
 export const getSyllabuses = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
-  const query: any = {};
 
+  const query: any = { organisationId: userTokenOrgId };
   if (search) {
     query.searchText = { $regex: search, $options: "i" };
   }
@@ -118,7 +118,7 @@ export const getSyllabuses = asyncHandler(async (req: Request, res: Response) =>
 
 // controller to handle role creation
 export const createSyllabus = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const {
     syllabusCustomId,
@@ -195,7 +195,7 @@ export const createSyllabus = asyncHandler(async (req: Request, res: Response) =
 
 // controller to handle role update
 export const updateSyllabus = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
   const {
     syllabusCustomId,
@@ -276,7 +276,7 @@ export const updateSyllabus = asyncHandler(async (req: Request, res: Response) =
 
 // controller to handle deleting roles
 export const deleteSyllabus = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { syllabusCustomId } = req.body;
   if (!syllabusCustomId) {
     throwError("Unknown delete request - Please try again", 400);

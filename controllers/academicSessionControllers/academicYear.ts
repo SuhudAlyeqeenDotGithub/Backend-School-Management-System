@@ -21,7 +21,7 @@ import { AcademicYear } from "../../models/timeline/academicYear.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 import { Period } from "../../models/timeline/period.ts";
 export const getAcademicYears = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
@@ -61,7 +61,7 @@ export const getAcademicYears = asyncHandler(async (req: Request, res: Response)
 
 // controller to handle role creation
 export const createAcademicYear = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { academicYear, startDate, endDate, periods } = req.body;
 
   // validate input
@@ -169,7 +169,7 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
 
 // controller to handle role update
 export const updateAcademicYear = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { _id: academicYearId, academicYear, startDate, endDate } = req.body;
 
   // validate input
@@ -243,7 +243,7 @@ export const updateAcademicYear = asyncHandler(async (req: Request, res: Respons
 
 // controller to handle deleting roles
 export const deleteAcademicYear = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { academicYearIdToDelete } = req.body;
   if (!academicYearIdToDelete) {
     throwError("Unknown delete request - Please try again", 400);

@@ -27,7 +27,6 @@ const syllabusSchema = new Schema(
 );
 
 syllabusSchema.index({ organisationId: 1, syllabusCustomId: 1 }, { unique: true });
-syllabusSchema.index({ searchText: 1 });
-syllabusSchema.index({ status: 1 });
+
 
 export const Syllabus = model("Syllabus", syllabusSchema);
