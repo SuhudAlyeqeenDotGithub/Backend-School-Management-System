@@ -30,9 +30,9 @@ const activityLogSchema = new Schema(
         "SubjectTeacher",
         "BaseSubject",
         "BaseSubjectManager",
-        "StudentDayAttendance",
-        "StudentSubjectAttendance",
-        "StudentEventAttendance",
+        "StudentDayAttendanceTemplate",
+        "StudentSubjectAttendanceTemplate",
+        "StudentEventAttendanceTemplate",
         "Topic",
         "Syllabus",
         "None"

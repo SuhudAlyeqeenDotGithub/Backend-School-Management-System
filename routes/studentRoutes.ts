@@ -30,6 +30,7 @@ import {
   getStudentDayAttendances,
   updateStudentDayAttendance
 } from "../controllers/studentControllers/dayAttendance";
+import { createStudentSubjectAttendance, deleteStudentSubjectAttendance, fetchSubjectAttendanceStore, getEnrolledSubjectAttendanceStudents, getStudentSubjectAttendances, updateStudentSubjectAttendance } from "../controllers/studentControllers/subjectAttendance";
 
 // end point for student / profile
 router.get("/student/profile", getStudentProfiles);
@@ -57,5 +58,13 @@ router.post("/student/attendance/dayattendance", createStudentDayAttendance);
 router.put("/student/attendance/dayattendance", updateStudentDayAttendance);
 router.delete("/student/attendance/dayattendance", deleteStudentDayAttendance);
 router.post("/student/attendance/dayattendancestore", fetchDayAttendanceStore);
+
+// end point for student / day attendance
+router.post("/student/attendance/enrolledsubjectattendancestudents", getEnrolledSubjectAttendanceStudents);
+router.get("/student/attendance/subjectattendance", getStudentSubjectAttendances);
+router.post("/student/attendance/subjectattendance", createStudentSubjectAttendance);
+router.put("/student/attendance/subjectattendance", updateStudentSubjectAttendance);
+router.delete("/student/attendance/subjectattendance", deleteStudentSubjectAttendance);
+router.post("/student/attendance/subjectattendancestore", fetchSubjectAttendanceStore);
 
 export default router;

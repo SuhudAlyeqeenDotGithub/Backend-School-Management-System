@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 const { Schema, model } = mongoose;
 
-const studentDayAttendanceTemplateSchema = new Schema(
+const studentSubjectAttendanceTemplateSchema = new Schema(
   {
     organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
     attendanceCustomId: { type: String, unique: true, required: true },
@@ -15,6 +15,14 @@ const studentDayAttendanceTemplateSchema = new Schema(
     courseManagerStaffId: { type: mongoose.Schema.Types.ObjectId, ref: "Staff", required: true },
     courseManagerCustomStaffId: { type: String, required: true },
     courseManagerFullName: { type: String, required: true },
+
+    subjectId: { type: mongoose.Schema.Types.ObjectId, ref: "Subject", required: true },
+    subjectCustomId: { type: String, required: true },
+    subjectFullTitle: { type: String, required: true },
+    subjectTeacherStaffId: { type: mongoose.Schema.Types.ObjectId, ref: "Staff", required: true },
+    subjectTeacherCustomStaffId: { type: String, required: true },
+    subjectTeacherFullName: { type: String, required: true },
+
     levelManagerStaffId: { type: mongoose.Schema.Types.ObjectId, ref: "Staff", required: true },
     levelManagerCustomStaffId: { type: String, required: true },
     levelManagerFullName: { type: String, required: true },
@@ -27,32 +35,35 @@ const studentDayAttendanceTemplateSchema = new Schema(
   { timestamps: true }
 );
 
-studentDayAttendanceTemplateSchema.index({ organisationId: 1, attendanceCustomId: 1 });
+studentSubjectAttendanceTemplateSchema.index({ organisationId: 1, attendanceCustomId: 1 });
 
-studentDayAttendanceTemplateSchema.virtual("studentDayAttendances", {
-  ref: "StudentDayAttendanceStore",
+studentSubjectAttendanceTemplateSchema.virtual("studentSubjectAttendances", {
+  ref: "StudentSubjectAttendanceStore",
   localField: "_id",
   foreignField: "attendanceId"
 });
 
-studentDayAttendanceTemplateSchema.set("toObject", { virtuals: true });
-studentDayAttendanceTemplateSchema.set("toJSON", { virtuals: true });
+studentSubjectAttendanceTemplateSchema.set("toObject", { virtuals: true });
+studentSubjectAttendanceTemplateSchema.set("toJSON", { virtuals: true });
 
-studentDayAttendanceTemplateSchema.index({ organisationId: 1, attendanceCustomId: 1 });
+export const StudentSubjectAttendanceTemplate = model(
+  "StudentSubjectAttendanceTemplate",
+  studentSubjectAttendanceTemplateSchema
+);
 
-export const StudentDayAttendanceTemplate = model("StudentDayAttendanceTemplate", studentDayAttendanceTemplateSchema);
-
-const studentDayAttendanceStoreSchema = new Schema(
+const studentSubjectAttendanceStoreSchema = new Schema(
   {
     organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
     attendanceCustomId: { type: String, required: true },
-    attendanceId: { type: mongoose.Schema.Types.ObjectId, ref: "StudentDayAttendanceTemplate", required: true },
+    attendanceId: { type: mongoose.Schema.Types.ObjectId, ref: "StudentSubjectAttendanceTemplate", required: true },
     attendanceDate: { type: String, required: true },
     academicYearId: { type: mongoose.Schema.Types.ObjectId, ref: "AcademicYear", required: true },
     courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
     level: { type: String, required: true },
     courseFullTitle: { type: String, required: true },
     levelId: { type: mongoose.Schema.Types.ObjectId, ref: "Level", required: true },
+    subjectId: { type: mongoose.Schema.Types.ObjectId, ref: "Subject", required: true },
+    subjectFullTitle: { type: String, required: true },
     studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student", required: true },
     studentCustomId: { type: String, required: true },
     studentFullName: { type: String, required: true },
@@ -65,6 +76,9 @@ const studentDayAttendanceStoreSchema = new Schema(
   { timestamps: true }
 );
 
-studentDayAttendanceStoreSchema.index({ organisationId: 1, attendanceId: 1 });
+studentSubjectAttendanceStoreSchema.index({ organisationId: 1, attendanceId: 1 });
 
-export const StudentDayAttendanceStore = model("StudentDayAttendanceStore", studentDayAttendanceStoreSchema);
+export const StudentSubjectAttendanceStore = model(
+  "StudentSubjectAttendanceStore",
+  studentSubjectAttendanceStoreSchema
+);

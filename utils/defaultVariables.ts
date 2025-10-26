@@ -112,10 +112,10 @@ export const defaultTabAccess = [
       { action: "View Subjects", permission: true },
       { action: "Edit Subject", permission: true },
       { action: "Delete Subject", permission: true },
-      { action: "Create Subject Manager", permission: true },
-      { action: "View Subject Managers", permission: true },
-      { action: "Edit Subject Manager", permission: true },
-      { action: "Delete Subject Manager", permission: true }
+      { action: "Create Subject Teacher", permission: false },
+      { action: "View Subject Teachers", permission: false },
+      { action: "Edit Subject Teacher", permission: false },
+      { action: "Delete Subject Teacher", permission: false }
     ]
   },
   {
@@ -257,16 +257,25 @@ export const defaultTabAccess = [
       { action: "Delete Student Event Attendance (For Level | Course Managers)", permission: false },
 
       { action: "View Student Subject Attendances (Admin Access)", permission: false },
-      { action: "View Student Subject Attendances (For Level | Course Managers)", permission: false },
+      {
+        action: "View Student Subject Attendances (For Level | Course Managers | Subject Teachers)",
+        permission: false
+      },
 
       { action: "Create Student Subject Attendance (Admin Access)", permission: false },
-      { action: "Create Student Subject Attendance (For Level | Course Managers)", permission: false },
+      {
+        action: "Create Student Subject Attendance (For Level | Course Managers | Subject Teachers)",
+        permission: false
+      },
 
       { action: "Edit Student Subject Attendance (Admin Access)", permission: false },
-      { action: "Edit Student Subject Attendance (For Level | Course Managers)", permission: false },
+      { action: "Edit Student Subject Attendance (For Level | Course Managers | Subject Teachers)", permission: false },
 
       { action: "Delete Student Subject Attendance (Admin Access)", permission: false },
-      { action: "Delete Student Subject Attendance (For Level | Course Managers)", permission: false }
+      {
+        action: "Delete Student Subject Attendance (For Level | Course Managers | Subject Teachers)",
+        permission: false
+      }
     ]
   }
 ];

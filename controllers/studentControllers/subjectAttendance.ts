@@ -10,18 +10,22 @@ import {
   confirmUserOrgRole,
   checkOrgAndUserActiveness,
   checkAccess,
-  fetchStudentDayAttendances
+  fetchStudentSubjectAttendances
 } from "../../utils/utilsFunctions.ts";
 import { diff } from "deep-diff";
 
-import { StudentDayAttendanceStore, StudentDayAttendanceTemplate } from "../../models/student/dayattendance.ts";
+import {
+  StudentSubjectAttendanceStore,
+  StudentSubjectAttendanceTemplate
+} from "../../models/student/subjectAttendance.ts";
 import { AcademicYear } from "../../models/timeline/academicYear.ts";
 import { Course, CourseManager } from "../../models/curriculum/course.ts";
 import { Level, LevelManager } from "../../models/curriculum/level.ts";
 import { StudentEnrollment } from "../../models/student/enrollment.ts";
 import { Staff } from "../../models/staff/profile.ts";
+import { Subject, SubjectTeacher } from "../../models/curriculum/subject.ts";
 
-const validateStudentDayAttendance = (studentDataParam: any) => {
+const validateStudentSubjectAttendance = (studentDataParam: any) => {
   const { notes, ...copyLocalData } = studentDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
@@ -34,13 +38,13 @@ const validateStudentDayAttendance = (studentDataParam: any) => {
   return true;
 };
 
-export const fetchDayAttendanceStore = asyncHandler(async (req: Request, res: Response) => {
+export const fetchSubjectAttendanceStore = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { attendanceId } = req.body;
 
   // validate input
   if (!attendanceId) {
-    throwError("An error occured whilst fetching student day attendance data", 400);
+    throwError("An error occured whilst fetching student subject attendance data", 400);
   }
 
   // confirm user
@@ -57,21 +61,21 @@ export const fetchDayAttendanceStore = asyncHandler(async (req: Request, res: Re
   if (!checkPassed) {
     throwError(message, 409);
   }
-  const hasAdminAccess = checkAccess(account, tabAccess, "View Student Day Attendances (Admin Access)");
+  const hasAdminAccess = checkAccess(account, tabAccess, "View Student Subject Attendances (Admin Access)");
   const hasManagerAccess = checkAccess(
     account,
     tabAccess,
-    "View Student Day Attendances (For Level | Course Managers)"
+    "View Student Subject Attendances (For Level | Course Managers | Subject Teachers)"
   );
 
   if (absoluteAdmin || hasAdminAccess || hasManagerAccess) {
-    const result = await StudentDayAttendanceStore.find({
+    const result = await StudentSubjectAttendanceStore.find({
       organisationId: userTokenOrgId,
       attendanceId
     });
 
     if (!result) {
-      throwError("Error fetching relevant student day attendance records", 500);
+      throwError("Error fetching relevant student subject attendance records", 500);
     }
 
     res.status(201).json(result);
@@ -79,18 +83,30 @@ export const fetchDayAttendanceStore = asyncHandler(async (req: Request, res: Re
   }
 
   throwError(
-    "Unauthorised Action: You do not have access to view student day attendances - Please contact your admin",
+    "Unauthorised Action: You do not have access to view student subject attendances - Please contact your admin",
     403
   );
 });
 
-export const getEnrolledDayAttendanceStudents = asyncHandler(async (req: Request, res: Response) => {
+export const getEnrolledSubjectAttendanceStudents = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
-  const { academicYearId, courseId, levelId } = req.body;
+  const {
+    academicYearId,
+    courseId,
+    levelId,
+    subjectId,
+    subjectTeacherCustomStaffId,
+    courseManagerCustomStaffId,
+    levelManagerCustomStaffId
+  } = req.body;
 
   // validate input
-  if (!academicYearId || !courseId || !levelId) {
-    throwError("Please fill in all required fields - Academic Year, Course and Level", 400);
+  if (!academicYearId || !courseId || !levelId || !subjectId) {
+    throwError("Please fill in all required fields - Academic Year, Course, Level and Subject", 400);
+  }
+
+  if (!subjectTeacherCustomStaffId && !courseManagerCustomStaffId && !levelManagerCustomStaffId) {
+    throwError("Please fill in all required fields - Subject Teacher, Course Manager or Level Manager", 400);
   }
 
   // confirm user
@@ -108,7 +124,7 @@ export const getEnrolledDayAttendanceStudents = asyncHandler(async (req: Request
     throwError(message, 409);
   }
 
-  const hasAdminAccess = checkAccess(account, tabAccess, "View Student Day Attendances (Admin Access)");
+  const hasAdminAccess = checkAccess(account, tabAccess, "View Student Subject Attendances (Admin Access)");
 
   const isStaff = await Staff.findOne({ _id: staffId });
   if (!isStaff && !absoluteAdmin) {
@@ -128,14 +144,33 @@ export const getEnrolledDayAttendanceStudents = asyncHandler(async (req: Request
     status: "Active"
   });
 
-  if (!absoluteAdmin && !hasAdminAccess && !staffIsActiveCourseManager && !staffIsActiveLevelManager) {
+  const staffIsActiveSubjectTeacher = await SubjectTeacher.findOne({
+    organisationId: userTokenOrgId,
+    subjectId,
+    subjectManagerCustomStaffId: isStaff?.staffCustomId,
+    status: "Active"
+  });
+
+  if (
+    !absoluteAdmin &&
+    !hasAdminAccess &&
+    !staffIsActiveCourseManager &&
+    !staffIsActiveLevelManager &&
+    !staffIsActiveSubjectTeacher
+  ) {
     throwError(
-      "Unauthorised Action: You do not have access to create student day attendance for this course / level or any other course / level - Please contact your admin",
+      "Unauthorised Action: You do not have access to create student subject attendance for this course / level / subject or any other course / level / subject - Please contact your admin",
       403
     );
   }
 
-  if (absoluteAdmin || hasAdminAccess || staffIsActiveCourseManager || staffIsActiveLevelManager) {
+  if (
+    absoluteAdmin ||
+    hasAdminAccess ||
+    staffIsActiveCourseManager ||
+    staffIsActiveLevelManager ||
+    staffIsActiveSubjectTeacher
+  ) {
     const result = await StudentEnrollment.find(
       {
         organisationId: userTokenOrgId,
@@ -155,12 +190,12 @@ export const getEnrolledDayAttendanceStudents = asyncHandler(async (req: Request
   }
 
   throwError(
-    "Unauthorised Action: You do not have access to view student day attendances - Please contact your admin",
+    "Unauthorised Action: You do not have access to view student subject attendances - Please contact your admin",
     403
   );
 });
 
-export const getStudentDayAttendances = asyncHandler(async (req: Request, res: Response) => {
+export const getStudentSubjectAttendances = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
@@ -200,7 +235,7 @@ export const getStudentDayAttendances = asyncHandler(async (req: Request, res: R
     throwError(message, 409);
   }
 
-  const hasAdminAccess = checkAccess(account, tabAccess, "View Student Day Attendances (Admin Access)");
+  const hasAdminAccess = checkAccess(account, tabAccess, "View Student Subject Attendances (Admin Access)");
 
   if (!absoluteAdmin && !hasAdminAccess) {
     const courseManagementDocs = await CourseManager.find({
@@ -214,6 +249,12 @@ export const getStudentDayAttendances = asyncHandler(async (req: Request, res: R
       status: "Active"
     });
 
+    const subjectManagementDocs = await SubjectTeacher.find({
+      organisationId: userTokenOrgId,
+      subjectTeacherStaffId: staffId,
+      status: "Active"
+    });
+
     let coursesManaged: any = [];
     if (courseManagementDocs && courseManagementDocs.length > 0) {
       coursesManaged = courseManagementDocs.map((doc) => doc.courseId);
@@ -224,25 +265,34 @@ export const getStudentDayAttendances = asyncHandler(async (req: Request, res: R
       levelsManaged = levelManagementDocs.map((doc) => doc.levelId);
     }
 
-    query["$or"] = [{ courseId: { $in: coursesManaged } }, { levelId: { $in: levelsManaged } }];
+    let subjectsManaged: any = [];
+    if (subjectManagementDocs && subjectManagementDocs.length > 0) {
+      subjectsManaged = subjectManagementDocs.map((doc) => doc.subjectId);
+    }
+
+    query["$or"] = [
+      { courseId: { $in: coursesManaged } },
+      { levelId: { $in: levelsManaged } },
+      { subjectId: { $in: subjectsManaged } }
+    ];
   }
 
-  const result = await fetchStudentDayAttendances(
+  const result = await fetchStudentSubjectAttendances(
     query,
     cursorType as string,
     parsedLimit,
     organisation!._id.toString()
   );
 
-  if (!result || !result.studentDayAttendances) {
-    throwError("Error fetching student day attendances", 500);
+  if (!result || !result.studentSubjectAttendances) {
+    throwError("Error fetching student subject attendances", 500);
   }
   res.status(201).json(result);
   return;
 });
 
 // // controller to handle role creation
-export const createStudentDayAttendance = asyncHandler(async (req: Request, res: Response) => {
+export const createStudentSubjectAttendance = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const {
     attendanceCustomId,
@@ -261,12 +311,17 @@ export const createStudentDayAttendance = asyncHandler(async (req: Request, res:
     levelManagerFullName,
     levelId,
     levelCustomId,
-    level
+    level,
+    subjectId,
+    subjectCustomId,
+    subjectFullTitle,
+    subjectTeacherCustomStaffId,
+    subjectTeacherFullName
   } = req.body;
 
-  const { studentDayAttendances, ...rest } = req.body;
+  const { studentSubjectAttendances, ...rest } = req.body;
 
-  if (!validateStudentDayAttendance({ ...req.body })) {
+  if (!validateStudentSubjectAttendance({ ...req.body })) {
     throwError("Please fill in all required fields", 400);
   }
 
@@ -284,20 +339,20 @@ export const createStudentDayAttendance = asyncHandler(async (req: Request, res:
     throwError(message, 409);
   }
 
-  const hasAdminAccess = checkAccess(account, creatorTabAccess, "Create Student Day Attendance (Admin Access)");
+  const hasAdminAccess = checkAccess(account, creatorTabAccess, "Create Student Subject Attendance (Admin Access)");
   const hasManagerAccess = checkAccess(
     account,
     creatorTabAccess,
-    "Create Student Day Attendance (For Level | Course Managers)"
+    "Create Student Subject Attendance (For Level | Course Managers | Subject Teachers)"
   );
   if (!absoluteAdmin && !hasAdminAccess && !hasManagerAccess) {
     throwError(
-      "Unauthorised Action: You do not have access to create student day attendance for this course / level or any other course / level - Please contact your admin",
+      "Unauthorised Action: You do not have access to create student subject attendance for this course / level / subject or any other course / level / subject - Please contact your admin",
       403
     );
   }
 
-  const attendanceExists = await StudentDayAttendanceTemplate.findOne({
+  const attendanceExists = await StudentSubjectAttendanceTemplate.findOne({
     organisationId: orgParsedId,
     attendanceCustomId
   });
@@ -332,6 +387,14 @@ export const createStudentDayAttendance = asyncHandler(async (req: Request, res:
     );
   }
 
+  const subjectExist = await Subject.findOne({ organisationId: orgParsedId, subjectCustomId });
+  if (!subjectExist) {
+    throwError(
+      "This subject does not exist in this organisation - Ensure it has been created or has not been deleted",
+      409
+    );
+  }
+
   const courseManagerExist = await CourseManager.findOne({
     organisationId: orgParsedId,
     courseId,
@@ -356,7 +419,19 @@ export const createStudentDayAttendance = asyncHandler(async (req: Request, res:
     );
   }
 
-  const attendance = await StudentDayAttendanceTemplate.create({
+  const subjectTeacherExist = await SubjectTeacher.findOne({
+    organisationId: orgParsedId,
+    subjectId,
+    subjectTeacherCustomStaffId
+  });
+  if (!subjectTeacherExist) {
+    throwError(
+      "This subject teacher does not have a teaching record related to this subject- Ensure you have created one for them",
+      409
+    );
+  }
+
+  const attendance = await StudentSubjectAttendanceTemplate.create({
     ...rest,
     organisationId: orgParsedId,
     searchText: generateSearchText([
@@ -376,21 +451,26 @@ export const createStudentDayAttendance = asyncHandler(async (req: Request, res:
       courseManagerFullName,
       levelManagerStaffId,
       levelManagerCustomStaffId,
-      levelManagerFullName
+      levelManagerFullName,
+      subjectId,
+      subjectCustomId,
+      subjectFullTitle,
+      subjectTeacherCustomStaffId,
+      subjectTeacherFullName
     ])
   });
 
   if (!attendance) {
-    throwError("Error creating student day attendance template", 500);
+    throwError("Error creating student subject attendance template", 500);
   }
 
   await logActivity(
     account?.organisationId,
     accountId,
     "Student Attendance Creation",
-    "StudentDayAttendanceTemplate",
+    "StudentSubjectAttendanceTemplate",
     attendance?._id,
-    `${attendanceDate} - ${attendanceCustomId} - ${courseFullTitle} - ${level}`,
+    `${attendanceDate} - ${attendanceCustomId} - ${courseFullTitle} - ${level} - ${subjectFullTitle}`,
     [
       {
         kind: "N",
@@ -400,9 +480,9 @@ export const createStudentDayAttendance = asyncHandler(async (req: Request, res:
     new Date()
   );
 
-  if (studentDayAttendances.length > 0) {
-    const mappedAttendances = studentDayAttendances.map((studentDayAttendance: any) => ({
-      ...studentDayAttendance,
+  if (studentSubjectAttendances.length > 0) {
+    const mappedAttendances = studentSubjectAttendances.map((studentSubjectAttendance: any) => ({
+      ...studentSubjectAttendance,
       organisationId: orgParsedId,
       attendanceCustomId,
       attendanceId: attendance?._id,
@@ -412,15 +492,17 @@ export const createStudentDayAttendance = asyncHandler(async (req: Request, res:
       courseFullTitle,
       levelId,
       level,
+      subjectId,
+      subjectFullTitle,
       attendanceDate,
-      studentId: studentDayAttendance.studentId,
-      studentCustomId: studentDayAttendance.studentCustomId,
-      studentFullName: studentDayAttendance.studentFullName
+      studentId: studentSubjectAttendance.studentId,
+      studentCustomId: studentSubjectAttendance.studentCustomId,
+      studentFullName: studentSubjectAttendance.studentFullName
     }));
-    const studentAttendancess = await StudentDayAttendanceStore.insertMany(mappedAttendances, { ordered: true });
+    const studentAttendancess = await StudentSubjectAttendanceStore.insertMany(mappedAttendances, { ordered: true });
     if (!studentAttendancess) {
       throwError(
-        "Error creating student day attendance - However the student day attendance template was created - close this dialog and try again by editing the created template",
+        "Error creating student subject attendance - However the student subject attendance template was created - close this dialog and try again by editing the created template",
         500
       );
     }
@@ -430,7 +512,7 @@ export const createStudentDayAttendance = asyncHandler(async (req: Request, res:
 });
 
 // controller to handle role update
-export const updateStudentDayAttendance = asyncHandler(async (req: Request, res: Response) => {
+export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const {
     attendanceCustomId,
@@ -449,12 +531,17 @@ export const updateStudentDayAttendance = asyncHandler(async (req: Request, res:
     levelManagerFullName,
     levelId,
     levelCustomId,
-    level
+    level,
+    subjectId,
+    subjectCustomId,
+    subjectFullTitle,
+    subjectTeacherCustomStaffId,
+    subjectTeacherFullName
   } = req.body;
 
-  const { studentDayAttendances, ...rest } = req.body;
+  const { studentSubjectAttendances, ...rest } = req.body;
 
-  if (!validateStudentDayAttendance({ ...req.body })) {
+  if (!validateStudentSubjectAttendance({ ...req.body })) {
     throwError("Please fill in all required fields", 400);
   }
 
@@ -472,27 +559,27 @@ export const updateStudentDayAttendance = asyncHandler(async (req: Request, res:
     throwError(message, 409);
   }
 
-  const hasAdminAccess = checkAccess(account, creatorTabAccess, "Create Student Day Attendance (Admin Access)");
+  const hasAdminAccess = checkAccess(account, creatorTabAccess, "Create Student Subject Attendance (Admin Access)");
   const hasManagerAccess = checkAccess(
     account,
     creatorTabAccess,
-    "Create Student Day Attendance (For Level | Course Managers)"
+    "Create Student Subject Attendance (For Level | Course Managers | Subject Teachers)"
   );
   if (!absoluteAdmin && !hasAdminAccess && !hasManagerAccess) {
     throwError(
-      "Unauthorised Action: You do not have access to create student day attendance for this course / level or any other course / level - Please contact your admin",
+      "Unauthorised Action: You do not have access to create student subject attendance for this course / level or any other course / level - Please contact your admin",
       403
     );
   }
 
-  const attendanceExists = await StudentDayAttendanceTemplate.findOne({
+  const attendanceExists = await StudentSubjectAttendanceTemplate.findOne({
     organisationId: orgParsedId,
     attendanceCustomId
   });
 
   if (!attendanceExists) {
     throwError(
-      "An error occured whilst getting this student day attendance template - Please ensure this attendance exists with the correct Id",
+      "An error occured whilst getting this student subject attendance template - Please ensure this attendance exists with the correct Id",
       500
     );
   }
@@ -521,6 +608,14 @@ export const updateStudentDayAttendance = asyncHandler(async (req: Request, res:
     );
   }
 
+  const subjectExist = await Subject.findOne({ organisationId: orgParsedId, subjectCustomId });
+  if (!subjectExist) {
+    throwError(
+      "This subject does not exist in this organisation - Ensure it has been created or has not been deleted",
+      409
+    );
+  }
+
   const courseManagerExist = await CourseManager.findOne({
     organisationId: orgParsedId,
     courseId,
@@ -545,7 +640,19 @@ export const updateStudentDayAttendance = asyncHandler(async (req: Request, res:
     );
   }
 
-  const updatedStudentDayAttendance = await StudentDayAttendanceTemplate.findByIdAndUpdate(
+  const subjectTeacherExist = await SubjectTeacher.findOne({
+    organisationId: orgParsedId,
+    subjectId,
+    subjectTeacherCustomStaffId
+  });
+  if (!subjectTeacherExist) {
+    throwError(
+      "This subject teacher does not have a teaching record related to this subject- Ensure you have created one for them",
+      409
+    );
+  }
+
+  const updatedStudentSubjectAttendance = await StudentSubjectAttendanceTemplate.findByIdAndUpdate(
     attendanceExists?._id,
     {
       ...rest,
@@ -566,73 +673,79 @@ export const updateStudentDayAttendance = asyncHandler(async (req: Request, res:
         courseManagerFullName,
         levelManagerStaffId,
         levelManagerCustomStaffId,
-        levelManagerFullName
+        levelManagerFullName,
+        subjectId,
+        subjectCustomId,
+        subjectFullTitle,
+        subjectTeacherCustomStaffId,
+        subjectTeacherFullName
       ])
     },
     { new: true }
   );
 
-  if (!updatedStudentDayAttendance) {
-    throwError("Error updating student day attendance template", 500);
+  if (!updatedStudentSubjectAttendance) {
+    throwError("Error updating student subject attendance template", 500);
   }
 
-  const difference = diff(attendanceExists, updatedStudentDayAttendance);
+  const difference = diff(attendanceExists, updatedStudentSubjectAttendance);
 
   await logActivity(
     account?.organisationId,
     accountId,
     "Student Attendance Update",
-    "StudentDayAttendanceTemplate",
-    updatedStudentDayAttendance?._id,
+    "StudentSubjectAttendanceTemplate",
+    updatedStudentSubjectAttendance?._id,
     `${attendanceDate} - ${attendanceCustomId} - ${courseFullTitle} - ${level}`,
     difference,
     new Date()
   );
 
-  if (studentDayAttendances.length > 0) {
-    const mappedAttendances = studentDayAttendances.map((studentDayAttendance: any) =>
-      studentDayAttendance._id && studentDayAttendance.organisationId
-        ? studentDayAttendance
+  if (studentSubjectAttendances.length > 0) {
+    const mappedAttendances = studentSubjectAttendances.map((studentSubjectAttendance: any) =>
+      studentSubjectAttendance._id && studentSubjectAttendance.organisationId
+        ? studentSubjectAttendance
         : {
-            ...studentDayAttendance,
+            ...studentSubjectAttendance,
             organisationId: orgParsedId,
             attendanceCustomId,
-            attendanceId: attendanceExists?._id,
+            attendanceId: attendanceExists?._id.toString(),
             academicYearId,
             academicYear,
             courseId,
             courseFullTitle,
             levelId,
             level,
+            subjectId,
+            subjectFullTitle,
             attendanceDate,
-            studentId: studentDayAttendance.studentId,
-            studentCustomId: studentDayAttendance.studentCustomId,
-            studentFullName: studentDayAttendance.studentFullName
+            studentId: studentSubjectAttendance.studentId,
+            studentCustomId: studentSubjectAttendance.studentCustomId,
+            studentFullName: studentSubjectAttendance.studentFullName
           }
     );
 
-    const bulkUpdates = mappedAttendances.map((studentDayAttendance: any) => {
-      const filter = studentDayAttendance._id
-        ? { _id: studentDayAttendance._id, studentId: studentDayAttendance.studentId }
-        : { studentId: studentDayAttendance.studentId };
+    const bulkUpdates = mappedAttendances.map((studentSubjectAttendance: any) => {
+      const filter = studentSubjectAttendance._id
+        ? { _id: studentSubjectAttendance._id, studentId: studentSubjectAttendance.studentId }
+        : { studentId: studentSubjectAttendance.studentId };
       return {
         updateOne: {
-          filter: filter,
+          filter,
           update: {
             $set: {
-              ...studentDayAttendance,
-              attendance: studentDayAttendance.attendance
+              ...studentSubjectAttendance,
+              attendance: studentSubjectAttendance.attendance
             }
           },
           upsert: true
         }
       };
     });
-
-    const studentAttendancess = await StudentDayAttendanceStore.bulkWrite(bulkUpdates, { ordered: true });
+    const studentAttendancess = await StudentSubjectAttendanceStore.bulkWrite(bulkUpdates, { ordered: true });
     if (!studentAttendancess) {
       throwError(
-        "Error updating student day attendances - However the student day attendance template was updated - close this dialog and try again by editing the created template",
+        "Error updating student subject attendances - However the student subject attendance template was updated - close this dialog and try again by editing the created template",
         500
       );
     }
@@ -642,10 +755,10 @@ export const updateStudentDayAttendance = asyncHandler(async (req: Request, res:
 });
 
 // controller to handle deleting roles
-export const deleteStudentDayAttendance = asyncHandler(async (req: Request, res: Response) => {
+export const deleteStudentSubjectAttendance = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
-  const { studentDayAttendanceIDToDelete } = req.body;
-  if (!studentDayAttendanceIDToDelete) {
+  const { studentSubjectAttendanceIDToDelete } = req.body;
+  if (!studentSubjectAttendanceIDToDelete) {
     throwError("Unknown delete request - Please try again", 400);
   }
   // confirm user
@@ -659,54 +772,56 @@ export const deleteStudentDayAttendance = asyncHandler(async (req: Request, res:
   if (!checkPassed) {
     throwError(message, 409);
   }
-  const hasAdminAccess = checkAccess(account, creatorTabAccess, "Create Student Day Attendance (Admin Access)");
+  const hasAdminAccess = checkAccess(account, creatorTabAccess, "Create Student Subject Attendance (Admin Access)");
   const hasManagerAccess = checkAccess(
     account,
     creatorTabAccess,
-    "Create Student Day Attendance (For Level | Course Managers)"
+    "Create Student Subject Attendance (For Level | Course Managers | Subject Teachers)"
   );
   if (!absoluteAdmin && !hasAdminAccess && !hasManagerAccess) {
     throwError(
-      "Unauthorised Action: You do not have access to delete student day attendance - Please contact your admin",
+      "Unauthorised Action: You do not have access to delete student subject attendance - Please contact your admin",
       403
     );
   }
 
-  const StudentDayAttendanceToDelete = await StudentDayAttendanceTemplate.findById(studentDayAttendanceIDToDelete);
+  const StudentSubjectAttendanceToDelete = await StudentSubjectAttendanceTemplate.findById(
+    studentSubjectAttendanceIDToDelete
+  );
 
-  if (!StudentDayAttendanceToDelete) {
-    throwError("Error finding student day attendance template - Please try again", 404);
+  if (!StudentSubjectAttendanceToDelete) {
+    throwError("Error finding student subject attendance template - Please try again", 404);
   }
 
-  const deletedStudentDayAttendanceStore = await StudentDayAttendanceStore.deleteMany({
-    attendanceId: studentDayAttendanceIDToDelete
+  const deletedStudentSubjectAttendanceStore = await StudentSubjectAttendanceStore.deleteMany({
+    attendanceId: studentSubjectAttendanceIDToDelete
   });
 
-  if (!deletedStudentDayAttendanceStore) {
-    throwError("Error deleting student day attendance - Please try again", 500);
+  if (!deletedStudentSubjectAttendanceStore) {
+    throwError("Error deleting student subject attendance - Please try again", 500);
   }
 
-  const deletedStudentDayAttendance = await StudentDayAttendanceTemplate.findByIdAndDelete(
-    studentDayAttendanceIDToDelete
+  const deletedStudentSubjectAttendance = await StudentSubjectAttendanceTemplate.findByIdAndDelete(
+    studentSubjectAttendanceIDToDelete
   );
-  if (!deletedStudentDayAttendance) {
-    throwError("Error deleting student day attendance template - Please try again", 500);
+  if (!deletedStudentSubjectAttendance) {
+    throwError("Error deleting student subject attendance template - Please try again", 500);
   }
 
-  const emitRoom = deletedStudentDayAttendance?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "studentdayattendancetemplates", deletedStudentDayAttendance, "delete");
+  const emitRoom = deletedStudentSubjectAttendance?.organisationId?.toString() ?? "";
+  emitToOrganisation(emitRoom, "studentsubjectattendancetemplates", deletedStudentSubjectAttendance, "delete");
 
   await logActivity(
     account?.organisationId,
     accountId,
     "Student Attendance Delete",
-    "StudentDayAttendanceTemplate",
-    deletedStudentDayAttendance?._id,
-    deletedStudentDayAttendance?._id.toString(),
+    "StudentSubjectAttendanceTemplate",
+    deletedStudentSubjectAttendance?._id,
+    deletedStudentSubjectAttendance?._id.toString(),
     [
       {
         kind: "D" as any,
-        lhs: deletedStudentDayAttendance
+        lhs: deletedStudentSubjectAttendance
       }
     ],
     new Date()

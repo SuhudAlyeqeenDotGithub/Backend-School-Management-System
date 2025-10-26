@@ -20,7 +20,8 @@ import { Topic } from "../models/curriculum/topic.ts";
 import { Syllabus } from "../models/curriculum/syllabus.ts";
 import { Subject, SubjectTeacher } from "../models/curriculum/subject.ts";
 import { StudentEnrollment } from "../models/student/enrollment.ts";
-import { StudentDayAttendanceTemplate } from "../models/student/attendance.ts";
+import { StudentDayAttendanceTemplate } from "../models/student/dayattendance.ts";
+import { StudentSubjectAttendanceTemplate } from "../models/student/subjectAttendance.ts";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -1079,6 +1080,40 @@ export const fetchStudentDayAttendances = async (query: any, cursorType: string,
     chunkCount,
     nextCursor: studentDayAttendances[studentDayAttendances.length - 1]?._id,
     prevCursor: studentDayAttendances[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchStudentSubjectAttendances = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const studentSubjectAttendances = await StudentSubjectAttendanceTemplate.find({
+    ...query,
+    organisationId: orgId
+  })
+    .populate("studentSubjectAttendances")
+    .sort({ _id: -1 })
+    .limit(limit + 1);
+  const totalCount = await StudentSubjectAttendanceTemplate.countDocuments({
+    ...query,
+    organisationId: orgId
+  });
+
+  if (!studentSubjectAttendances) {
+    throwError("Error fetching student contracts", 500);
+  }
+
+  const hasNext = studentSubjectAttendances.length > limit || cursorType === "prev";
+
+  if (studentSubjectAttendances.length > limit) {
+    studentSubjectAttendances.pop();
+  }
+  const chunkCount = studentSubjectAttendances.length;
+
+  return {
+    studentSubjectAttendances,
+    totalCount,
+    chunkCount,
+    nextCursor: studentSubjectAttendances[studentSubjectAttendances.length - 1]?._id,
+    prevCursor: studentSubjectAttendances[0]?._id,
     hasNext
   };
 };
