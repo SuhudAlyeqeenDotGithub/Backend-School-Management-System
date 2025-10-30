@@ -171,20 +171,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error updating role", 500);
   }
 
-  const original = {
-    roleId: originalRole?._id,
-    roleName: originalRole?.roleName,
-    roleDescription: originalRole?.roleDescription,
-    tabAccess: originalRole?.tabAccess
-  };
-
-  const updated = {
-    roleId: updatedRole?._id,
-    roleName: updatedRole?.roleName,
-    roleDescription: updatedRole?.roleDescription,
-    tabAccess: updatedRole?.tabAccess
-  };
-  const difference = diff(original, updated);
+  const difference = diff(originalRole, updatedRole);
   await logActivity(
     account?.organisationId,
     accountId,

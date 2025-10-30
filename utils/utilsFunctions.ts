@@ -304,6 +304,33 @@ export const fetchUsers = async (
   };
 };
 
+export const fetchActivityLogs = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const activityLogs = await ActivityLog.find({ ...query, organisationId: orgId })
+    .sort({ _id: -1 })
+    .limit(limit + 1)
+    .populate([{ path: "accountId", populate: [{ path: "staffId" }, { path: "roleId" }] }, { path: "recordId" }]);
+  const totalCount = await ActivityLog.countDocuments({ ...query, organisationId: orgId });
+
+  if (!activityLogs) {
+    throwError("Error fetching activity Logs", 500);
+  }
+  const hasNext = activityLogs.length > limit || cursorType === "prev";
+
+  if (activityLogs.length > limit) {
+    activityLogs.pop();
+  }
+  const chunkCount = activityLogs.length;
+
+  return {
+    activityLogs,
+    totalCount,
+    chunkCount,
+    nextCursor: activityLogs[activityLogs.length - 1]?._id,
+    prevCursor: activityLogs[0]?._id,
+    hasNext
+  };
+};
+
 export const fetchAllStaffProfiles = async (asWho: string, orgId: string, selfId: string) => {
   let staffProfiles;
   if (asWho === "Absolute Admin") {

@@ -149,7 +149,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   await logActivity(
     account?.organisationId,
     accountId,
-    "User Creation",
+    "User Account Creation",
     "Account",
     newUser?._id,
     userName,
@@ -162,7 +162,8 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
           accountName: userName,
           accountEmail: userEmail,
           accountStatus: userStatus,
-          roleId: userRoleId
+          roleId: userRoleId,
+          uniqueTabAccess
         }
       }
     ],
@@ -180,7 +181,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
 export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
-  const { onEditUserIsAbsoluteAdmin, _id: userId, staffId, roleId: userRoleId } = body;
+  const { onEditUserIsAbsoluteAdmin, uniqueTabAccess, _id: userId, staffId, roleId: userRoleId } = body;
 
   let updatedDoc: any = {};
 
@@ -267,23 +268,32 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error updating user", 500);
   }
 
-  const original = originalUser;
+  const original = {
+    _id: originalUser?._id,
+    staffId: staffExists?._id,
+    accountName: userName,
+    accountEmail: userEmail,
+    accountStatus: userStatus,
+    roleId: userRoleId,
+    uniqueTabAccess
+  };
 
   const updated = {
     _id: updatedUser?._id,
-    staffId: updatedUser?.staffId,
-    accountName: updatedUser?.accountName,
-    accountEmail: updatedUser?.accountEmail,
-    accountPassword: updatedUser?.accountPassword,
-    accountStatus: updatedUser?.accountStatus,
-    roleId: updatedUser?.roleId
+    staffId: staffExists?._id,
+    accountName: userName,
+    accountEmail: userEmail,
+    accountStatus: userStatus,
+    roleId: userRoleId,
+    uniqueTabAccess
   };
+
   const difference = diff(original, updated);
 
   await logActivity(
     account?.organisationId,
     accountId,
-    "User Update",
+    "User Account Update",
     "Account",
     updatedUser?._id,
     updatedUser?.accountName ?? "",
@@ -350,7 +360,7 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   await logActivity(
     account?.organisationId,
     accountId,
-    "User Deletion",
+    "User Account Deletion",
     "Account",
     accountIdToDelete,
     userName,

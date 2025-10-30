@@ -245,7 +245,7 @@ export const updateLevelManager = asyncHandler(async (req: Request, res: Respons
   await logActivity(
     account?.organisationId,
     accountId,
-    "LevelManager Update",
+    "Level Manager Update",
     "LevelManager",
     updatedLevelManager?._id,
     levelFullTitle,

@@ -161,7 +161,7 @@ export const createBaseSubjectManager = asyncHandler(async (req: Request, res: R
   await logActivity(
     account?.organisationId,
     accountId,
-    "BaseSubject Manager Creation",
+    "Base Subject Manager Creation",
     "BaseSubjectManager",
     newBaseSubjectManager?._id,
     baseSubjectManagerFullName,
@@ -246,7 +246,7 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
   await logActivity(
     account?.organisationId,
     accountId,
-    "BaseSubjectManager Update",
+    "Base Subject Manager Update",
     "BaseSubjectManager",
     updatedBaseSubjectManager?._id,
     baseSubjectName,

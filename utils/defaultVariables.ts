@@ -119,6 +119,20 @@ export const defaultTabAccess = [
     ]
   },
   {
+    tab: "Event",
+    group: "Curriculum",
+    actions: [
+      { action: "Create Event", permission: false },
+      { action: "View Events", permission: false },
+      { action: "Edit Event", permission: false },
+      { action: "Delete Event", permission: false },
+      { action: "Create Event Manager", permission: false },
+      { action: "View Event Managers", permission: false },
+      { action: "Edit Event Manager", permission: false },
+      { action: "Delete Event Manager", permission: false }
+    ]
+  },
+  {
     tab: "Learning Plan",
     group: "Curriculum",
     actions: [

@@ -246,7 +246,7 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
   await logActivity(
     account?.organisationId,
     accountId,
-    "ProgrammeManager Update",
+    "Programme Manager Update",
     "ProgrammeManager",
     updatedProgrammeManager?._id,
     programmeName,

@@ -260,7 +260,7 @@ export const updateSubjectTeacher = asyncHandler(async (req: Request, res: Respo
   await logActivity(
     account?.organisationId,
     accountId,
-    "SubjectTeacher Update",
+    "Subject Teacher Update",
     "SubjectTeacher",
     updatedSubjectTeacher?._id,
     subjectFullTitle,

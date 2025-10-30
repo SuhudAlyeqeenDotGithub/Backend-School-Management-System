@@ -47,4 +47,5 @@ const activityLogSchema = new Schema(
   { timestamps: true }
 );
 
+activityLogSchema.index({ updatedAt: -1, _id: -1 });
 export const ActivityLog = model("ActivityLog", activityLogSchema);
