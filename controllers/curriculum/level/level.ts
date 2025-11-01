@@ -161,25 +161,30 @@ export const createLevel = asyncHandler(async (req: Request, res: Response) => {
     searchText: generateSearchText([levelCustomId, level, levelFullTitle])
   });
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Level Creation",
-    "Level",
-    newLevel?._id,
-    level,
-    [
-      {
-        kind: "N",
-        rhs: {
-          _id: newLevel._id,
-          levelId: newLevel.levelCustomId,
-          level
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Level Creation",
+      "Level",
+      newLevel?._id,
+      level,
+      [
+        {
+          kind: "N",
+          rhs: {
+            _id: newLevel._id,
+            levelId: newLevel.levelCustomId,
+            level
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -241,18 +246,22 @@ export const updateLevel = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error updating level", 500);
   }
 
-  const difference = diff(originalLevel, updatedLevel);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Level Update",
-    "Level",
-    updatedLevel?._id,
-    level,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalLevel, updatedLevel);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Level Update",
+      "Level",
+      updatedLevel?._id,
+      level,
+      difference,
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -299,20 +308,25 @@ export const deleteLevel = asyncHandler(async (req: Request, res: Response) => {
   const emitRoom = deletedLevel?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "levels", deletedLevel, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Level Delete",
-    "Level",
-    deletedLevel?._id,
-    deletedLevel?.level,
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedLevel
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Level Delete",
+      "Level",
+      deletedLevel?._id,
+      deletedLevel?.level,
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedLevel
+        }
+      ],
+      new Date()
+    );
+  }
   res.status(201).json("successfull");
 });

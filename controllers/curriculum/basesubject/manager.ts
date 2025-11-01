@@ -158,21 +158,26 @@ export const createBaseSubjectManager = asyncHandler(async (req: Request, res: R
     ])
   });
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Base Subject Manager Creation",
-    "BaseSubjectManager",
-    newBaseSubjectManager?._id,
-    baseSubjectManagerFullName,
-    [
-      {
-        kind: "N",
-        rhs: newBaseSubjectManager
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Base Subject Manager Creation",
+      "BaseSubjectManager",
+      newBaseSubjectManager?._id,
+      baseSubjectManagerFullName,
+      [
+        {
+          kind: "N",
+          rhs: newBaseSubjectManager
+        }
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -181,14 +186,7 @@ export const createBaseSubjectManager = asyncHandler(async (req: Request, res: R
 export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const body = req.body;
-  const {
-    baseSubjectCustomId,
-    baseSubjectId,
-    status,
-    baseSubjectName,
-    baseSubjectManagerCustomStaffId,
-    baseSubjectManagerFullName
-  } = body;
+  const { baseSubjectCustomId, baseSubjectName, baseSubjectManagerCustomStaffId, baseSubjectManagerFullName } = body;
 
   if (!validateBaseSubjectManager(body)) {
     throwError("Please fill in all required fields", 400);
@@ -241,18 +239,22 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
     throwError("Error updating base subject", 500);
   }
 
-  const difference = diff(originalBaseSubjectManager, updatedBaseSubjectManager);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Base Subject Manager Update",
-    "BaseSubjectManager",
-    updatedBaseSubjectManager?._id,
-    baseSubjectName,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalBaseSubjectManager, updatedBaseSubjectManager);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Base Subject Manager Update",
+      "BaseSubjectManager",
+      updatedBaseSubjectManager?._id,
+      baseSubjectName,
+      difference,
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -303,20 +305,25 @@ export const deleteBaseSubjectManager = asyncHandler(async (req: Request, res: R
   const emitRoom = deletedBaseSubjectManager?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "basesubjectmanagers", deletedBaseSubjectManager, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Base Subject Manager Deletion",
-    "BaseSubjectManager",
-    deletedBaseSubjectManager?._id,
-    deletedBaseSubjectManager?.baseSubjectManagerFullName,
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedBaseSubjectManager
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Base Subject Manager Deletion",
+      "BaseSubjectManager",
+      deletedBaseSubjectManager?._id,
+      deletedBaseSubjectManager?.baseSubjectManagerFullName,
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedBaseSubjectManager
+        }
+      ],
+      new Date()
+    );
+  }
   res.status(201).json("successfull");
 });

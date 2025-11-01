@@ -131,6 +131,7 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
+
   if (logActivityAllowed) {
     activityLog = await logActivity(
       account?.organisationId,

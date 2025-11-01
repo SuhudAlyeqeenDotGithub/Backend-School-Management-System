@@ -86,26 +86,31 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error creating role", 500);
   }
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Role Creation",
-    "Role",
-    newRole?._id,
-    roleName,
-    [
-      {
-        kind: "N",
-        rhs: {
-          _id: newRole._id,
-          roleName: newRole.roleName,
-          roleDescription: newRole.roleDescription,
-          absoluteAdmin: newRole.absoluteAdmin
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Role Creation",
+      "Role",
+      newRole?._id,
+      roleName,
+      [
+        {
+          kind: "N",
+          rhs: {
+            _id: newRole._id,
+            roleName: newRole.roleName,
+            roleDescription: newRole.roleDescription,
+            absoluteAdmin: newRole.absoluteAdmin
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
 
   if (absoluteAdmin || hasAccess) {
     const roles = await fetchRoles(
@@ -171,17 +176,22 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error updating role", 500);
   }
 
-  const difference = diff(originalRole, updatedRole);
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Role Update",
-    "Role",
-    updatedRole?._id,
-    roleName,
-    difference,
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    const difference = diff(originalRole, updatedRole);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Role Update",
+      "Role",
+      updatedRole?._id,
+      roleName,
+      difference,
+      new Date()
+    );
+  }
 
   if (absoluteAdmin || hasAccess) {
     const roles = await fetchRoles(
@@ -250,27 +260,32 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   const emitRoom = deletedRole?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "roles", deletedRole, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Role Delete",
-    "Role",
-    deletedRole?._id,
-    roleName,
-    [
-      {
-        kind: "D",
-        lhs: {
-          _id: originalRole?._id,
-          roleName: originalRole?.roleName,
-          roleDescription: originalRole?.roleDescription,
-          absoluteAdmin: originalRole?.absoluteAdmin,
-          tabAccess: originalRole?.tabAccess
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Role Delete",
+      "Role",
+      deletedRole?._id,
+      roleName,
+      [
+        {
+          kind: "D",
+          lhs: {
+            _id: originalRole?._id,
+            roleName: originalRole?.roleName,
+            roleDescription: originalRole?.roleDescription,
+            absoluteAdmin: originalRole?.absoluteAdmin,
+            tabAccess: originalRole?.tabAccess
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
 
   if (absoluteAdmin || hasAccess) {
     const roles = await fetchRoles(

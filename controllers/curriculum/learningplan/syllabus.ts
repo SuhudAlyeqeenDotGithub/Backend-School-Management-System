@@ -170,25 +170,30 @@ export const createSyllabus = asyncHandler(async (req: Request, res: Response) =
     ])
   });
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Syllabus Creation",
-    "Syllabus",
-    newSyllabus?._id,
-    syllabus,
-    [
-      {
-        kind: "N",
-        rhs: {
-          _id: newSyllabus._id,
-          syllabusId: newSyllabus.syllabusCustomId,
-          syllabus
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Syllabus Creation",
+      "Syllabus",
+      newSyllabus?._id,
+      syllabus,
+      [
+        {
+          kind: "N",
+          rhs: {
+            _id: newSyllabus._id,
+            syllabusId: newSyllabus.syllabusCustomId,
+            syllabus
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -258,18 +263,22 @@ export const updateSyllabus = asyncHandler(async (req: Request, res: Response) =
     throwError("Error updating syllabus", 500);
   }
 
-  const difference = diff(originalSyllabus, updatedSyllabus);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Syllabus Update",
-    "Syllabus",
-    updatedSyllabus?._id,
-    syllabus,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalSyllabus, updatedSyllabus);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Syllabus Update",
+      "Syllabus",
+      updatedSyllabus?._id,
+      syllabus,
+      difference,
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -316,20 +325,25 @@ export const deleteSyllabus = asyncHandler(async (req: Request, res: Response) =
   const emitRoom = deletedSyllabus?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "syllabuses", deletedSyllabus, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Syllabus Delete",
-    "Syllabus",
-    deletedSyllabus?._id,
-    deletedSyllabus?.syllabus,
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedSyllabus
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Syllabus Delete",
+      "Syllabus",
+      deletedSyllabus?._id,
+      deletedSyllabus?.syllabus,
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedSyllabus
+        }
+      ],
+      new Date()
+    );
+  }
   res.status(201).json("successfull");
 });

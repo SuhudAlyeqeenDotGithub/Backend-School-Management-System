@@ -245,21 +245,26 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
     throwError("Error creating student enrollment", 500);
   }
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Student Enrollment Creation",
-    "StudentEnrollment",
-    newStudentEnrollment?._id,
-    studentFullName + " " + "Enrollment",
-    [
-      {
-        kind: "N",
-        rhs: newStudentEnrollment
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Student Enrollment Creation",
+      "StudentEnrollment",
+      newStudentEnrollment?._id,
+      studentFullName + " " + "Enrollment",
+      [
+        {
+          kind: "N",
+          rhs: newStudentEnrollment
+        }
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successful");
 });
@@ -375,18 +380,22 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
     throwError("Error updating student enrollment", 500);
   }
 
-  const difference = diff(originalStudentEnrollment, updatedStudentEnrollment);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Student Enrollment Update",
-    "StudentEnrollment",
-    updatedStudentEnrollment?._id,
-    studentFullName,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalStudentEnrollment, updatedStudentEnrollment);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Student Enrollment Update",
+      "StudentEnrollment",
+      updatedStudentEnrollment?._id,
+      studentFullName,
+      difference,
+      new Date()
+    );
+  }
   res.status(201).json("successful");
 });
 
@@ -432,21 +441,26 @@ export const deleteStudentEnrollment = asyncHandler(async (req: Request, res: Re
   const emitRoom = deletedStudentEnrollment?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "studentenrollments", deletedStudentEnrollment, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Student Enrollment Delete",
-    "StudentEnrollment",
-    deletedStudentEnrollment?._id,
-    deletedStudentEnrollment?._id.toString(),
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedStudentEnrollment
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Student Enrollment Delete",
+      "StudentEnrollment",
+      deletedStudentEnrollment?._id,
+      deletedStudentEnrollment?._id.toString(),
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedStudentEnrollment
+        }
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successful");
 });

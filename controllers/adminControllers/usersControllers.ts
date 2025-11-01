@@ -146,29 +146,34 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error creating role", 500);
   }
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "User Account Creation",
-    "Account",
-    newUser?._id,
-    userName,
-    [
-      {
-        kind: "N",
-        rhs: {
-          _id: newUser._id,
-          staffId: staffExists?._id,
-          accountName: userName,
-          accountEmail: userEmail,
-          accountStatus: userStatus,
-          roleId: userRoleId,
-          uniqueTabAccess
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "User Account Creation",
+      "Account",
+      newUser?._id,
+      userName,
+      [
+        {
+          kind: "N",
+          rhs: {
+            _id: newUser._id,
+            staffId: staffExists?._id,
+            accountName: userName,
+            accountEmail: userEmail,
+            accountStatus: userStatus,
+            roleId: userRoleId,
+            uniqueTabAccess
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -284,18 +289,22 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     uniqueTabAccess: updatedUser?.uniqueTabAccess
   };
 
-  const difference = diff(original, updated);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "User Account Update",
-    "Account",
-    updatedUser?._id,
-    updatedUser?.accountName ?? "",
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(original, updated);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "User Account Update",
+      "Account",
+      updatedUser?._id,
+      updatedUser?.accountName ?? "",
+      difference,
+      new Date()
+    );
+  }
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to edit users - Please contact your admin", 403);
@@ -353,28 +362,33 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   const emitRoom = deletedUser?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "accounts", deletedUser, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "User Account Deletion",
-    "Account",
-    accountIdToDelete,
-    userName,
-    [
-      {
-        kind: "D",
-        lhs: {
-          _id: accountIdToDelete,
-          staffId,
-          accountName: userName,
-          accountEmail: userEmail,
-          accountStatus: userStatus,
-          roleId
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "User Account Deletion",
+      "Account",
+      accountIdToDelete,
+      userName,
+      [
+        {
+          kind: "D",
+          lhs: {
+            _id: accountIdToDelete,
+            staffId,
+            accountName: userName,
+            accountEmail: userEmail,
+            accountStatus: userStatus,
+            roleId
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete users - Please contact your admin", 403);
@@ -427,16 +441,21 @@ export const updateOrgSettings = asyncHandler(async (req: Request, res: Response
     throwError("Error updating user", 500);
   }
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Organisation Account Setting Update",
-    "Account",
-    updatedAccount?._id,
-    updatedAccount?.accountName ?? "",
-    diff(organisationSettings?.settings, updatedAccount?.settings),
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Organisation Account Setting Update",
+      "Account",
+      updatedAccount?._id,
+      updatedAccount?.accountName ?? "",
+      diff(organisationSettings?.settings, updatedAccount?.settings),
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });

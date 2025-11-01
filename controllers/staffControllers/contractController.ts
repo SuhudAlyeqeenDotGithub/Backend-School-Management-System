@@ -223,31 +223,36 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
     throwError("Error creating staff contract", 500);
   }
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Staff Contract Creation",
-    "StaffContract",
-    newStaffContract?._id,
-    jobTitle,
-    [
-      {
-        kind: "N",
-        rhs: {
-          _id: newStaffContract._id,
-          academicYear,
-          staffCustomId,
-          staffFullName,
-          jobTitle,
-          contractStartDate,
-          contractEndDate,
-          contractType,
-          contractStatus
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Staff Contract Creation",
+      "StaffContract",
+      newStaffContract?._id,
+      jobTitle,
+      [
+        {
+          kind: "N",
+          rhs: {
+            _id: newStaffContract._id,
+            academicYear,
+            staffCustomId,
+            staffFullName,
+            jobTitle,
+            contractStartDate,
+            contractEndDate,
+            contractType,
+            contractStatus
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successful");
 });
@@ -334,18 +339,22 @@ export const updateStaffContract = asyncHandler(async (req: Request, res: Respon
     throwError("Error updating staff contract", 500);
   }
 
-  const difference = diff(originalStaff, updatedStaffContract);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Staff Contract Update",
-    "StaffContract",
-    updatedStaffContract?._id,
-    staffFullName,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalStaff, updatedStaffContract);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Staff Contract Update",
+      "StaffContract",
+      updatedStaffContract?._id,
+      staffFullName,
+      difference,
+      new Date()
+    );
+  }
   res.status(201).json("successful");
 });
 
@@ -388,21 +397,26 @@ export const deleteStaffContract = asyncHandler(async (req: Request, res: Respon
   const emitRoom = deletedStaffContract?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "staffcontracts", deletedStaffContract, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Staff Contract Delete",
-    "StaffContract",
-    deletedStaffContract?._id,
-    deletedStaffContract?._id.toString(),
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedStaffContract
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Staff Contract Delete",
+      "StaffContract",
+      deletedStaffContract?._id,
+      deletedStaffContract?._id.toString(),
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedStaffContract
+        }
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successful");
 });

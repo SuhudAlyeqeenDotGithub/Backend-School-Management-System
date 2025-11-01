@@ -219,8 +219,11 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     accountPhone: updatedOrgAccount?.accountPhone,
     roleId: updatedOrgAccount?.roleId
   };
+
+  let activityLog;
+
   const difference = diff(original, updated);
-  await logActivity(
+  activityLog = await logActivity(
     orgAccount._id,
     orgAccount._id,
     `Updating organization (${organisationName}) Account with Default Role`,
@@ -440,6 +443,7 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
     [],
     new Date()
   );
+
   res.status(200).json(reshapedAccount);
 });
 
@@ -566,16 +570,22 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
   }
 
   // create a log for reset password request
-  await logActivity(
-    accountExist?._id,
-    accountExist?._id,
-    "Reset Password Request",
-    "None",
-    resetPasswordDoc._id,
-    "Reset Password",
-    [],
-    new Date()
-  );
+
+  let activityLog;
+  const logActivityAllowed = accountExist?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      accountExist?._id,
+      accountExist?._id,
+      "Reset Password Request",
+      "None",
+      resetPasswordDoc._id,
+      "Reset Password",
+      [],
+      new Date()
+    );
+  }
 
   // send token to account email
   await sendEmail(
@@ -692,17 +702,23 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
 
   // create an activity log for the organization account password change
   // get the difference in old and new
-  const difference = diff(organisationEmailExists, updatedAccountPassword);
-  await logActivity(
-    updatedAccountPassword?._id,
-    updatedAccountPassword?._id,
-    `Changing organisation ${updatedAccountPassword?.accountName} password`,
-    "Account",
-    updatedAccountPassword?._id,
-    updatedAccountPassword?.accountName ?? undefined,
-    difference,
-    new Date()
-  );
+
+  let activityLog;
+  const logActivityAllowed = organisationEmailExists?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    const difference = diff(organisationEmailExists, updatedAccountPassword);
+    activityLog = await logActivity(
+      updatedAccountPassword?._id,
+      updatedAccountPassword?._id,
+      `Changing organisation ${updatedAccountPassword?.accountName} password`,
+      "Account",
+      updatedAccountPassword?._id,
+      updatedAccountPassword?.accountName ?? undefined,
+      difference,
+      new Date()
+    );
+  }
 
   const roleId = updatedAccountPassword?.roleId;
   const noRole = roleId === null || roleId === undefined || !roleId;
@@ -744,15 +760,19 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
 
   delete reshapedAccount._id;
   delete reshapedAccount.accountPassword;
-  await logActivity(
-    updatedAccountPassword?.organisationId,
-    updatedAccountPassword?._id,
-    "User auto Sign In after password change",
-    "Account",
-    updatedAccountPassword?._id,
-    updatedAccountPassword?.accountName ?? undefined,
-    [],
-    new Date()
-  );
+  let activityLog2;
+
+  if (logActivityAllowed) {
+    activityLog2 = await logActivity(
+      updatedAccountPassword?.organisationId,
+      updatedAccountPassword?._id,
+      "User auto Sign In after password change",
+      "Account",
+      updatedAccountPassword?._id,
+      updatedAccountPassword?.accountName ?? undefined,
+      [],
+      new Date()
+    );
+  }
   res.status(200).json(reshapedAccount);
 });

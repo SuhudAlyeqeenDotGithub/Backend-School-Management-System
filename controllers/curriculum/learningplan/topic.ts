@@ -155,25 +155,30 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
     searchText: generateSearchText([topicCustomId, topic])
   });
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Topic Creation",
-    "Topic",
-    newTopic?._id,
-    topic,
-    [
-      {
-        kind: "N",
-        rhs: {
-          _id: newTopic._id,
-          topicId: newTopic.topicCustomId,
-          topic
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Topic Creation",
+      "Topic",
+      newTopic?._id,
+      topic,
+      [
+        {
+          kind: "N",
+          rhs: {
+            _id: newTopic._id,
+            topicId: newTopic.topicCustomId,
+            topic
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -227,18 +232,22 @@ export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error updating topic", 500);
   }
 
-  const difference = diff(originalTopic, updatedTopic);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Topic Update",
-    "Topic",
-    updatedTopic?._id,
-    topic,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalTopic, updatedTopic);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Topic Update",
+      "Topic",
+      updatedTopic?._id,
+      topic,
+      difference,
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -285,20 +294,25 @@ export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
   const emitRoom = deletedTopic?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "topics", deletedTopic, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Topic Delete",
-    "Topic",
-    deletedTopic?._id,
-    deletedTopic?.topic,
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedTopic
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Topic Delete",
+      "Topic",
+      deletedTopic?._id,
+      deletedTopic?.topic,
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedTopic
+        }
+      ],
+      new Date()
+    );
+  }
   res.status(201).json("successfull");
 });

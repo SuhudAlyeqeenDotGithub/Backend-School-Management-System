@@ -224,25 +224,30 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
     ])
   });
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Staff Profile Creation",
-    "Staff",
-    newStaff?._id,
-    staffFullName,
-    [
-      {
-        kind: "N",
-        rhs: {
-          _id: newStaff._id,
-          staffId: newStaff.staffCustomId,
-          staffFullName
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Staff Profile Creation",
+      "Staff",
+      newStaff?._id,
+      staffFullName,
+      [
+        {
+          kind: "N",
+          rhs: {
+            _id: newStaff._id,
+            staffId: newStaff.staffCustomId,
+            staffFullName
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -328,18 +333,22 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
     throwError("Error updating staff profile", 500);
   }
 
-  const difference = diff(originalStaff, updatedStaff);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Staff Profile Update",
-    "Staff",
-    updatedStaff?._id,
-    staffFullName,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalStaff, updatedStaff);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Staff Profile Update",
+      "Staff",
+      updatedStaff?._id,
+      staffFullName,
+      difference,
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -386,27 +395,32 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
   const emitRoom = deletedStaffProfile?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "staffs", deletedStaffProfile, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Staff Delete",
-    "Staff",
-    deletedStaffProfile?._id,
-    deletedStaffProfile?.staffFullName,
-    [
-      {
-        kind: "D" as any,
-        lhs: {
-          _id: deletedStaffProfile?._id,
-          staffCustomId: deletedStaffProfile?.staffCustomId,
-          staffFullName: deletedStaffProfile?.staffFullName,
-          staffEmail: deletedStaffProfile?.staffEmail,
-          staffNextOfKinName: deletedStaffProfile?.staffNextOfKinName,
-          staffQualification: deletedStaffProfile?.staffQualification
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Staff Delete",
+      "Staff",
+      deletedStaffProfile?._id,
+      deletedStaffProfile?.staffFullName,
+      [
+        {
+          kind: "D" as any,
+          lhs: {
+            _id: deletedStaffProfile?._id,
+            staffCustomId: deletedStaffProfile?.staffCustomId,
+            staffFullName: deletedStaffProfile?.staffFullName,
+            staffEmail: deletedStaffProfile?.staffEmail,
+            staffNextOfKinName: deletedStaffProfile?.staffNextOfKinName,
+            staffQualification: deletedStaffProfile?.staffQualification
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
   res.status(201).json("successfull");
 });

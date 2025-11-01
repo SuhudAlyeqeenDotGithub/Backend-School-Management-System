@@ -172,21 +172,26 @@ export const createCourseManager = asyncHandler(async (req: Request, res: Respon
     searchText: generateSearchText([courseCustomId, courseFullTitle, courseManagerCustomStaffId, courseManagerFullName])
   });
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Course Manager Creation",
-    "CourseManager",
-    newCourseManager?._id,
-    courseManagerFullName,
-    [
-      {
-        kind: "N",
-        rhs: newCourseManager
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Course Manager Creation",
+      "CourseManager",
+      newCourseManager?._id,
+      courseManagerFullName,
+      [
+        {
+          kind: "N",
+          rhs: newCourseManager
+        }
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -245,18 +250,22 @@ export const updateCourseManager = asyncHandler(async (req: Request, res: Respon
     throwError("Error updating course", 500);
   }
 
-  const difference = diff(originalCourseManager, updatedCourseManager);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Course Manager Update",
-    "CourseManager",
-    updatedCourseManager?._id,
-    courseFullTitle,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalCourseManager, updatedCourseManager);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Course Manager Update",
+      "CourseManager",
+      updatedCourseManager?._id,
+      courseFullTitle,
+      difference,
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -302,20 +311,25 @@ export const deleteCourseManager = asyncHandler(async (req: Request, res: Respon
   const emitRoom = deletedCourseManager?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "coursemanagers", deletedCourseManager, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Course Manager Deletion",
-    "CourseManager",
-    deletedCourseManager?._id,
-    deletedCourseManager?.courseManagerFullName,
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedCourseManager
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Course Manager Deletion",
+      "CourseManager",
+      deletedCourseManager?._id,
+      deletedCourseManager?.courseManagerFullName,
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedCourseManager
+        }
+      ],
+      new Date()
+    );
+  }
   res.status(201).json("successfull");
 });

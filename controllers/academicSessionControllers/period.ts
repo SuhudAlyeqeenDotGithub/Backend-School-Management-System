@@ -71,6 +71,7 @@ export const createPeriod = asyncHandler(async (req: Request, res: Response) => 
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
+
   if (logActivityAllowed) {
     activityLog = await logActivity(
       account?.organisationId,

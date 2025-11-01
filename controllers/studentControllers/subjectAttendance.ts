@@ -464,21 +464,26 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
     throwError("Error creating student subject attendance template", 500);
   }
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Student Attendance Creation",
-    "StudentSubjectAttendanceTemplate",
-    attendance?._id,
-    `${attendanceDate} - ${attendanceCustomId} - ${courseFullTitle} - ${level} - ${subjectFullTitle}`,
-    [
-      {
-        kind: "N",
-        rhs: attendance
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Student Attendance Creation",
+      "StudentSubjectAttendanceTemplate",
+      attendance?._id,
+      `${attendanceDate} - ${attendanceCustomId} - ${courseFullTitle} - ${level} - ${subjectFullTitle}`,
+      [
+        {
+          kind: "N",
+          rhs: attendance
+        }
+      ],
+      new Date()
+    );
+  }
 
   if (studentSubjectAttendances.length > 0) {
     const mappedAttendances = studentSubjectAttendances.map((studentSubjectAttendance: any) => ({
@@ -688,18 +693,22 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
     throwError("Error updating student subject attendance template", 500);
   }
 
-  const difference = diff(attendanceExists, updatedStudentSubjectAttendance);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Student Attendance Update",
-    "StudentSubjectAttendanceTemplate",
-    updatedStudentSubjectAttendance?._id,
-    `${attendanceDate} - ${attendanceCustomId} - ${courseFullTitle} - ${level}`,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(attendanceExists, updatedStudentSubjectAttendance);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Student Attendance Update",
+      "StudentSubjectAttendanceTemplate",
+      updatedStudentSubjectAttendance?._id,
+      `${attendanceDate} - ${attendanceCustomId} - ${courseFullTitle} - ${level}`,
+      difference,
+      new Date()
+    );
+  }
 
   if (studentSubjectAttendances.length > 0) {
     const mappedAttendances = studentSubjectAttendances.map((studentSubjectAttendance: any) =>
@@ -811,21 +820,26 @@ export const deleteStudentSubjectAttendance = asyncHandler(async (req: Request, 
   const emitRoom = deletedStudentSubjectAttendance?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "studentsubjectattendancetemplates", deletedStudentSubjectAttendance, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Student Attendance Delete",
-    "StudentSubjectAttendanceTemplate",
-    deletedStudentSubjectAttendance?._id,
-    deletedStudentSubjectAttendance?._id.toString(),
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedStudentSubjectAttendance
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Student Attendance Delete",
+      "StudentSubjectAttendanceTemplate",
+      deletedStudentSubjectAttendance?._id,
+      deletedStudentSubjectAttendance?._id.toString(),
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedStudentSubjectAttendance
+        }
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successful");
 });

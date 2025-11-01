@@ -172,21 +172,26 @@ export const createLevelManager = asyncHandler(async (req: Request, res: Respons
     searchText: generateSearchText([levelCustomId, levelFullTitle, levelManagerCustomStaffId, levelManagerFullName])
   });
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Level Manager Creation",
-    "LevelManager",
-    newLevelManager?._id,
-    levelManagerFullName,
-    [
-      {
-        kind: "N",
-        rhs: newLevelManager
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Level Manager Creation",
+      "LevelManager",
+      newLevelManager?._id,
+      levelManagerFullName,
+      [
+        {
+          kind: "N",
+          rhs: newLevelManager
+        }
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -240,18 +245,22 @@ export const updateLevelManager = asyncHandler(async (req: Request, res: Respons
     throwError("Error updating level", 500);
   }
 
-  const difference = diff(originalLevelManager, updatedLevelManager);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Level Manager Update",
-    "LevelManager",
-    updatedLevelManager?._id,
-    levelFullTitle,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalLevelManager, updatedLevelManager);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Level Manager Update",
+      "LevelManager",
+      updatedLevelManager?._id,
+      levelFullTitle,
+      difference,
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -297,20 +306,25 @@ export const deleteLevelManager = asyncHandler(async (req: Request, res: Respons
   const emitRoom = deletedLevelManager?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "levelmanagers", deletedLevelManager, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Level Manager Deletion",
-    "LevelManager",
-    deletedLevelManager?._id,
-    deletedLevelManager?.levelManagerFullName,
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedLevelManager
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Level Manager Deletion",
+      "LevelManager",
+      deletedLevelManager?._id,
+      deletedLevelManager?.levelManagerFullName,
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedLevelManager
+        }
+      ],
+      new Date()
+    );
+  }
   res.status(201).json("successfull");
 });

@@ -158,25 +158,30 @@ export const createBaseSubject = asyncHandler(async (req: Request, res: Response
     searchText: generateSearchText([baseSubjectCustomId, baseSubjectName])
   });
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "BaseSubject Creation",
-    "BaseSubject",
-    newBaseSubject?._id,
-    baseSubjectName,
-    [
-      {
-        kind: "N",
-        rhs: {
-          _id: newBaseSubject._id,
-          baseSubjectId: newBaseSubject.baseSubjectCustomId,
-          baseSubjectName
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "BaseSubject Creation",
+      "BaseSubject",
+      newBaseSubject?._id,
+      baseSubjectName,
+      [
+        {
+          kind: "N",
+          rhs: {
+            _id: newBaseSubject._id,
+            baseSubjectId: newBaseSubject.baseSubjectCustomId,
+            baseSubjectName
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -230,18 +235,22 @@ export const updateBaseSubject = asyncHandler(async (req: Request, res: Response
     throwError("Error updating base subject", 500);
   }
 
-  const difference = diff(originalBaseSubject, updatedBaseSubject);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Base Subject Update",
-    "BaseSubject",
-    updatedBaseSubject?._id,
-    baseSubjectName,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalBaseSubject, updatedBaseSubject);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Base Subject Update",
+      "BaseSubject",
+      updatedBaseSubject?._id,
+      baseSubjectName,
+      difference,
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -291,20 +300,25 @@ export const deleteBaseSubject = asyncHandler(async (req: Request, res: Response
   const emitRoom = deletedBaseSubject?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "basesubjects", deletedBaseSubject, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "BasesSubject Delete",
-    "BaseSubject",
-    deletedBaseSubject?._id,
-    deletedBaseSubject?.baseSubjectName,
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedBaseSubject
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "BasesSubject Delete",
+      "BaseSubject",
+      deletedBaseSubject?._id,
+      deletedBaseSubject?.baseSubjectName,
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedBaseSubject
+        }
+      ],
+      new Date()
+    );
+  }
   res.status(201).json("successfull");
 });

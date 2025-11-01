@@ -181,21 +181,26 @@ export const createSubjectTeacher = asyncHandler(async (req: Request, res: Respo
     ])
   });
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Subject Teacher Creation",
-    "SubjectTeacher",
-    newSubjectTeacher?._id,
-    subjectTeacherFullName,
-    [
-      {
-        kind: "N",
-        rhs: newSubjectTeacher
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Subject Teacher Creation",
+      "SubjectTeacher",
+      newSubjectTeacher?._id,
+      subjectTeacherFullName,
+      [
+        {
+          kind: "N",
+          rhs: newSubjectTeacher
+        }
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -255,18 +260,22 @@ export const updateSubjectTeacher = asyncHandler(async (req: Request, res: Respo
     throwError("Error updating subject", 500);
   }
 
-  const difference = diff(originalSubjectTeacher, updatedSubjectTeacher);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Subject Teacher Update",
-    "SubjectTeacher",
-    updatedSubjectTeacher?._id,
-    subjectFullTitle,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalSubjectTeacher, updatedSubjectTeacher);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Subject Teacher Update",
+      "SubjectTeacher",
+      updatedSubjectTeacher?._id,
+      subjectFullTitle,
+      difference,
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -315,20 +324,25 @@ export const deleteSubjectTeacher = asyncHandler(async (req: Request, res: Respo
   const emitRoom = deletedSubjectTeacher?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "subjectteachers", deletedSubjectTeacher, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Subject Teacher Deletion",
-    "SubjectTeacher",
-    deletedSubjectTeacher?._id,
-    deletedSubjectTeacher?.subjectTeacherFullName,
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedSubjectTeacher
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Subject Teacher Deletion",
+      "SubjectTeacher",
+      deletedSubjectTeacher?._id,
+      deletedSubjectTeacher?.subjectTeacherFullName,
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedSubjectTeacher
+        }
+      ],
+      new Date()
+    );
+  }
   res.status(201).json("successfull");
 });

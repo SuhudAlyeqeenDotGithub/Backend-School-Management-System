@@ -384,21 +384,26 @@ export const createStudentDayAttendance = asyncHandler(async (req: Request, res:
     throwError("Error creating student day attendance template", 500);
   }
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Student Attendance Creation",
-    "StudentDayAttendanceTemplate",
-    attendance?._id,
-    `${attendanceDate} - ${attendanceCustomId} - ${courseFullTitle} - ${level}`,
-    [
-      {
-        kind: "N",
-        rhs: attendance
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Student Attendance Creation",
+      "StudentDayAttendanceTemplate",
+      attendance?._id,
+      `${attendanceDate} - ${attendanceCustomId} - ${courseFullTitle} - ${level}`,
+      [
+        {
+          kind: "N",
+          rhs: attendance
+        }
+      ],
+      new Date()
+    );
+  }
 
   if (studentDayAttendances.length > 0) {
     const mappedAttendances = studentDayAttendances.map((studentDayAttendance: any) => ({
@@ -576,18 +581,22 @@ export const updateStudentDayAttendance = asyncHandler(async (req: Request, res:
     throwError("Error updating student day attendance template", 500);
   }
 
-  const difference = diff(attendanceExists, updatedStudentDayAttendance);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Student Attendance Update",
-    "StudentDayAttendanceTemplate",
-    updatedStudentDayAttendance?._id,
-    `${attendanceDate} - ${attendanceCustomId} - ${courseFullTitle} - ${level}`,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(attendanceExists, updatedStudentDayAttendance);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Student Attendance Update",
+      "StudentDayAttendanceTemplate",
+      updatedStudentDayAttendance?._id,
+      `${attendanceDate} - ${attendanceCustomId} - ${courseFullTitle} - ${level}`,
+      difference,
+      new Date()
+    );
+  }
 
   if (studentDayAttendances.length > 0) {
     const mappedAttendances = studentDayAttendances.map((studentDayAttendance: any) =>
@@ -696,21 +705,26 @@ export const deleteStudentDayAttendance = asyncHandler(async (req: Request, res:
   const emitRoom = deletedStudentDayAttendance?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "studentdayattendancetemplates", deletedStudentDayAttendance, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Student Attendance Delete",
-    "StudentDayAttendanceTemplate",
-    deletedStudentDayAttendance?._id,
-    deletedStudentDayAttendance?._id.toString(),
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedStudentDayAttendance
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Student Attendance Delete",
+      "StudentDayAttendanceTemplate",
+      deletedStudentDayAttendance?._id,
+      deletedStudentDayAttendance?._id.toString(),
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedStudentDayAttendance
+        }
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successful");
 });

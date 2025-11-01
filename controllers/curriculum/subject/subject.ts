@@ -179,25 +179,30 @@ export const createSubject = asyncHandler(async (req: Request, res: Response) =>
     searchText: generateSearchText([subjectCustomId, subject, subjectFullTitle, courseCustomId, levelCustomId])
   });
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Subject Creation",
-    "Subject",
-    newSubject?._id,
-    subject,
-    [
-      {
-        kind: "N",
-        rhs: {
-          _id: newSubject._id,
-          subjectId: newSubject.subjectCustomId,
-          subject
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Subject Creation",
+      "Subject",
+      newSubject?._id,
+      subject,
+      [
+        {
+          kind: "N",
+          rhs: {
+            _id: newSubject._id,
+            subjectId: newSubject.subjectCustomId,
+            subject
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -275,18 +280,22 @@ export const updateSubject = asyncHandler(async (req: Request, res: Response) =>
     throwError("Error updating subject", 500);
   }
 
-  const difference = diff(originalSubject, updatedSubject);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Subject Update",
-    "Subject",
-    updatedSubject?._id,
-    subject,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalSubject, updatedSubject);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Subject Update",
+      "Subject",
+      updatedSubject?._id,
+      subject,
+      difference,
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -333,20 +342,25 @@ export const deleteSubject = asyncHandler(async (req: Request, res: Response) =>
   const emitRoom = deletedSubject?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "subjects", deletedSubject, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Subject Delete",
-    "Subject",
-    deletedSubject?._id,
-    deletedSubject?.subject,
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedSubject
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Subject Delete",
+      "Subject",
+      deletedSubject?._id,
+      deletedSubject?.subject,
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedSubject
+        }
+      ],
+      new Date()
+    );
+  }
   res.status(201).json("successfull");
 });

@@ -224,25 +224,30 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
     ])
   });
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Student Profile Creation",
-    "Student",
-    newStudent?._id,
-    studentFullName,
-    [
-      {
-        kind: "N",
-        rhs: {
-          _id: newStudent._id,
-          studentId: newStudent.studentCustomId,
-          studentFullName
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Student Profile Creation",
+      "Student",
+      newStudent?._id,
+      studentFullName,
+      [
+        {
+          kind: "N",
+          rhs: {
+            _id: newStudent._id,
+            studentId: newStudent.studentCustomId,
+            studentFullName
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -328,18 +333,22 @@ export const updateStudentProfile = asyncHandler(async (req: Request, res: Respo
     throwError("Error updating student profile", 500);
   }
 
-  const difference = diff(originalStudent, updatedStudent);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Student Profile Update",
-    "Student",
-    updatedStudent?._id,
-    studentFullName,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalStudent, updatedStudent);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Student Profile Update",
+      "Student",
+      updatedStudent?._id,
+      studentFullName,
+      difference,
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -389,27 +398,32 @@ export const deleteStudentProfile = asyncHandler(async (req: Request, res: Respo
   const emitRoom = deletedStudentProfile?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "students", deletedStudentProfile, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Student Delete",
-    "Student",
-    deletedStudentProfile?._id,
-    deletedStudentProfile?.studentFullName,
-    [
-      {
-        kind: "D" as any,
-        lhs: {
-          _id: deletedStudentProfile?._id,
-          studentCustomId: deletedStudentProfile?.studentCustomId,
-          studentFullName: deletedStudentProfile?.studentFullName,
-          studentEmail: deletedStudentProfile?.studentEmail,
-          studentNextOfKinName: deletedStudentProfile?.studentNextOfKinName,
-          studentQualification: deletedStudentProfile?.studentQualification
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Student Delete",
+      "Student",
+      deletedStudentProfile?._id,
+      deletedStudentProfile?.studentFullName,
+      [
+        {
+          kind: "D" as any,
+          lhs: {
+            _id: deletedStudentProfile?._id,
+            studentCustomId: deletedStudentProfile?.studentCustomId,
+            studentFullName: deletedStudentProfile?.studentFullName,
+            studentEmail: deletedStudentProfile?.studentEmail,
+            studentNextOfKinName: deletedStudentProfile?.studentNextOfKinName,
+            studentQualification: deletedStudentProfile?.studentQualification
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
   res.status(201).json("successfull");
 });

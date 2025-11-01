@@ -152,25 +152,30 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
     searchText: generateSearchText([programmeCustomId, programmeName])
   });
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Programme Creation",
-    "Programme",
-    newProgramme?._id,
-    programmeName,
-    [
-      {
-        kind: "N",
-        rhs: {
-          _id: newProgramme._id,
-          programmeId: newProgramme.programmeCustomId,
-          programmeName
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Programme Creation",
+      "Programme",
+      newProgramme?._id,
+      programmeName,
+      [
+        {
+          kind: "N",
+          rhs: {
+            _id: newProgramme._id,
+            programmeId: newProgramme.programmeCustomId,
+            programmeName
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -224,18 +229,22 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
     throwError("Error updating programme", 500);
   }
 
-  const difference = diff(originalProgramme, updatedProgramme);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Programme Update",
-    "Programme",
-    updatedProgramme?._id,
-    programmeName,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalProgramme, updatedProgramme);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Programme Update",
+      "Programme",
+      updatedProgramme?._id,
+      programmeName,
+      difference,
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -282,20 +291,25 @@ export const deleteProgramme = asyncHandler(async (req: Request, res: Response) 
   const emitRoom = deletedProgramme?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "programmes", deletedProgramme, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Programme Delete",
-    "Programme",
-    deletedProgramme?._id,
-    deletedProgramme?.programmeName,
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedProgramme
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Programme Delete",
+      "Programme",
+      deletedProgramme?._id,
+      deletedProgramme?.programmeName,
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedProgramme
+        }
+      ],
+      new Date()
+    );
+  }
   res.status(201).json("successfull");
 });

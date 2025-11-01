@@ -161,25 +161,30 @@ export const createCourse = asyncHandler(async (req: Request, res: Response) => 
     searchText: generateSearchText([courseCustomId, courseName, courseFullTitle])
   });
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Course Creation",
-    "Course",
-    newCourse?._id,
-    courseName,
-    [
-      {
-        kind: "N",
-        rhs: {
-          _id: newCourse._id,
-          courseId: newCourse.courseCustomId,
-          courseName
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Course Creation",
+      "Course",
+      newCourse?._id,
+      courseName,
+      [
+        {
+          kind: "N",
+          rhs: {
+            _id: newCourse._id,
+            courseId: newCourse.courseCustomId,
+            courseName
+          }
         }
-      }
-    ],
-    new Date()
-  );
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -241,18 +246,22 @@ export const updateCourse = asyncHandler(async (req: Request, res: Response) => 
     throwError("Error updating course", 500);
   }
 
-  const difference = diff(originalCourse, updatedCourse);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Course Update",
-    "Course",
-    updatedCourse?._id,
-    courseName,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalCourse, updatedCourse);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Course Update",
+      "Course",
+      updatedCourse?._id,
+      courseName,
+      difference,
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -299,20 +308,25 @@ export const deleteCourse = asyncHandler(async (req: Request, res: Response) => 
   const emitRoom = deletedCourse?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "courses", deletedCourse, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Course Delete",
-    "Course",
-    deletedCourse?._id,
-    deletedCourse?.courseName,
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedCourse
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Course Delete",
+      "Course",
+      deletedCourse?._id,
+      deletedCourse?.courseName,
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedCourse
+        }
+      ],
+      new Date()
+    );
+  }
   res.status(201).json("successfull");
 });

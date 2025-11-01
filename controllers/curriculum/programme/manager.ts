@@ -158,21 +158,26 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
     ])
   });
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Programme Manager Creation",
-    "ProgrammeManager",
-    newProgrammeManager?._id,
-    programmeManagerFullName,
-    [
-      {
-        kind: "N",
-        rhs: newProgrammeManager
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Programme Manager Creation",
+      "ProgrammeManager",
+      newProgrammeManager?._id,
+      programmeManagerFullName,
+      [
+        {
+          kind: "N",
+          rhs: newProgrammeManager
+        }
+      ],
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -241,18 +246,22 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
     throwError("Error updating programme", 500);
   }
 
-  const difference = diff(originalProgrammeManager, updatedProgrammeManager);
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Programme Manager Update",
-    "ProgrammeManager",
-    updatedProgrammeManager?._id,
-    programmeName,
-    difference,
-    new Date()
-  );
+  if (logActivityAllowed) {
+    const difference = diff(originalProgrammeManager, updatedProgrammeManager);
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Programme Manager Update",
+      "ProgrammeManager",
+      updatedProgrammeManager?._id,
+      programmeName,
+      difference,
+      new Date()
+    );
+  }
 
   res.status(201).json("successfull");
 });
@@ -301,20 +310,25 @@ export const deleteProgrammeManager = asyncHandler(async (req: Request, res: Res
   const emitRoom = deletedProgrammeManager?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "programmemanagers", deletedProgrammeManager, "delete");
 
-  await logActivity(
-    account?.organisationId,
-    accountId,
-    "Programme Manager Deletion",
-    "ProgrammeManager",
-    deletedProgrammeManager?._id,
-    deletedProgrammeManager?.programmeManagerFullName,
-    [
-      {
-        kind: "D" as any,
-        lhs: deletedProgrammeManager
-      }
-    ],
-    new Date()
-  );
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Programme Manager Deletion",
+      "ProgrammeManager",
+      deletedProgrammeManager?._id,
+      deletedProgrammeManager?.programmeManagerFullName,
+      [
+        {
+          kind: "D" as any,
+          lhs: deletedProgrammeManager
+        }
+      ],
+      new Date()
+    );
+  }
   res.status(201).json("successfull");
 });
