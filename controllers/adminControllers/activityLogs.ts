@@ -28,7 +28,15 @@ export const getActivityLogs = asyncHandler(async (req: Request, res: Response) 
   }
 
   if (from && to) {
-    query.createdAt = { $gte: new Date(from as string), $lte: new Date(to as string) };
+    const fromDate = new Date(from as string);
+    const toDate = new Date(to as string);
+
+    toDate.setDate(toDate.getDate() + 1);
+
+    query.createdAt = {
+      $gte: fromDate,
+      $lt: toDate
+    };
   }
 
   for (const key in filters) {

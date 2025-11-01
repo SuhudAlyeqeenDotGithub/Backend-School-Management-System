@@ -170,10 +170,6 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
     new Date()
   );
 
-  if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to create users - Please contact your admin", 403);
-  }
-
   res.status(201).json("successfull");
 });
 
@@ -231,7 +227,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const staffExists = await Staff.findOne({ _id: staffId, organisationId: account!.organisationId!._id.toString() });
-  if (!staffExists) {
+  if (!staffExists && !onEditUserIsAbsoluteAdmin) {
     throwError("Please provide the user staff ID related to their staff record - or create one for them", 409);
   }
 
@@ -275,7 +271,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     accountEmail: userEmail,
     accountStatus: userStatus,
     roleId: userRoleId,
-    uniqueTabAccess
+    uniqueTabAccess: originalUser?.uniqueTabAccess
   };
 
   const updated = {
@@ -285,7 +281,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     accountEmail: userEmail,
     accountStatus: userStatus,
     roleId: userRoleId,
-    uniqueTabAccess
+    uniqueTabAccess: updatedUser?.uniqueTabAccess
   };
 
   const difference = diff(original, updated);
@@ -383,6 +379,64 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete users - Please contact your admin", 403);
   }
+
+  res.status(201).json("successfull");
+});
+
+// controller to handle role update
+export const updateOrgSettings = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const body = req.body;
+  const { settings } = body;
+
+  if (!settings) {
+    throwError("No settings provided - Please try again", 400);
+  }
+
+  // confirm user
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const { roleId, accountStatus } = account as any;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+
+  if (!absoluteAdmin) {
+    throwError(
+      "Unauthorised Action: You do not have access to update settings - Please contact your absolute admin",
+      400
+    );
+  }
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
+  }
+
+  const organisationSettings = await Account.findById(userTokenOrgId, "settings");
+
+  const updatedAccount = await Account.findByIdAndUpdate(
+    userTokenOrgId,
+    {
+      $set: {
+        settings
+      }
+    },
+    { new: true }
+  );
+
+  if (!updatedAccount) {
+    throwError("Error updating user", 500);
+  }
+
+  await logActivity(
+    account?.organisationId,
+    accountId,
+    "Organisation Account Setting Update",
+    "Account",
+    updatedAccount?._id,
+    updatedAccount?.accountName ?? "",
+    diff(organisationSettings?.settings, updatedAccount?.settings),
+    new Date()
+  );
 
   res.status(201).json("successfull");
 });

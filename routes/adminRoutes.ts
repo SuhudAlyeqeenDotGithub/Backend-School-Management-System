@@ -1,7 +1,7 @@
 import express from "express";
 const router = express.Router();
 import { getRoles, createRole, updateRole, deleteRole } from "../controllers/adminControllers/rolesController";
-import { getUsers, createUser, updateUser, deleteUser } from "../controllers/adminControllers/usersControllers";
+import { getUsers, createUser, updateUser, deleteUser, updateOrgSettings } from "../controllers/adminControllers/usersControllers";
 import { getActivityLogs, getLastActivityLog } from "../controllers/adminControllers/activityLogs";
 
 // admin roles endpoints
@@ -19,5 +19,8 @@ router.delete("/admin/users", deleteUser);
 // admin activity logs endpoints
 router.get("/admin/activitylogs", getActivityLogs);
 router.get("/admin/lastactivitylog", getLastActivityLog);
+
+// admin setting endopoints
+router.post("/admin/settings", updateOrgSettings);
 
 export default router;
