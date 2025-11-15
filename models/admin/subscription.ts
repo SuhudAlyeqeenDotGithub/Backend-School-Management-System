@@ -17,4 +17,6 @@ const subscriptionSchema = new Schema(
   { timestamps: true }
 );
 
+subscriptionSchema.index({ organisationId: 1 });
+
 export const Subscription = model("Subscription", subscriptionSchema);

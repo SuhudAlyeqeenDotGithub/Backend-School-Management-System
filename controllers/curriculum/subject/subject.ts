@@ -2,18 +2,15 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { Account } from "../../../models/admin/accountModel";
 import {
-  confirmAccount,
-  confirmRole,
+  getObjectSize,
+  toNegative,
   throwError,
   generateSearchText,
   fetchSubjects,
-  generateCustomId,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  validateEmail,
-  validatePhoneNumber,
   fetchAllSubjects
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
@@ -23,6 +20,7 @@ import { Subject } from "../../../models/curriculum/subject";
 import { Course } from "../../../models/curriculum/course";
 import { Level } from "../../../models/curriculum/level";
 import { BaseSubject } from "../../../models/curriculum/basesubject";
+import { registerBillings } from "utils/billingFunctions";
 
 const validateSubject = (subjectDataParam: any) => {
   const { description, subjectDuration, courseName, ...copyLocalData } = subjectDataParam;
@@ -58,6 +56,14 @@ export const getAllSubjects = asyncHandler(async (req: Request, res: Response) =
     if (!subjectProfiles) {
       throwError("Error fetching subject profiles", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + subjectProfiles.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([subjectProfiles, organisation, role, account])
+      }
+    ]);
     res.status(201).json(subjectProfiles);
     return;
   }
@@ -92,7 +98,7 @@ export const getSubjects = asyncHandler(async (req: Request, res: Response) => {
     }
   }
 
-  const { roleId, accountStatus, subjectId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -109,6 +115,14 @@ export const getSubjects = asyncHandler(async (req: Request, res: Response) => {
     if (!result || !result.subjects) {
       throwError("Error fetching subjects", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.subjects.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
@@ -204,6 +218,23 @@ export const createSubject = asyncHandler(async (req: Request, res: Response) =>
     );
   }
 
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 9 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newSubject) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newSubject, baseSubjectExists, organisation, role, account]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
@@ -297,6 +328,23 @@ export const updateSubject = asyncHandler(async (req: Request, res: Response) =>
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 9 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([
+          updatedSubject,
+          courseExists,
+          levelExists,
+          baseSubjectExists,
+          organisation,
+          role,
+          account,
+          originalSubject
+        ]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });
 
@@ -362,5 +410,22 @@ export const deleteSubject = asyncHandler(async (req: Request, res: Response) =>
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: toNegative(getObjectSize(deletedSubject) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedSubject, organisation, role, account, subjectToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });

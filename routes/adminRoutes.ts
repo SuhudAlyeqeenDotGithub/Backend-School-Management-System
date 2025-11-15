@@ -1,8 +1,15 @@
 import express from "express";
 const router = express.Router();
 import { getRoles, createRole, updateRole, deleteRole } from "../controllers/adminControllers/rolesController";
-import { getUsers, createUser, updateUser, deleteUser, updateOrgSettings } from "../controllers/adminControllers/usersControllers";
+import {
+  getUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  updateOrgSettings
+} from "../controllers/adminControllers/usersControllers";
 import { getActivityLogs, getLastActivityLog } from "../controllers/adminControllers/activityLogs";
+import { getBillings, getSubscription } from "../controllers/adminControllers/billing";
 
 // admin roles endpoints
 router.get("/admin/roles", getRoles);
@@ -22,5 +29,9 @@ router.get("/admin/lastactivitylog", getLastActivityLog);
 
 // admin setting endopoints
 router.post("/admin/settings", updateOrgSettings);
+
+// admin billing endopoints
+router.get("/admin/billings", getBillings);
+router.get("/admin/billing/subscription", getSubscription);
 
 export default router;

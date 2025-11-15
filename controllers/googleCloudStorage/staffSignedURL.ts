@@ -1,8 +1,17 @@
 import { Storage } from "@google-cloud/storage";
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { throwError, confirmUserOrgRole, checkOrgAndUserActiveness, checkAccess } from "../../utils/utilsFunctions.ts";
+import {
+  throwError,
+  confirmUserOrgRole,
+  checkOrgAndUserActiveness,
+  checkAccess,
+  getObjectSize,
+  getGoogleCloudFileSize,
+  toNegative
+} from "../../utils/utilsFunctions.ts";
 import { nanoid } from "nanoid";
+import { registerBillings } from "utils/billingFunctions.ts";
 
 const storage = new Storage({
   projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
@@ -13,11 +22,15 @@ const bucketName = "alyeqeenappsimages";
 
 export const getStaffImageUploadSignedUrl = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
-  const { imageName, imageType } = req.body;
+  const { imageName, imageType, imageSize } = req.body;
 
   const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
   if (!allowedTypes.includes(imageType)) {
     throwError("Unsupported image type", 400);
+  }
+
+  if (imageSize === "") {
+    throwError("Error getting image size - Please uploading again", 400);
   }
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
@@ -52,6 +65,25 @@ export const getStaffImageUploadSignedUrl = asyncHandler(async (req: Request, re
 
     const publicUrl = `https://storage.googleapis.com/${bucketName}/${destination}`;
 
+    registerBillings(req, [
+      {
+        field: "databaseOperation",
+        value: 3
+      },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account])
+      },
+      {
+        field: "cloudStorageUploadOperation",
+        value: 1
+      },
+      {
+        field: "cloudStorageGBStored",
+        value: (await getGoogleCloudFileSize(file)) || 0
+      }
+    ]);
+
     res.status(200).json({ signedUrl, publicUrl, destination });
   } catch (err: any) {
     throwError("Failed to get signed URL:" + err.message, 500);
@@ -63,7 +95,7 @@ export const getStaffImageViewSignedUrl = asyncHandler(async (req: Request, res:
   const { imageLocalDestination } = req.body;
 
   // confirm user
-  const { account, organisation } = await confirmUserOrgRole(accountId);
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
@@ -80,19 +112,37 @@ export const getStaffImageViewSignedUrl = asyncHandler(async (req: Request, res:
     throwError("Unauthorised Action: You do not have access to upload image- Please contact your admin", 403);
   }
 
-  const [url] = await storage
-    .bucket("my-bucket")
-    .file(imageLocalDestination)
-    .getSignedUrl({
-      action: "read",
-      expires: Date.now() + 60 * 60 * 1000
-    });
+  const file = storage.bucket(bucketName).file(imageLocalDestination);
+
+  const [url] = await file.getSignedUrl({
+    action: "read",
+    expires: Date.now() + 60 * 60 * 1000
+  });
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 3
+    },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([organisation, role, account])
+    },
+    {
+      field: "cloudStorageDownloadOperation",
+      value: 1
+    },
+    {
+      field: "cloudStorageGBDownloaded",
+      value: (await getGoogleCloudFileSize(file)) || 0
+    }
+  ]);
 
   res.json({ url });
 });
 
 export const deleteStaffImageInBucket = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { imageLocalDestination } = req.body;
 
   if (!imageLocalDestination) {
@@ -102,7 +152,7 @@ export const deleteStaffImageInBucket = asyncHandler(async (req: Request, res: R
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -118,7 +168,24 @@ export const deleteStaffImageInBucket = asyncHandler(async (req: Request, res: R
   }
 
   try {
-    await storage.bucket(bucketName).file(imageLocalDestination).delete();
+    const file = storage.bucket(bucketName).file(imageLocalDestination);
+
+    await file.delete();
+
+    registerBillings(req, [
+      {
+        field: "databaseOperation",
+        value: 3
+      },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account])
+      },
+      {
+        field: "cloudStorageGBStored",
+        value: toNegative(await getGoogleCloudFileSize(file)) || 0
+      }
+    ]);
 
     res.status(200).json("delete successful");
   } catch (err: any) {

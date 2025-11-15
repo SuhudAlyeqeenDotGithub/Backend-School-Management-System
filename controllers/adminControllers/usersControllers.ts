@@ -2,21 +2,22 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { Account } from "../../models/admin/accountModel.ts";
 import {
-  confirmAccount,
-  confirmRole,
   throwError,
   fetchUsers,
   generateSearchText,
   emitToOrganisation,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  checkAccess
+  checkAccess,
+  getObjectSize,
+  toNegative
 } from "../../utils/utilsFunctions.ts";
 import { logActivity } from "../../utils/utilsFunctions.ts";
 import { diff } from "deep-diff";
 import bcrypt from "bcryptjs";
 import { StaffContract } from "../../models/staff/contracts.ts";
 import { Staff } from "../../models/staff/profile.ts";
+import { registerBillings } from "utils/billingFunctions.ts";
 
 export const getUsers = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
@@ -73,6 +74,15 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
     if (!result || !result.users) {
       throwError("Error fetching staff profiles", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.users.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result.users, organisation, role, account])
+      }
+    ]);
+
     res.status(201).json(result);
     return;
   }
@@ -174,6 +184,20 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
       new Date()
     );
   }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 8 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newUser) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newUser, userExists, staffExists, staffHasActiveContract, organisation, role, account]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
 
   res.status(201).json("successfull");
 });
@@ -306,9 +330,15 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
-  if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to edit users - Please contact your admin", 403);
-  }
+  registerBillings(req, [
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedUser, staffExists, organisation, role, account, originalUser]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
 
   res.status(201).json("successfull");
 });
@@ -390,9 +420,22 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
-  if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to delete users - Please contact your admin", 403);
-  }
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 5 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: toNegative(getObjectSize(deletedUser) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedUser, organisation, role, account]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
 
   res.status(201).json("successfull");
 });
@@ -456,6 +499,16 @@ export const updateOrgSettings = asyncHandler(async (req: Request, res: Response
       new Date()
     );
   }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedAccount, organisation, role, account]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
 
   res.status(201).json("successfull");
 });

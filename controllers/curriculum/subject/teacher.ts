@@ -1,22 +1,22 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
+  getObjectSize,
+  toNegative,
   throwError,
   generateSearchText,
   fetchSubjectTeachers,
-  generateCustomId,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  validateEmail,
-  validatePhoneNumber,
   fetchAllSubjectTeachers
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 import { StaffContract } from "../../../models/staff/contracts";
 import { SubjectTeacher } from "../../../models/curriculum/subject";
+import { registerBillings } from "utils/billingFunctions";
 
 const validateSubjectTeacher = (subjectTeacherDataParam: any) => {
   const { managedUntil, _id, ...copyLocalData } = subjectTeacherDataParam;
@@ -35,7 +35,7 @@ export const getAllSubjectTeachers = asyncHandler(async (req: Request, res: Resp
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus, courseId, staffId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -52,6 +52,14 @@ export const getAllSubjectTeachers = asyncHandler(async (req: Request, res: Resp
     if (!result) {
       throwError("Error fetching subject teachers", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
@@ -86,7 +94,7 @@ export const getSubjectTeachers = asyncHandler(async (req: Request, res: Respons
     }
   }
 
-  const { roleId, accountStatus, subjectId, staffId } = account as any;
+  const { roleId, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -110,6 +118,14 @@ export const getSubjectTeachers = asyncHandler(async (req: Request, res: Respons
     if (!result || !result.subjectTeachers) {
       throwError("Error fetching subject teachers", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.subjectTeachers.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
@@ -137,8 +153,9 @@ export const createSubjectTeacher = asyncHandler(async (req: Request, res: Respo
     throwError("The staff has no contract with this organisation - Please create one for them", 409);
   }
 
+  let subjectAlreadyManaged;
   if (status === "Active") {
-    const subjectAlreadyManaged = await SubjectTeacher.findOne({
+    subjectAlreadyManaged = await SubjectTeacher.findOne({
       organisationId: orgParsedId,
       subjectId,
       subjectTeacherCustomStaffId,
@@ -201,6 +218,23 @@ export const createSubjectTeacher = asyncHandler(async (req: Request, res: Respo
       new Date()
     );
   }
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 4 + (logActivityAllowed ? 2 : 0) + (status === "Active" ? 1 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newSubjectTeacher) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newSubjectTeacher, staffHasContract, organisation, role, account]) +
+        (status === "Active" ? getObjectSize(subjectAlreadyManaged) : 0) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
 
   res.status(201).json("successfull");
 });
@@ -277,6 +311,16 @@ export const updateSubjectTeacher = asyncHandler(async (req: Request, res: Respo
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedSubjectTeacher, organisation, role, account, originalSubjectTeacher]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
@@ -344,5 +388,22 @@ export const deleteSubjectTeacher = asyncHandler(async (req: Request, res: Respo
       new Date()
     );
   }
+
+    registerBillings(req, [
+      {
+        field: "databaseOperation",
+        value: 6 + (logActivityAllowed ? 2 : 0)
+      },
+      {
+        field: "databaseStorageAndBackup",
+        value: toNegative(getObjectSize(deletedSubjectTeacher) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      },
+      {
+        field: "databaseDataTransfer",
+        value:
+          getObjectSize([deletedSubjectTeacher, organisation, role, account, subjectTeacherToDelete]) +
+          (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      }
+    ]);
   res.status(201).json("successfull");
 });

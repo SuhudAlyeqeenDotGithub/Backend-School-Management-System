@@ -1,8 +1,8 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  confirmAccount,
-  confirmRole,
+  getObjectSize,
+  toNegative,
   throwError,
   generateSearchText,
   fetchStudentEnrollments,
@@ -20,6 +20,7 @@ import { StudentEnrollment } from "../../models/student/enrollment.ts";
 import { AcademicYear } from "../../models/timeline/academicYear.ts";
 import { Course } from "../../models/curriculum/course.ts";
 import { Level } from "../../models/curriculum/level.ts";
+import { registerBillings } from "utils/billingFunctions.ts";
 
 const validateStudentEnrollment = (studentDataParam: any) => {
   const { enrollmentExpiresOn, notes, allowances, ...copyLocalData } = studentDataParam;
@@ -62,10 +63,7 @@ export const getStudentEnrollments = asyncHandler(async (req: Request, res: Resp
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  // confirm role
-  await confirmRole(account!.roleId!._id.toString());
-
-  const { roleId, accountStatus, studentId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -87,7 +85,14 @@ export const getStudentEnrollments = asyncHandler(async (req: Request, res: Resp
     if (!result || !result.studentEnrollments) {
       throwError("Error fetching student enrollments", 500);
     }
-    deleteStudentEnrollment;
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.studentEnrollments.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
 
     res.status(201).json(result);
     return;
@@ -100,15 +105,12 @@ export const getStudentEnrollments = asyncHandler(async (req: Request, res: Resp
 });
 
 export const getAllStudentEnrollments = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  // confirm role
-  await confirmRole(account!.roleId!._id.toString());
-
-  const { roleId, accountStatus, studentId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -125,7 +127,14 @@ export const getAllStudentEnrollments = asyncHandler(async (req: Request, res: R
     if (!studentEnrollments) {
       throwError("Error fetching student enrollments", 500);
     }
-    deleteStudentEnrollment;
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + studentEnrollments.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([studentEnrollments, organisation, role, account])
+      }
+    ]);
 
     res.status(201).json(studentEnrollments);
     return;
@@ -138,7 +147,7 @@ export const getAllStudentEnrollments = asyncHandler(async (req: Request, res: R
 });
 // controller to handle role creation
 export const createStudentEnrollment = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const {
     academicYearId,
     academicYear,
@@ -165,7 +174,7 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const { roleId, accountStatus, studentId: userStudentId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -183,8 +192,8 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
     );
   }
 
-  const enrollementExist = await StudentEnrollment.findOne({ organisationId: orgParsedId, enrollmentCustomId });
-  if (enrollementExist) {
+  const enrollementExists = await StudentEnrollment.findOne({ organisationId: orgParsedId, enrollmentCustomId });
+  if (enrollementExists) {
     throwError("This enrollment custom ID is already being used. Please use a different enrollment custom ID", 409);
   }
 
@@ -265,6 +274,29 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
       new Date()
     );
   }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 10 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newStudentEnrollment) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([
+          newStudentEnrollment,
+          academicYearExists,
+          studentExists,
+          enrollementExists,
+          courseExists,
+          levelExists,
+          organisation,
+          role,
+          account
+        ]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
 
   res.status(201).json("successful");
 });
@@ -396,6 +428,24 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
       new Date()
     );
   }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 9 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([
+          updatedStudentEnrollment,
+          academicYearExists,
+          courseExists,
+          levelExists,
+          organisation,
+          role,
+          account,
+          originalStudentEnrollment
+        ]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successful");
 });
 
@@ -461,6 +511,24 @@ export const deleteStudentEnrollment = asyncHandler(async (req: Request, res: Re
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value:
+        toNegative(getObjectSize(deletedStudentEnrollment) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedStudentEnrollment, organisation, role, account, StudentEnrollmentToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
 
   res.status(201).json("successful");
 });

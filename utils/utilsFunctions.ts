@@ -22,6 +22,7 @@ import { Subject, SubjectTeacher } from "../models/curriculum/subject.ts";
 import { StudentEnrollment } from "../models/student/enrollment.ts";
 import { StudentDayAttendanceTemplate } from "../models/student/dayattendance.ts";
 import { StudentSubjectAttendanceTemplate } from "../models/student/subjectAttendance.ts";
+import { Billing } from "../models/admin/billingModel.ts";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -74,6 +75,15 @@ export const confirmUserOrgRole = async (accountId: string) => {
   const role = await confirmRole(account!.roleId!._id.toString());
 
   return { account, role, organisation };
+};
+
+export const getGoogleCloudFileSize = async (file: any) => {
+  const [metadata] = await file.getMetadata();
+  // File size in bytes
+  const sizeInBytes = typeof metadata.size === "number" ? metadata.size : parseInt(String(metadata.size || "0"), 10);
+
+  // Convert to GB
+  return sizeInBytes / (1024 * 1024 * 1024);
 };
 
 export const checkOrgAndUserActiveness = (organisationDoc: any, userDoc: any) => {
@@ -327,6 +337,32 @@ export const fetchActivityLogs = async (query: any, cursorType: string, limit: n
     chunkCount,
     nextCursor: activityLogs[activityLogs.length - 1]?._id,
     prevCursor: activityLogs[0]?._id,
+    hasNext
+  };
+};
+
+export const fetchBillings = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const billings = await Billing.find({ ...query, organisationId: orgId })
+    .sort({ _id: -1 })
+    .limit(limit + 1);
+  const totalCount = await Billing.countDocuments({ ...query, organisationId: orgId });
+
+  if (!billings) {
+    throwError("Error fetching billings", 500);
+  }
+  const hasNext = billings.length > limit || cursorType === "prev";
+
+  if (billings.length > limit) {
+    billings.pop();
+  }
+  const chunkCount = billings.length;
+
+  return {
+    billings,
+    totalCount,
+    chunkCount,
+    nextCursor: billings[billings.length - 1]?._id,
+    prevCursor: billings[0]?._id,
     hasNext
   };
 };

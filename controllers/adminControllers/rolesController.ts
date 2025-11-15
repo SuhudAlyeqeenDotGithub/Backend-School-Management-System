@@ -8,16 +8,19 @@ import {
   logActivity,
   checkOrgAndUserActiveness,
   checkAccess,
-  confirmUserOrgRole
+  confirmUserOrgRole,
+  getObjectSize,
+  toNegative
 } from "../../utils/utilsFunctions.ts";
 
 import { diff } from "deep-diff";
+import { registerBillings } from "utils/billingFunctions.ts";
 
 export const getRoles = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
 
   // confirm user
-  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
 
   const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess, _id: selfRoleId } = roleId;
@@ -40,6 +43,15 @@ export const getRoles = asyncHandler(async (req: Request, res: Response) => {
     if (!roles) {
       throwError("Error fetching roles", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + roles.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([roles, organisation, role, account])
+      }
+    ]);
+
     res.status(201).json(roles);
     return;
   }
@@ -57,7 +69,7 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // confirm user
-  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
 
   const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess, _id: selfRoleId } = roleId;
@@ -112,21 +124,21 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
-  if (absoluteAdmin || hasAccess) {
-    const roles = await fetchRoles(
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      selfRoleId.toString()
-    );
-
-    if (!roles) {
-      throwError("Error fetching roles", 500);
+  registerBillings(req, [
+    { field: "databaseOperation", value: 5 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newRole) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newRole, organisation, role, account]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
-    res.status(201).json(roles);
-    return;
-  }
+  ]);
 
-  throwError("Unauthorised Action: You do not have access to view roles - Please contact your admin", 403);
+  res.status(201).json("successfull");
+  return;
 });
 
 // controller to handle role update
@@ -139,7 +151,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // confirm user
-  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
 
   const { roleId: creatorRoleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess, _id: selfRoleId } = creatorRoleId;
@@ -193,21 +205,17 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
-  if (absoluteAdmin || hasAccess) {
-    const roles = await fetchRoles(
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      selfRoleId.toString()
-    );
-
-    if (!roles) {
-      throwError("Error fetching roles", 500);
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedRole, organisation, role, account, originalRole]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
-    res.status(201).json(roles);
-    return;
-  }
-
-  throwError("Unauthorised Action: You do not have access to view roles - Please contact your admin", 403);
+  ]);
+  res.status(201).json("successfull");
+  return;
 });
 
 // controller to handle deleting roles
@@ -228,7 +236,7 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // confirm user
-  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
 
   const { roleId: creatorRoleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess, _id: selfRoleId } = creatorRoleId;
@@ -287,19 +295,22 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
-  if (absoluteAdmin || hasAccess) {
-    const roles = await fetchRoles(
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      selfRoleId.toString()
-    );
-
-    if (!roles) {
-      throwError("Error fetching roles", 500);
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: toNegative(getObjectSize(deletedRole) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedRole, organisation, role, account, originalRole]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
-    res.status(201).json(roles);
-    return;
-  }
-
-  throwError("Unauthorised Action: You do not have access to view roles - Please contact your admin", 403);
+  ]);
+  res.status(201).json("successfull");
+  return;
 });

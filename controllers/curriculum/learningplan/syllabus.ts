@@ -8,12 +8,15 @@ import {
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllSyllabuses
+  fetchAllSyllabuses,
+  getObjectSize,
+  toNegative
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
 import { Syllabus } from "../../../models/curriculum/syllabus";
+import { registerBillings } from "utils/billingFunctions";
 
 const validateSyllabus = (syllabusDataParam: any) => {
   const {
@@ -58,6 +61,13 @@ export const getAllSyllabuses = asyncHandler(async (req: Request, res: Response)
     if (!syllabusProfiles) {
       throwError("Error fetching syllabus", 500);
     }
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + syllabusProfiles.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([syllabusProfiles, organisation, role, account])
+      }
+    ]);
     res.status(201).json(syllabusProfiles);
     return;
   }
@@ -109,6 +119,13 @@ export const getSyllabuses = asyncHandler(async (req: Request, res: Response) =>
     if (!result || !result.syllabuses) {
       throwError("Error fetching syllabuses", 500);
     }
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.syllabuses.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
@@ -195,6 +212,20 @@ export const createSyllabus = asyncHandler(async (req: Request, res: Response) =
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newSyllabus) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newSyllabus, syllabusExists, organisation, role, account]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
@@ -280,6 +311,16 @@ export const updateSyllabus = asyncHandler(async (req: Request, res: Response) =
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedSyllabus, organisation, role, account, originalSyllabus]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
@@ -318,6 +359,7 @@ export const deleteSyllabus = asyncHandler(async (req: Request, res: Response) =
   }
 
   const deletedSyllabus = await Syllabus.findByIdAndDelete(syllabusToDelete?._id.toString());
+  
   if (!deletedSyllabus) {
     throwError("Error deleting syllabus - Please try again", 500);
   }
@@ -345,5 +387,22 @@ export const deleteSyllabus = asyncHandler(async (req: Request, res: Response) =
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: toNegative(getObjectSize(deletedSyllabus) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedSyllabus, organisation, role, account, syllabusToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });

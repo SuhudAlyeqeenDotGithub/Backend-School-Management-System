@@ -1,8 +1,8 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  confirmAccount,
-  confirmRole,
+  getObjectSize,
+  toNegative,
   throwError,
   generateSearchText,
   emitToOrganisation,
@@ -24,6 +24,7 @@ import { Level, LevelManager } from "../../models/curriculum/level.ts";
 import { StudentEnrollment } from "../../models/student/enrollment.ts";
 import { Staff } from "../../models/staff/profile.ts";
 import { Subject, SubjectTeacher } from "../../models/curriculum/subject.ts";
+import { registerBillings } from "utils/billingFunctions.ts";
 
 const validateStudentSubjectAttendance = (studentDataParam: any) => {
   const { notes, ...copyLocalData } = studentDataParam;
@@ -50,9 +51,6 @@ export const fetchSubjectAttendanceStore = asyncHandler(async (req: Request, res
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  // confirm role
-  await confirmRole(account!.roleId!._id.toString());
-
   const { roleId, accountStatus, studentId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
@@ -77,6 +75,14 @@ export const fetchSubjectAttendanceStore = asyncHandler(async (req: Request, res
     if (!result) {
       throwError("Error fetching relevant student subject attendance records", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
 
     res.status(201).json(result);
     return;
@@ -111,9 +117,6 @@ export const getEnrolledSubjectAttendanceStudents = asyncHandler(async (req: Req
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-
-  // confirm role
-  await confirmRole(account!.roleId!._id.toString());
 
   const { roleId, accountStatus, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
@@ -185,6 +188,21 @@ export const getEnrolledSubjectAttendanceStudents = asyncHandler(async (req: Req
       throwError("Error fetching relevant enrolled student records", 500);
     }
 
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 + result.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([
+          result,
+          courseManagerCustomStaffId,
+          levelManagerCustomStaffId,
+          subjectTeacherCustomStaffId,
+          organisation,
+          role,
+          account
+        ])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
@@ -222,9 +240,6 @@ export const getStudentSubjectAttendances = asyncHandler(async (req: Request, re
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-
-  // confirm role
-  await confirmRole(account!.roleId!._id.toString());
 
   const { roleId, staffId, studentId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
@@ -330,7 +345,7 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const { roleId, accountStatus, staffId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -363,68 +378,68 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
     );
   }
 
-  const academicYearExist = await AcademicYear.findOne({ organisationId: orgParsedId, academicYear });
-  if (!academicYearExist) {
+  const academicYearExists = await AcademicYear.findOne({ organisationId: orgParsedId, academicYear });
+  if (!academicYearExists) {
     throwError(
       "This academic year does not exist in this organisation - Ensure it has been created or has not been deleted",
       409
     );
   }
 
-  const courseExist = await Course.findOne({ organisationId: orgParsedId, courseCustomId });
-  if (!courseExist) {
+  const courseExists = await Course.findOne({ organisationId: orgParsedId, courseCustomId });
+  if (!courseExists) {
     throwError(
       "This course does not exist in this organisation - Ensure it has been created or has not been deleted",
       409
     );
   }
 
-  const levelExist = await Level.findOne({ organisationId: orgParsedId, levelCustomId });
-  if (!levelExist) {
+  const levelExists = await Level.findOne({ organisationId: orgParsedId, levelCustomId });
+  if (!levelExists) {
     throwError(
       "This level does not exist in this organisation - Ensure it has been created or has not been deleted",
       409
     );
   }
 
-  const subjectExist = await Subject.findOne({ organisationId: orgParsedId, subjectCustomId });
-  if (!subjectExist) {
+  const subjectExists = await Subject.findOne({ organisationId: orgParsedId, subjectCustomId });
+  if (!subjectExists) {
     throwError(
       "This subject does not exist in this organisation - Ensure it has been created or has not been deleted",
       409
     );
   }
 
-  const courseManagerExist = await CourseManager.findOne({
+  const courseManagerExists = await CourseManager.findOne({
     organisationId: orgParsedId,
     courseId,
     courseManagerCustomStaffId
   });
-  if (!courseManagerExist) {
+  if (!courseManagerExists) {
     throwError(
       "This course manager does not have a management record related to this course- Ensure you have created one for them",
       409
     );
   }
 
-  const levelManagerExist = await LevelManager.findOne({
+  const levelManagerExists = await LevelManager.findOne({
     organisationId: orgParsedId,
     levelId,
     levelManagerCustomStaffId
   });
-  if (!levelManagerExist) {
+  if (!levelManagerExists) {
     throwError(
       "This level manager does not have a management record related to this level- Ensure you have created one for them",
       409
     );
   }
 
-  const subjectTeacherExist = await SubjectTeacher.findOne({
+  const subjectTeacherExists = await SubjectTeacher.findOne({
     organisationId: orgParsedId,
     subjectId,
     subjectTeacherCustomStaffId
   });
-  if (!subjectTeacherExist) {
+  if (!subjectTeacherExists) {
     throwError(
       "This subject teacher does not have a teaching record related to this subject- Ensure you have created one for them",
       409
@@ -485,8 +500,11 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
     );
   }
 
+  let mappedAttendances: any = [];
+  let studentAttendances;
+
   if (studentSubjectAttendances.length > 0) {
-    const mappedAttendances = studentSubjectAttendances.map((studentSubjectAttendance: any) => ({
+    mappedAttendances = studentSubjectAttendances.map((studentSubjectAttendance: any) => ({
       ...studentSubjectAttendance,
       organisationId: orgParsedId,
       attendanceCustomId,
@@ -504,14 +522,42 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
       studentCustomId: studentSubjectAttendance.studentCustomId,
       studentFullName: studentSubjectAttendance.studentFullName
     }));
-    const studentAttendancess = await StudentSubjectAttendanceStore.insertMany(mappedAttendances, { ordered: true });
-    if (!studentAttendancess) {
+    studentAttendances = await StudentSubjectAttendanceStore.insertMany(mappedAttendances, { ordered: true });
+    if (!studentAttendances) {
       throwError(
         "Error creating student subject attendance - However the student subject attendance template was created - close this dialog and try again by editing the created template",
         500
       );
     }
   }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 13 + (logActivityAllowed ? 2 : 0) + mappedAttendances.length * 2 },
+    {
+      field: "databaseStorageAndBackup",
+      value:
+        (getObjectSize([attendance, studentAttendances]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([
+          mappedAttendances,
+          attendance,
+          attendanceExists,
+          levelManagerExists,
+          courseManagerExists,
+          levelExists,
+          courseExists,
+          academicYearExists,
+          subjectExists,
+          subjectTeacherExists,
+          organisation,
+          role,
+          account
+        ]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
 
   res.status(201).json("successful");
 });
@@ -613,44 +659,44 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
     );
   }
 
-  const subjectExist = await Subject.findOne({ organisationId: orgParsedId, subjectCustomId });
-  if (!subjectExist) {
+  const subjectExists = await Subject.findOne({ organisationId: orgParsedId, subjectCustomId });
+  if (!subjectExists) {
     throwError(
       "This subject does not exist in this organisation - Ensure it has been created or has not been deleted",
       409
     );
   }
 
-  const courseManagerExist = await CourseManager.findOne({
+  const courseManagerExists = await CourseManager.findOne({
     organisationId: orgParsedId,
     courseId,
     courseManagerCustomStaffId
   });
-  if (!courseManagerExist) {
+  if (!courseManagerExists) {
     throwError(
       "This course manager does not have a management record related to this course- Ensure you have created one for them",
       409
     );
   }
 
-  const levelManagerExist = await LevelManager.findOne({
+  const levelManagerExists = await LevelManager.findOne({
     organisationId: orgParsedId,
     levelId,
     levelManagerCustomStaffId
   });
-  if (!levelManagerExist) {
+  if (!levelManagerExists) {
     throwError(
       "This level manager does not have a management record related to this level- Ensure you have created one for them",
       409
     );
   }
 
-  const subjectTeacherExist = await SubjectTeacher.findOne({
+  const subjectTeacherExists = await SubjectTeacher.findOne({
     organisationId: orgParsedId,
     subjectId,
     subjectTeacherCustomStaffId
   });
-  if (!subjectTeacherExist) {
+  if (!subjectTeacherExists) {
     throwError(
       "This subject teacher does not have a teaching record related to this subject- Ensure you have created one for them",
       409
@@ -710,8 +756,11 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
     );
   }
 
+  let mappedAttendances: any = [];
+  let studentAttendances;
+
   if (studentSubjectAttendances.length > 0) {
-    const mappedAttendances = studentSubjectAttendances.map((studentSubjectAttendance: any) =>
+    mappedAttendances = studentSubjectAttendances.map((studentSubjectAttendance: any) =>
       studentSubjectAttendance._id && studentSubjectAttendance.organisationId
         ? studentSubjectAttendance
         : {
@@ -751,8 +800,8 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
         }
       };
     });
-    const studentAttendancess = await StudentSubjectAttendanceStore.bulkWrite(bulkUpdates, { ordered: true });
-    if (!studentAttendancess) {
+    studentAttendances = await StudentSubjectAttendanceStore.bulkWrite(bulkUpdates, { ordered: true });
+    if (!studentAttendances) {
       throwError(
         "Error updating student subject attendances - However the student subject attendance template was updated - close this dialog and try again by editing the created template",
         500
@@ -760,12 +809,35 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
     }
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 13 + (logActivityAllowed ? 2 : 0) + mappedAttendances.length * 2 },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([
+          mappedAttendances,
+          updatedStudentSubjectAttendance,
+          attendanceExists,
+          levelManagerExists,
+          courseManagerExists,
+          levelExists,
+          courseExists,
+          academicYearExists,
+          subjectExists,
+          subjectTeacherExists,
+          organisation,
+          role,
+          account
+        ]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successful");
 });
 
 // controller to handle deleting roles
 export const deleteStudentSubjectAttendance = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { studentSubjectAttendanceIDToDelete } = req.body;
   if (!studentSubjectAttendanceIDToDelete) {
     throwError("Unknown delete request - Please try again", 400);
@@ -773,7 +845,7 @@ export const deleteStudentSubjectAttendance = asyncHandler(async (req: Request, 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -840,6 +912,40 @@ export const deleteStudentSubjectAttendance = asyncHandler(async (req: Request, 
       new Date()
     );
   }
+
+  let oneRecordSize = 0.0000006;
+
+  const foundRecord = await StudentSubjectAttendanceStore.findOne({ attendanceId: studentSubjectAttendanceIDToDelete });
+
+  if (foundRecord) {
+    oneRecordSize = getObjectSize(foundRecord);
+  }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 7 + (logActivityAllowed ? 2 : 0) + deletedStudentSubjectAttendanceStore.deletedCount * 2
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value:
+        toNegative(getObjectSize(deletedStudentSubjectAttendance) * 2) +
+        toNegative(getObjectSize(oneRecordSize) * deletedStudentSubjectAttendanceStore.deletedCount * 2) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([
+          deletedStudentSubjectAttendance,
+          organisation,
+          role,
+          foundRecord,
+          account,
+          StudentSubjectAttendanceToDelete
+        ]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
 
   res.status(201).json("successful");
 });

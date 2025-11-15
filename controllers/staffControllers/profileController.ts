@@ -2,24 +2,24 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { Account } from "../../models/admin/accountModel.ts";
 import {
-  confirmAccount,
-  confirmRole,
+  getObjectSize,
+  toNegative,
   throwError,
   generateSearchText,
   fetchStaffProfiles,
-  generateCustomId,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
+  fetchAllStaffProfiles,
   validateEmail,
-  validatePhoneNumber,
-  fetchAllStaffProfiles
+  validatePhoneNumber
 } from "../../utils/utilsFunctions.ts";
 import { logActivity } from "../../utils/utilsFunctions.ts";
 import { diff } from "deep-diff";
 
 import { Staff } from "../../models/staff/profile.ts";
+import { registerBillings } from "utils/billingFunctions.ts";
 
 const validateStaffProfile = (staffDataParam: any) => {
   const {
@@ -55,10 +55,10 @@ const validateStaffProfile = (staffDataParam: any) => {
 };
 
 export const getAllStaffProfiles = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus, staffId } = account as any;
+  const { roleId, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -79,6 +79,14 @@ export const getAllStaffProfiles = asyncHandler(async (req: Request, res: Respon
     if (!staffProfiles) {
       throwError("Error fetching staff profiles", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + staffProfiles.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([staffProfiles, organisation, role, account])
+      }
+    ]);
     res.status(201).json(staffProfiles);
     return;
   }
@@ -113,7 +121,7 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
     }
   }
 
-  const { roleId, accountStatus, staffId } = account as any;
+  const { roleId, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -137,6 +145,14 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
     if (!result || !result.staffProfiles) {
       throwError("Error fetching staff profiles", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.staffProfiles.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
@@ -153,25 +169,9 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
     staffFullName,
     staffDateOfBirth,
     staffGender,
-    staffPhone,
     staffEmail,
-    staffAddress,
-    staffPostCode,
-    staffImageUrl,
-    imageLocalDestination,
-    staffMaritalStatus,
-    staffStartDate,
-    staffEndDate,
     staffNationality,
-    staffAllergies,
-    staffNextOfKinName,
-    staffNextOfKinRelationship,
-    staffNextOfKinPhone,
-    staffNextOfKinEmail,
-    staffQualification,
-    workExperience,
-    identification,
-    skills
+    staffNextOfKinName
   } = body;
 
   if (!validateStaffProfile(body)) {
@@ -182,7 +182,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const { roleId, accountStatus, accountName, staffId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -249,37 +249,35 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newStaff) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newStaff, usedEmail, staffExists, organisation, role, account]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
 // controller to handle role update
 export const updateStaffProfile = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
   const {
     staffCustomId,
     staffFullName,
     staffDateOfBirth,
     staffGender,
-    staffPhone,
     staffEmail,
-    staffAddress,
-    staffPostCode,
-    staffImageUrl,
-    imageLocalDestination,
-    staffMaritalStatus,
-    staffStartDate,
-    staffEndDate,
     staffNationality,
-    staffAllergies,
-    staffNextOfKinName,
-    staffNextOfKinRelationship,
-    staffNextOfKinPhone,
-    staffNextOfKinEmail,
-    staffQualification,
-    workExperience,
-    identification,
-    skills
+    staffNextOfKinName
   } = body;
 
   if (!validateStaffProfile(body)) {
@@ -291,7 +289,7 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
   // confirm organisation
   const orgParsedId = account!.organisationId!.toString();
 
-  const { roleId, accountStatus, staffId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -350,12 +348,22 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedStaff, organisation, role, account, originalStaff]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
 // controller to handle deleting roles
 export const deleteStaffProfile = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { staffIDToDelete } = req.body;
   if (!staffIDToDelete) {
     throwError("Unknown delete request - Please try again", 400);
@@ -363,7 +371,7 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
 
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
@@ -422,5 +430,22 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: toNegative(getObjectSize(deletedStaffProfile) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedStaffProfile, organisation, role, account, staffProfileToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });

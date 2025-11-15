@@ -4,19 +4,19 @@ import {
   throwError,
   generateSearchText,
   fetchCourseManagers,
-  generateCustomId,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  validateEmail,
-  validatePhoneNumber,
-  fetchAllCourseManagers
+  fetchAllCourseManagers,
+  getObjectSize,
+  toNegative
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 import { StaffContract } from "../../../models/staff/contracts";
 import { CourseManager } from "../../../models/curriculum/course";
+import { registerBillings } from "utils/billingFunctions";
 
 const validateCourseManager = (courseManagerDataParam: any) => {
   const { managedUntil, _id, ...copyLocalData } = courseManagerDataParam;
@@ -32,10 +32,10 @@ const validateCourseManager = (courseManagerDataParam: any) => {
 };
 
 export const getAllCourseManagers = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus, courseId, staffId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -52,6 +52,14 @@ export const getAllCourseManagers = asyncHandler(async (req: Request, res: Respo
     if (!result) {
       throwError("Error fetching course managers", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
@@ -110,6 +118,14 @@ export const getCourseManagers = asyncHandler(async (req: Request, res: Response
     if (!result || !result.courseManagers) {
       throwError("Error fetching course managers", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.courseManagers.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
@@ -136,8 +152,9 @@ export const createCourseManager = asyncHandler(async (req: Request, res: Respon
     throwError("The staff has no contract with this organisation - Please create one for them", 409);
   }
 
+  let courseAlreadyManaged;
   if (status === "Active") {
-    const courseAlreadyManaged = await CourseManager.findOne({
+    courseAlreadyManaged = await CourseManager.findOne({
       organisationId: orgParsedId,
       courseId,
       courseManagerCustomStaffId,
@@ -192,6 +209,24 @@ export const createCourseManager = asyncHandler(async (req: Request, res: Respon
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0) + (status === "Active" ? 1 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newCourseManager) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newCourseManager, staffHasContract, organisation, role, account]) +
+        (status === "Active" ? getObjectSize(courseAlreadyManaged) : 0) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
 
   res.status(201).json("successfull");
 });
@@ -267,6 +302,16 @@ export const updateCourseManager = asyncHandler(async (req: Request, res: Respon
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedCourseManager, organisation, role, account, originalCourseManager]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
@@ -331,5 +376,22 @@ export const deleteCourseManager = asyncHandler(async (req: Request, res: Respon
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: toNegative(getObjectSize(deletedCourseManager) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedCourseManager, organisation, role, account, courseManagerToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });

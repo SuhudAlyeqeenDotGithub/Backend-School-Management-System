@@ -9,7 +9,7 @@ const studentSchema = new Schema(
     studentDateOfBirth: { type: String, required: true },
     studentGender: { type: String, required: true },
     studentPhone: { type: String, required: true },
-    studentEmail: { type: String, unique: true, required: true, index: true },
+    studentEmail: { type: String, required: true, index: true },
     studentAddress: { type: String, required: true },
     studentPostCode: { type: String },
     studentImageUrl: { type: String },

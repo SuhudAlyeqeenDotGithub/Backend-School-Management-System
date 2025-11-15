@@ -4,18 +4,18 @@ import {
   throwError,
   generateSearchText,
   fetchProgrammeManagers,
-  generateCustomId,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  validateEmail,
-  validatePhoneNumber
+  getObjectSize,
+  toNegative
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 import { StaffContract } from "../../../models/staff/contracts";
 import { ProgrammeManager } from "../../../models/curriculum/programme";
+import { registerBillings } from "utils/billingFunctions";
 
 const validateProgrammeManager = (programmeManagerDataParam: any) => {
   const { managedUntil, _id, ...copyLocalData } = programmeManagerDataParam;
@@ -81,6 +81,14 @@ export const getProgrammeManagers = asyncHandler(async (req: Request, res: Respo
     if (!result || !result.programmeManagers) {
       throwError("Error fetching programme managers", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.programmeManagers.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
@@ -114,8 +122,10 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
     throwError("The staff has no contract with this organisation - Please create one for them", 409);
   }
 
+  let programmeAlreadyManaged;
+
   if (status === "Active") {
-    const programmeAlreadyManaged = await ProgrammeManager.findOne({
+    programmeAlreadyManaged = await ProgrammeManager.findOne({
       organisationId: orgParsedId,
       programmeId,
       programmeManagerCustomStaffId,
@@ -178,6 +188,24 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 5 + (logActivityAllowed ? 2 : 0) + (status === "Active" ? 1 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newProgrammeManager) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newProgrammeManager, staffHasContract, organisation, role, account]) +
+        (status === "Active" ? getObjectSize(programmeAlreadyManaged) : 0) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
 
   res.status(201).json("successfull");
 });
@@ -263,6 +291,15 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedProgrammeManager, organisation, role, account, originalProgrammeManager]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });
 
@@ -330,5 +367,23 @@ export const deleteProgrammeManager = asyncHandler(async (req: Request, res: Res
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value:
+        toNegative(getObjectSize(deletedProgrammeManager) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedProgrammeManager, organisation, role, account, programmeManagerToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });

@@ -2,24 +2,22 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { Account } from "../../../models/admin/accountModel";
 import {
-  confirmAccount,
-  confirmRole,
+  getObjectSize,
+  toNegative,
   throwError,
   generateSearchText,
   fetchProgrammes,
-  generateCustomId,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  validateEmail,
-  validatePhoneNumber,
   fetchAllProgrammes
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
 import { Programme } from "../../../models/curriculum/programme";
+import { registerBillings } from "utils/billingFunctions";
 
 const validateProgramme = (programmeDataParam: any) => {
   const { description, programmeDuration, ...copyLocalData } = programmeDataParam;
@@ -35,10 +33,10 @@ const validateProgramme = (programmeDataParam: any) => {
 };
 
 export const getAllProgrammes = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus, programmeId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -55,6 +53,14 @@ export const getAllProgrammes = asyncHandler(async (req: Request, res: Response)
     if (!programmeProfiles) {
       throwError("Error fetching programme", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + programmeProfiles.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([programmeProfiles, organisation, role, account])
+      }
+    ]);
     res.status(201).json(programmeProfiles);
     return;
   }
@@ -64,7 +70,7 @@ export const getAllProgrammes = asyncHandler(async (req: Request, res: Response)
 
 export const getProgrammes = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
-  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const { account, organisation } = await confirmUserOrgRole(accountId);
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
@@ -89,7 +95,7 @@ export const getProgrammes = asyncHandler(async (req: Request, res: Response) =>
     }
   }
 
-  const { roleId, accountStatus, programmeId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -177,12 +183,29 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
     );
   }
 
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newProgramme) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newProgramme, programmeExists, organisation, role, account]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
 // controller to handle role update
 export const updateProgramme = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
   const { programmeCustomId, programmeName } = body;
 
@@ -245,6 +268,16 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
       new Date()
     );
   }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedProgramme, organisation, role, account, originalProgramme]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
 
   res.status(201).json("successfull");
 });
@@ -311,5 +344,22 @@ export const deleteProgramme = asyncHandler(async (req: Request, res: Response) 
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: toNegative(getObjectSize(deletedProgramme) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedProgramme, organisation, role, account, programmeToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });

@@ -2,18 +2,16 @@ import { Request, Response } from "express";
 import asyncHandler from "express-async-handler";
 
 import {
-  confirmAccount,
-  confirmRole,
   throwError,
   generateSearchText,
   fetchAcademicYears,
   emitToOrganisation,
   logActivity,
-  getObjectSize,
   toNegative,
   confirmUserOrgRole,
   checkOrgAndUserActiveness,
-  checkAccess
+  checkAccess,
+  getObjectSize
 } from "../../utils/utilsFunctions.ts";
 
 import { diff } from "deep-diff";
@@ -157,11 +155,17 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 1 : 0) + createdPeriods?.length * 2 },
-    { field: "databaseStorageAndBackup", value: getObjectSize([newAcademicYear, activityLog, createdPeriods]) * 2 },
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) + createdPeriods?.length * 2 },
+    {
+      field: "databaseStorageAndBackup",
+      value:
+        getObjectSize([newAcademicYear, createdPeriods]) + (logActivityAllowed ? getObjectSize(activityLog) : 0) * 2
+    },
     {
       field: "databaseDataTransfer",
-      value: getObjectSize([newAcademicYear, organisation, role, account, yearNameExists, activityLog, createdPeriods])
+      value:
+        getObjectSize([newAcademicYear, organisation, role, account, yearNameExists, createdPeriods]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
 
@@ -232,10 +236,12 @@ export const updateAcademicYear = asyncHandler(async (req: Request, res: Respons
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 1 : 0) },
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value: getObjectSize([updatedAcademicYear, organisation, role, account, originalAcademicYear, activityLog])
+      value:
+        getObjectSize([updatedAcademicYear, organisation, role, account, originalAcademicYear]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
 
@@ -303,18 +309,30 @@ export const deleteAcademicYear = asyncHandler(async (req: Request, res: Respons
     );
   }
 
+  let oneRecordSize = 0.0000003;
+
+  const foundRecord = await Period.findOne({ academicYearId: academicYearIdToDelete });
+
+  if (foundRecord) {
+    oneRecordSize = getObjectSize(foundRecord);
+  }
   registerBillings(req, [
     {
       field: "databaseOperation",
-      value: 6 + (logActivityAllowed ? 1 : 0) + deletedAcademicYearPeriods.deletedCount
+      value: 6 + (logActivityAllowed ? 2 : 0) + deletedAcademicYearPeriods.deletedCount
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedAcademicYear) * 2) + getObjectSize(activityLog) * 2
+      value:
+        toNegative(getObjectSize(deletedAcademicYear) * 2) +
+        toNegative(getObjectSize(oneRecordSize) * deletedAcademicYearPeriods.deletedCount * 2) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
     },
     {
       field: "databaseDataTransfer",
-      value: getObjectSize([deletedAcademicYear, organisation, role, account, academicYearIdToDelete])
+      value:
+        getObjectSize([deletedAcademicYear, oneRecordSize, organisation, role, account, academicYearIdToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
 

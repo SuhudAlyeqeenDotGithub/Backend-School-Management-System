@@ -1,8 +1,8 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  confirmAccount,
-  confirmRole,
+  getObjectSize,
+  toNegative,
   throwError,
   generateSearchText,
   fetchStaffContracts,
@@ -18,6 +18,7 @@ import { diff } from "deep-diff";
 import { Staff } from "../../models/staff/profile.ts";
 import { StaffContract } from "../../models/staff/contracts.ts";
 import { AcademicYear } from "../../models/timeline/academicYear.ts";
+import { registerBillings } from "utils/billingFunctions.ts";
 
 const validateStaffContract = (staffDataParam: any) => {
   const {
@@ -73,10 +74,7 @@ export const getStaffContracts = asyncHandler(async (req: Request, res: Response
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  // confirm role
-  await confirmRole(account!.roleId!._id.toString());
-
-  const { roleId, accountStatus, staffId } = account as any;
+  const { roleId, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -100,7 +98,14 @@ export const getStaffContracts = asyncHandler(async (req: Request, res: Response
     if (!result || !result.staffContracts) {
       throwError("Error fetching staff contracts", 500);
     }
-    deleteStaffContract;
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.staffContracts.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
 
     res.status(201).json(result);
     return;
@@ -110,15 +115,12 @@ export const getStaffContracts = asyncHandler(async (req: Request, res: Response
 });
 
 export const getAllStaffContracts = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  // confirm role
-  await confirmRole(account!.roleId!._id.toString());
-
-  const { roleId, accountStatus, staffId } = account as any;
+  const { roleId, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -139,8 +141,14 @@ export const getAllStaffContracts = asyncHandler(async (req: Request, res: Respo
     if (!staffContracts) {
       throwError("Error fetching staff contracts", 500);
     }
-    deleteStaffContract;
 
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + staffContracts.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([staffContracts, organisation, role, account])
+      }
+    ]);
     res.status(201).json(staffContracts);
     return;
   }
@@ -149,7 +157,7 @@ export const getAllStaffContracts = asyncHandler(async (req: Request, res: Respo
 });
 // controller to handle role creation
 export const createStaffContract = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const {
     academicYearId,
     academicYear,
@@ -172,7 +180,7 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const { roleId, accountStatus, staffId: userStaffId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -254,6 +262,20 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newStaffContract) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newStaffContract, academicYearExists, staffExists, organisation, role, account]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successful");
 });
 
@@ -263,17 +285,13 @@ export const updateStaffContract = asyncHandler(async (req: Request, res: Respon
   const {
     academicYearId,
     academicYear,
-    staffId,
     staffCustomId,
     staffFullName,
     jobTitle,
     contractStartDate,
     contractEndDate,
-    responsibilities,
     contractType,
-    contractStatus,
-    contractSalary,
-    workingSchedule
+    contractStatus
   } = req.body;
 
   if (!validateStaffContract({ ...req.body })) {
@@ -355,6 +373,16 @@ export const updateStaffContract = asyncHandler(async (req: Request, res: Respon
       new Date()
     );
   }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedStaffContract, academicYearExists, organisation, role, account, originalStaff]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successful");
 });
 
@@ -417,6 +445,23 @@ export const deleteStaffContract = asyncHandler(async (req: Request, res: Respon
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: toNegative(getObjectSize(deletedStaffContract) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedStaffContract, organisation, role, account, StaffContractToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
 
   res.status(201).json("successful");
 });

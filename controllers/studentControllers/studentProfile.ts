@@ -2,24 +2,24 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { Account } from "../../models/admin/accountModel";
 import {
-  confirmAccount,
-  confirmRole,
+  getObjectSize,
+  toNegative,
   throwError,
   generateSearchText,
   fetchStudentProfiles,
-  generateCustomId,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
+  fetchAllStudentProfiles,
   validateEmail,
-  validatePhoneNumber,
-  fetchAllStudentProfiles
+  validatePhoneNumber
 } from "../../utils/utilsFunctions";
 import { logActivity } from "../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
 import { Student } from "../../models/student/studentProfile";
+import { registerBillings } from "utils/billingFunctions";
 
 const validateStudentProfile = (studentDataParam: any) => {
   const {
@@ -29,20 +29,12 @@ const validateStudentProfile = (studentDataParam: any) => {
     workExperience,
     identification,
     skills,
+    studentEmail,
+    studentPhone,
     studentPostCode,
     studentEndDate,
     ...copyLocalData
   } = studentDataParam;
-
-  if (!validateEmail(studentDataParam.studentEmail)) {
-    throwError("Please enter a valid email address.", 400);
-    return;
-  }
-
-  if (!validatePhoneNumber(studentDataParam.studentPhone)) {
-    throwError("Please enter a valid phone number with the country code. e.g +234, +447", 400);
-    return;
-  }
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -55,10 +47,10 @@ const validateStudentProfile = (studentDataParam: any) => {
 };
 
 export const getAllStudentProfiles = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus, studentId } = account as any;
+  const { roleId, studentId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -79,6 +71,14 @@ export const getAllStudentProfiles = asyncHandler(async (req: Request, res: Resp
     if (!studentProfiles) {
       throwError("Error fetching student profiles", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + studentProfiles.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([studentProfiles, organisation, role, account])
+      }
+    ]);
     res.status(201).json(studentProfiles);
     return;
   }
@@ -113,7 +113,7 @@ export const getStudentProfiles = asyncHandler(async (req: Request, res: Respons
     }
   }
 
-  const { roleId, accountStatus, studentId } = account as any;
+  const { roleId, studentId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -137,6 +137,14 @@ export const getStudentProfiles = asyncHandler(async (req: Request, res: Respons
     if (!result || !result.studentProfiles) {
       throwError("Error fetching student profiles", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.studentProfiles.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
@@ -153,25 +161,9 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
     studentFullName,
     studentDateOfBirth,
     studentGender,
-    studentPhone,
     studentEmail,
-    studentAddress,
-    studentPostCode,
-    studentImageUrl,
-    imageLocalDestination,
-    studentMaritalStatus,
-    studentStartDate,
-    studentEndDate,
     studentNationality,
-    studentAllergies,
-    studentNextOfKinName,
-    studentNextOfKinRelationship,
-    studentNextOfKinPhone,
-    studentNextOfKinEmail,
-    studentQualification,
-    workExperience,
-    identification,
-    skills
+    studentNextOfKinName
   } = body;
 
   if (!validateStudentProfile(body)) {
@@ -182,7 +174,7 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const { roleId, accountStatus, accountName, studentId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -195,11 +187,6 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
 
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to create student - Please contact your admin", 403);
-  }
-
-  const usedEmail = await Account.findOne({ studentEmail, organisationId: orgParsedId });
-  if (usedEmail) {
-    throwError("This email is already in use by another student member - Please use a different email", 409);
   }
 
   const studentExists = await Student.findOne({ organisationId: orgParsedId, studentCustomId });
@@ -249,37 +236,35 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newStudent) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newStudent, studentExists, organisation, role, account]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
 // controller to handle role update
 export const updateStudentProfile = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
   const {
     studentCustomId,
     studentFullName,
     studentDateOfBirth,
     studentGender,
-    studentPhone,
     studentEmail,
-    studentAddress,
-    studentPostCode,
-    studentImageUrl,
-    imageLocalDestination,
-    studentMaritalStatus,
-    studentStartDate,
-    studentEndDate,
     studentNationality,
-    studentAllergies,
-    studentNextOfKinName,
-    studentNextOfKinRelationship,
-    studentNextOfKinPhone,
-    studentNextOfKinEmail,
-    studentQualification,
-    workExperience,
-    identification,
-    skills
+    studentNextOfKinName
   } = body;
 
   if (!validateStudentProfile(body)) {
@@ -291,7 +276,7 @@ export const updateStudentProfile = asyncHandler(async (req: Request, res: Respo
   // confirm organisation
   const orgParsedId = account!.organisationId!.toString();
 
-  const { roleId, accountStatus, studentId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -350,12 +335,21 @@ export const updateStudentProfile = asyncHandler(async (req: Request, res: Respo
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedStudent, organisation, role, account, originalStudent]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });
 
 // controller to handle deleting roles
 export const deleteStudentProfile = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { studentIDToDelete } = req.body;
   if (!studentIDToDelete) {
     throwError("Unknown delete request - Please try again", 400);
@@ -363,7 +357,7 @@ export const deleteStudentProfile = asyncHandler(async (req: Request, res: Respo
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
 
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
@@ -425,5 +419,23 @@ export const deleteStudentProfile = asyncHandler(async (req: Request, res: Respo
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value:
+        toNegative(getObjectSize(deletedStudentProfile) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedStudentProfile, organisation, role, account, studentProfileToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });

@@ -5,13 +5,13 @@ import {
   checkOrgAndUserActiveness,
   checkAccess,
   confirmUserOrgRole,
-  fetchActivityLogs,
+  fetchBillings,
   getObjectSize
 } from "../../utils/utilsFunctions.ts";
-import { ActivityLog } from "../../models/admin/activityLogModel.ts";
+import { Subscription } from "../../models/admin/subscription.ts";
 import { registerBillings } from "utils/billingFunctions.ts";
 
-export const getActivityLogs = asyncHandler(async (req: Request, res: Response) => {
+export const getBillings = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
 
   // confirm user
@@ -53,7 +53,6 @@ export const getActivityLogs = asyncHandler(async (req: Request, res: Response) 
       query._id = { $gt: prevCursor };
     }
   }
-
   const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
@@ -63,31 +62,30 @@ export const getActivityLogs = asyncHandler(async (req: Request, res: Response) 
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, tabAccess, "View Activity Logs");
+  const hasAccess = checkAccess(account, tabAccess, "View Billings");
 
   if (absoluteAdmin || hasAccess) {
-    const result = await fetchActivityLogs(query, cursorType as string, parsedLimit, organisation!._id.toString());
+    const result = await fetchBillings(query, cursorType as string, parsedLimit, organisation!._id.toString());
 
-    if (!result || !result.activityLogs) {
-      throwError("Error fetching activity logs", 500);
+    if (!result || !result.billings) {
+      throwError("Error fetching billings", 500);
     }
 
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + result.activityLogs.length },
+      { field: "databaseOperation", value: 3 + result.billings.length },
       {
         field: "databaseDataTransfer",
-        value: getObjectSize([result, account, role, organisation])
+        value: getObjectSize([result, organisation, role, account])
       }
     ]);
-
     res.status(201).json(result);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view activity logs - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view billings - Please contact your admin", 403);
 });
 
-export const getLastActivityLog = asyncHandler(async (req: Request, res: Response) => {
+export const getSubscription = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
 
   // confirm user
@@ -102,28 +100,24 @@ export const getLastActivityLog = asyncHandler(async (req: Request, res: Respons
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, tabAccess, "View Activity Logs");
+  const hasAccess = checkAccess(account, tabAccess, "View Subscriptions");
 
   if (absoluteAdmin || hasAccess) {
-    const activityLog = await ActivityLog.findOne()
-      .sort({ _id: -1 })
-      .limit(1)
-      .populate([{ path: "accountId", populate: [{ path: "staffId" }, { path: "roleId" }] }, { path: "recordId" }]);
-
-    if (!activityLog) {
-      throwError("Error fetching activity Logs - Refresh manually to see latest logs", 500);
+    const subscription = await Subscription.findOne({ organisationId: userTokenOrgId });
+    if (!subscription) {
+      throwError("Error fetching subscription", 500);
     }
 
     registerBillings(req, [
-      { field: "databaseOperation", value: 5 },
+      { field: "databaseOperation", value: 4 },
       {
         field: "databaseDataTransfer",
-        value: getObjectSize([activityLog, account, role, organisation])
+        value: getObjectSize([subscription, organisation, role, account])
       }
     ]);
-    res.status(201).json(activityLog);
+    res.status(201).json(subscription);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view activity logs - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view billings - Please contact your admin", 403);
 });

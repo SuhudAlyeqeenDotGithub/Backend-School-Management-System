@@ -8,12 +8,15 @@ import {
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllTopics
+  fetchAllTopics,
+  getObjectSize,
+  toNegative
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
 import { Topic } from "../../../models/curriculum/topic";
+import { registerBillings } from "utils/billingFunctions";
 
 const validateTopic = (topicDataParam: any) => {
   const {
@@ -58,6 +61,14 @@ export const getAllTopics = asyncHandler(async (req: Request, res: Response) => 
     if (!topicProfiles) {
       throwError("Error fetching topic", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + topicProfiles.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([topicProfiles, organisation, role, account])
+      }
+    ]);
     res.status(201).json(topicProfiles);
     return;
   }
@@ -109,6 +120,14 @@ export const getTopics = asyncHandler(async (req: Request, res: Response) => {
     if (!result || !result.topics) {
       throwError("Error fetching topics", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.topics.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
@@ -180,6 +199,19 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newTopic) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newTopic, organisation, role, account]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
@@ -249,6 +281,16 @@ export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedTopic, organisation, role, account, originalTopic]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
@@ -314,5 +356,22 @@ export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: toNegative(getObjectSize(deletedTopic) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedTopic, organisation, role, account, topicToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });

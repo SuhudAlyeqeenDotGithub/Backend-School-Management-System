@@ -1,25 +1,22 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { Account } from "../../../models/admin/accountModel";
 import {
-  confirmAccount,
-  confirmRole,
+  getObjectSize,
+  toNegative,
   throwError,
   generateSearchText,
   fetchBaseSubjects,
-  generateCustomId,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  validateEmail,
-  validatePhoneNumber,
   fetchAllBaseSubjects
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
 import { BaseSubject } from "../../../models/curriculum/basesubject";
+import { registerBillings } from "utils/billingFunctions";
 
 const validateBaseSubject = (baseSubjectDataParam: any) => {
   const { description, ...copyLocalData } = baseSubjectDataParam;
@@ -38,7 +35,7 @@ export const getAllBaseSubjects = asyncHandler(async (req: Request, res: Respons
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus, baseSubjectId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -50,12 +47,19 @@ export const getAllBaseSubjects = asyncHandler(async (req: Request, res: Respons
   const hasAccess = checkAccess(account, tabAccess, "View Base Subjects");
 
   if (absoluteAdmin || hasAccess) {
-    const baseSubjectProfiles = await fetchAllBaseSubjects(organisation!._id.toString());
+    const baseSubjects = await fetchAllBaseSubjects(organisation!._id.toString());
 
-    if (!baseSubjectProfiles) {
+    if (!baseSubjects) {
       throwError("Error fetching base subject profiles", 500);
     }
-    res.status(201).json(baseSubjectProfiles);
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + baseSubjects.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([baseSubjects, organisation, role, account])
+      }
+    ]);
+    res.status(201).json(baseSubjects);
     return;
   }
 
@@ -92,7 +96,7 @@ export const getBaseSubjects = asyncHandler(async (req: Request, res: Response) 
     }
   }
 
-  const { roleId, accountStatus, baseSubjectId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -109,6 +113,14 @@ export const getBaseSubjects = asyncHandler(async (req: Request, res: Response) 
     if (!result || !result.baseSubjects) {
       throwError("Error fetching base subjects", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.baseSubjects.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
@@ -183,6 +195,20 @@ export const createBaseSubject = asyncHandler(async (req: Request, res: Response
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newBaseSubject) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newBaseSubject, organisation, role, account]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
@@ -252,6 +278,16 @@ export const updateBaseSubject = asyncHandler(async (req: Request, res: Response
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedBaseSubject, organisation, role, account, originalBaseSubject]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
@@ -320,5 +356,24 @@ export const deleteBaseSubject = asyncHandler(async (req: Request, res: Response
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value:
+        toNegative(getObjectSize(deletedBaseSubject) * 2) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedBaseSubject, organisation, role, account, baseSubjectToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });

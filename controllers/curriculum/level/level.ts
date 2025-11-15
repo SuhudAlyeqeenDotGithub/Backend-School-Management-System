@@ -2,18 +2,15 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { Account } from "../../../models/admin/accountModel";
 import {
-  confirmAccount,
-  confirmRole,
+  getObjectSize,
+  toNegative,
   throwError,
   generateSearchText,
   fetchLevels,
-  generateCustomId,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  validateEmail,
-  validatePhoneNumber,
   fetchAllLevels
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
@@ -21,6 +18,7 @@ import { diff } from "deep-diff";
 
 import { Level } from "../../../models/curriculum/level";
 import { Course } from "../../../models/curriculum/course";
+import { registerBillings } from "utils/billingFunctions";
 
 const validateLevel = (levelDataParam: any) => {
   const { description, levelDuration, courseName, ...copyLocalData } = levelDataParam;
@@ -51,16 +49,23 @@ export const getAllLevels = asyncHandler(async (req: Request, res: Response) => 
   const hasAccess = checkAccess(account, tabAccess, "View Levels");
 
   if (absoluteAdmin || hasAccess) {
-    const levelProfiles = await fetchAllLevels(organisation!._id.toString());
+    const levels = await fetchAllLevels(organisation!._id.toString());
 
-    if (!levelProfiles) {
-      throwError("Error fetching level profiles", 500);
+    if (!levels) {
+      throwError("Error fetching levels", 500);
     }
-    res.status(201).json(levelProfiles);
+    res.status(201).json(levels);
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + levels.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([levels, organisation, role, account])
+      }
+    ]);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view level profile - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view level - Please contact your admin", 403);
 });
 
 export const getLevels = asyncHandler(async (req: Request, res: Response) => {
@@ -90,7 +95,7 @@ export const getLevels = asyncHandler(async (req: Request, res: Response) => {
     }
   }
 
-  const { roleId, accountStatus, levelId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -107,16 +112,24 @@ export const getLevels = asyncHandler(async (req: Request, res: Response) => {
     if (!result || !result.levels) {
       throwError("Error fetching levels", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.levels.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view level profile - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view level - Please contact your admin", 403);
 });
 
 // controller to handle role creation
 export const createLevel = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
 
   const { levelCustomId, level, courseCustomId, levelFullTitle } = body;
@@ -186,12 +199,26 @@ export const createLevel = asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newLevel) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newLevel, levelExists, courseExists, organisation, role, account]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
 // controller to handle role update
 export const updateLevel = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
   const { levelCustomId, level, courseCustomId, levelFullTitle } = body;
 
@@ -263,6 +290,16 @@ export const updateLevel = asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedLevel, courseExists, organisation, role, account, originalLevel]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
@@ -286,9 +323,9 @@ export const deleteLevel = asyncHandler(async (req: Request, res: Response) => {
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Level Profile");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Level ");
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to delete level profile - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to delete level - Please contact your admin", 403);
   }
 
   const levelToDelete = await Level.findOne({
@@ -328,5 +365,22 @@ export const deleteLevel = asyncHandler(async (req: Request, res: Response) => {
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: toNegative(getObjectSize(deletedLevel) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedLevel, organisation, role, account, levelToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });

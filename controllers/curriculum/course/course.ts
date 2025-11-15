@@ -1,19 +1,15 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { Account } from "../../../models/admin/accountModel";
 import {
-  confirmAccount,
-  confirmRole,
+  getObjectSize,
+  toNegative,
   throwError,
   generateSearchText,
   fetchCourses,
-  generateCustomId,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  validateEmail,
-  validatePhoneNumber,
   fetchAllCourses
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
@@ -21,6 +17,7 @@ import { diff } from "deep-diff";
 
 import { Course } from "../../../models/curriculum/course";
 import { Programme } from "../../../models/curriculum/programme";
+import { registerBillings } from "utils/billingFunctions";
 
 const validateCourse = (courseDataParam: any) => {
   const { description, courseDuration, programmeName, ...copyLocalData } = courseDataParam;
@@ -51,12 +48,20 @@ export const getAllCourses = asyncHandler(async (req: Request, res: Response) =>
   const hasAccess = checkAccess(account, tabAccess, "View Courses");
 
   if (absoluteAdmin || hasAccess) {
-    const courseProfiles = await fetchAllCourses(organisation!._id.toString());
+    const courses = await fetchAllCourses(organisation!._id.toString());
 
-    if (!courseProfiles) {
-      throwError("Error fetching course profiles", 500);
+    if (!courses) {
+      throwError("Error fetching courses", 500);
     }
-    res.status(201).json(courseProfiles);
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + courses.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([courses, organisation, role, account])
+      }
+    ]);
+    res.status(201).json(courses);
     return;
   }
 
@@ -107,11 +112,19 @@ export const getCourses = asyncHandler(async (req: Request, res: Response) => {
     if (!result || !result.courses) {
       throwError("Error fetching courses", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.courses.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view course profile - Please contact your admin", 403);
+  throwError("Unauthorised Action: You do not have access to view course - Please contact your admin", 403);
 });
 
 // controller to handle role creation
@@ -185,6 +198,20 @@ export const createCourse = asyncHandler(async (req: Request, res: Response) => 
       new Date()
     );
   }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newCourse) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newCourse, programmeExists, courseExists, organisation, role, account]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
 
   res.status(201).json("successfull");
 });
@@ -263,6 +290,16 @@ export const updateCourse = asyncHandler(async (req: Request, res: Response) => 
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedCourse, programmeExists, organisation, role, account, originalCourse]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
@@ -286,9 +323,9 @@ export const deleteCourse = asyncHandler(async (req: Request, res: Response) => 
     throwError(message, 409);
   }
 
-  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Course Profile");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Course ");
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to delete course profile - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to delete course - Please contact your admin", 403);
   }
 
   const courseToDelete = await Course.findOne({
@@ -328,5 +365,22 @@ export const deleteCourse = asyncHandler(async (req: Request, res: Response) => 
       new Date()
     );
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: toNegative(getObjectSize(deletedCourse) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedCourse, organisation, role, account, courseToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });

@@ -150,6 +150,13 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     subscriptionStatus: "Active"
   });
 
+  if (!freemiumSubscription) {
+    throwError(
+      "Failed to create freemium subscription for this organization - Please try again, and if the problem persists contact support",
+      500
+    );
+  }
+
   //   create a default role for the organization as absolute admin
   const defaultRole = await Role.create({
     organisationId: orgAccount._id,
@@ -387,7 +394,10 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
     { path: "organisationId", select: "organisationId accountName" }
   ]);
   if (!account) {
-    throwError(`No associated account found for email (${email}) - Please contact your admin.`, 401);
+    throwError(
+      `No associated account found for email (${email}) - Sign up if you have no existing account. Or contact your admin.`,
+      401
+    );
   }
 
   const isMatch = await bcrypt.compare(password, account!.accountPassword ?? "");
@@ -433,7 +443,7 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
   delete reshapedAccount._id;
   delete reshapedAccount.accountPassword;
 
-  await logActivity(
+  const activityLog = await logActivity(
     account?.organisationId,
     account?._id,
     "User Sign In",
@@ -444,11 +454,22 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
     new Date()
   );
 
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 5
+    },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([account, activityLog])
+    }
+  ]);
+
   res.status(200).json(reshapedAccount);
 });
 
 export const fetchAccount = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
 
   // find the account by email
   const account = await Account.findById(accountId).populate([
@@ -481,7 +502,7 @@ export const fetchAccount = asyncHandler(async (req: Request, res: Response) => 
   delete reshapedAccount.accountPassword;
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 3 },
+    { field: "databaseOperation", value: 4 },
     {
       field: "databaseDataTransfer",
       value: getObjectSize(account)
@@ -508,7 +529,7 @@ export const signoutAccount = asyncHandler(async (req: Request, res: Response) =
 
 // controller to refresh token
 export const refreshAccessToken = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
 
   const account = await Account.findById(accountId);
 
@@ -529,6 +550,14 @@ export const refreshAccessToken = asyncHandler(async (req: Request, res: Respons
     maxAge: 60 * 60 * 1000,
     sameSite: "lax"
   });
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 1 },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize(account)
+    }
+  ]);
   res.status(201).json("Access token refresh successful");
 });
 
@@ -594,6 +623,16 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
     `Hello ${accountExist?.accountName}, your code is: ${verificationCode}. Please do not share this with anyone and use within 8 minutes`
   );
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 4 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([roleExist, accountExist, resetPasswordDoc]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(200).json({ message: `A verification code has been sent to email ${email}. You will now be redirected` });
 });
 
@@ -631,6 +670,13 @@ export const resetPasswordVerifyCode = asyncHandler(async (req: Request, res: Re
     throwError(`This code is expired. Please request a new one`, 409);
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 5 },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize(resetPasswordDoc)
+    }
+  ]);
   res.status(200).json({ message: `Code verification successful. You will now be redirected` });
 });
 
@@ -748,7 +794,7 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
     sameSite: "lax"
   });
 
-  await VerificationCode.deleteOne({ resetCode: hashedResetCode });
+  const deletedCode = await VerificationCode.deleteOne({ resetCode: hashedResetCode });
 
   const parsedAccount = updatedAccountPassword?.toObject();
 
@@ -774,5 +820,16 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
       new Date()
     );
   }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 9 + (logActivityAllowed ? 4 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([roleExist, deletedCode, updatedAccountPassword, resetPasswordDoc, organisationEmailExists]) +
+        (logActivityAllowed ? getObjectSize([activityLog, activityLog2]) : 0)
+    }
+  ]);
+
   res.status(200).json(reshapedAccount);
 });

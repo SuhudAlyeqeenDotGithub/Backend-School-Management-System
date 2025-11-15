@@ -4,19 +4,19 @@ import {
   throwError,
   generateSearchText,
   fetchLevelManagers,
-  generateCustomId,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  validateEmail,
-  validatePhoneNumber,
-  fetchAllLevelManagers
+  fetchAllLevelManagers,
+  getObjectSize,
+  toNegative
 } from "../../../utils/utilsFunctions";
 import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 import { StaffContract } from "../../../models/staff/contracts";
 import { LevelManager } from "../../../models/curriculum/level";
+import { registerBillings } from "utils/billingFunctions";
 
 const validateLevelManager = (levelManagerDataParam: any) => {
   const { managedUntil, _id, ...copyLocalData } = levelManagerDataParam;
@@ -52,6 +52,13 @@ export const getAllLevelManagers = asyncHandler(async (req: Request, res: Respon
     if (!result) {
       throwError("Error fetching level managers", 500);
     }
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
@@ -110,6 +117,13 @@ export const getLevelManagers = asyncHandler(async (req: Request, res: Response)
     if (!result || !result.levelManagers) {
       throwError("Error fetching level managers", 500);
     }
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.levelManagers.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }
@@ -135,9 +149,9 @@ export const createLevelManager = asyncHandler(async (req: Request, res: Respons
   if (!staffHasContract) {
     throwError("The staff has no contract with this organisation - Please create one for them", 409);
   }
-
+  let levelAlreadyManaged;
   if (status === "Active") {
-    const levelAlreadyManaged = await LevelManager.findOne({
+    levelAlreadyManaged = await LevelManager.findOne({
       organisationId: orgParsedId,
       levelId,
       levelManagerCustomStaffId,
@@ -193,6 +207,23 @@ export const createLevelManager = asyncHandler(async (req: Request, res: Respons
     );
   }
 
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0) + (status === "Active" ? 1 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: (getObjectSize(newLevelManager) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([newLevelManager, staffHasContract, organisation, role, account]) +
+        (status === "Active" ? getObjectSize(levelAlreadyManaged) : 0) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });
 
@@ -262,6 +293,16 @@ export const updateLevelManager = asyncHandler(async (req: Request, res: Respons
     );
   }
 
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([updatedLevelManager, organisation, role, account, originalLevelManager]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+
   res.status(201).json("successfull");
 });
 
@@ -325,6 +366,24 @@ export const deleteLevelManager = asyncHandler(async (req: Request, res: Respons
       ],
       new Date()
     );
+
+    registerBillings(req, [
+      {
+        field: "databaseOperation",
+        value: 6 + (logActivityAllowed ? 2 : 0)
+      },
+      {
+        field: "databaseStorageAndBackup",
+        value:
+          toNegative(getObjectSize(deletedLevelManager) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      },
+      {
+        field: "databaseDataTransfer",
+        value:
+          getObjectSize([deletedLevelManager, organisation, role, account, levelManagerToDelete]) +
+          (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      }
+    ]);
   }
   res.status(201).json("successfull");
 });
