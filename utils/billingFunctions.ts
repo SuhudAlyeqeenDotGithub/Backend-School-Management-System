@@ -1,8 +1,15 @@
 import { Billing } from "../models/admin/billingModel";
-import { getCurrentMonth, getLastMonth, getOwnerMongoId, throwError } from "./utilsFunctions";
+import { getCurrentMonth, getLastMonth, getNextMonth, sendEmailToOwner, throwError } from "./utilsFunctions";
 import { getObjectSize } from "./utilsFunctions";
 import { Request } from "express";
 
+import { getEnvVarAsNumber, getOwnerMongoId } from "./envVariableGetters";
+
+export const addVat = (amount: number): number => {
+  const ukVatPercentage = getEnvVarAsNumber("UK_VAT_PERCENTAGE");
+  const vatAmount = (amount * ukVatPercentage) / 100;
+  return amount + vatAmount;
+};
 export const getLastMonthBill = async (organisationId: string) => {
   const lastMonthBillingDoc = await Billing.findOne({
     organisationId,
@@ -34,11 +41,16 @@ const createNewMonthBilling = async (organisationId: string, newBillingMonth = g
   const newBillingDoc = await Billing.create({
     organisationId,
     billingMonth: newBillingMonth,
+    billingDate: getNextMonth(),
     databaseStorageAndBackup: { value: lastMonthDatabaseStorage },
     cloudStorageGBStored: { value: lastMonthCloudStorageGBStored }
   });
 
   if (!newBillingDoc) {
+    await sendEmailToOwner(
+      "New month billing document creation failed - School Management App",
+      `Failed to create new month billing document for organisation ID: ${organisationId} for month: ${newBillingMonth}`
+    );
     throwError("Failed to create current month billing document", 500);
   }
 
@@ -70,7 +82,8 @@ export const getBillingDoc = async (organisationId: string) => {
 
   const existingBillingDoc = await Billing.findOne({
     organisationId: organisationId,
-    billingMonth: newBillingMonth
+    billingMonth: newBillingMonth,
+    billingDate: getNextMonth()
   });
 
   operationCount++;
@@ -78,14 +91,18 @@ export const getBillingDoc = async (organisationId: string) => {
   if (!existingBillingDoc) {
     const { newBillingDoc, returnOperationCount } = await createNewMonthBilling(organisationId, newBillingMonth);
 
-    const objectSize = getObjectSize(newBillingDoc);
+    const newBillObjectSize = getObjectSize(newBillingDoc);
     await selfBill([
       { field: "databaseOperation", value: operationCount + returnOperationCount },
-      { field: "databaseStorageAndBackup", value: objectSize * 2 }
+      { field: "databaseStorageAndBackup", value: newBillObjectSize * 2 },
+      { field: "databaseDataTransfer", value: newBillObjectSize }
     ]);
     return { returnBillingDoc: newBillingDoc, operationCount: operationCount + returnOperationCount, created: true };
   } else {
-    await selfBill([{ field: "databaseOperation", value: operationCount }]);
+    await selfBill([
+      { field: "databaseOperation", value: operationCount },
+      { field: "databaseDataTransfer", value: getObjectSize(existingBillingDoc) }
+    ]);
     return { returnBillingDoc: existingBillingDoc, operationCount, created: false };
   }
 };
@@ -106,11 +123,13 @@ export const selfBill = async (billingFields: { field: string; value: any }[]) =
   if (created) {
     const objectSize = getObjectSize(selfBillingDoc);
     selfBillingDoc.databaseStorageAndBackup.value += objectSize * 2;
+    selfBillingDoc.databaseDataTransfer.value += objectSize;
   }
 
   const updatedSelfBill = await Billing.findByIdAndUpdate(selfBillingDoc._id, selfBillingDoc, { new: true });
+
   if (!updatedSelfBill) {
-    throwError("Failed to update owner billing document", 500);
+    await sendEmailToOwner("Billing Update Failed - School Management App", "Failed to update owner billing document");
   }
 };
 
@@ -125,14 +144,19 @@ export const billOrganisation = async (organisationId: string, billingFields: { 
   });
 
   const objectSize = getObjectSize(returnBillingDoc);
-  // console.log("self billing for billing organisation with", { field: "databaseOperation", value: 2 + operationCount });
-  await selfBill([
-    { field: "databaseOperation", value: 2 + operationCount },
-    { field: "databaseStorageAndBackup", value: created ? objectSize * 2 : 0 }
-  ]);
 
   const updatedBillingDoc = await Billing.findByIdAndUpdate(billingDoc._id, billingDoc, { new: true });
   if (!updatedBillingDoc) {
+    await sendEmailToOwner(
+      "Billing Update Failed - School Management App",
+      `Failed to update organisation billing document for organisation ${organisationId} for month: ${billingDoc.billingMonth}`
+    );
     throwError("Failed to update organisation billing document", 500);
   }
+
+  await selfBill([
+    { field: "databaseOperation", value: 2 + operationCount },
+    { field: "databaseStorageAndBackup", value: created ? objectSize * 2 : 0 },
+    { field: "databaseDataTransfer", value: created ? objectSize : 0 }
+  ]);
 };

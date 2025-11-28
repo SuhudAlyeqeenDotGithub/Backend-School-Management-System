@@ -9,7 +9,7 @@ import {
   getObjectSize
 } from "../../utils/utilsFunctions.ts";
 import { ActivityLog } from "../../models/admin/activityLogModel.ts";
-import { registerBillings } from "utils/billingFunctions.ts";
+import { registerBillings } from "../../utils/billingFunctions.ts";
 
 export const getActivityLogs = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;

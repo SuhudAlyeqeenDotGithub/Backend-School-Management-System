@@ -1,6 +1,5 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { Account } from "../../../models/admin/accountModel";
 import {
   getObjectSize,
   toNegative,
@@ -17,7 +16,8 @@ import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
 import { Programme } from "../../../models/curriculum/programme";
-import { registerBillings } from "utils/billingFunctions";
+import { registerBillings } from "../../../utils/billingFunctions.ts";
+import { VerificationCode } from "../../../models/authentication/resetPasswordModel.ts";
 
 const validateProgramme = (programmeDataParam: any) => {
   const { description, programmeDuration, ...copyLocalData } = programmeDataParam;
@@ -70,7 +70,7 @@ export const getAllProgrammes = asyncHandler(async (req: Request, res: Response)
 
 export const getProgrammes = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
-  const { account, organisation } = await confirmUserOrgRole(accountId);
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
@@ -112,6 +112,14 @@ export const getProgrammes = asyncHandler(async (req: Request, res: Response) =>
     if (!result || !result.programmes) {
       throwError("Error fetching programmes", 500);
     }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + result.programmes.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([result, organisation, role, account])
+      }
+    ]);
     res.status(201).json(result);
     return;
   }

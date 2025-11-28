@@ -1,13 +1,14 @@
 import dotenv from "dotenv";
+import { addVat } from "./billingFunctions";
 dotenv.config();
 
 // Utility function to safely get env variables
-function getEnvVar(key: string): string {
+export function getEnvVar(key: string): string {
   const value = process.env[key];
   return value as string;
 }
 
-function getEnvVarAsNumber(key: string): number {
+export function getEnvVarAsNumber(key: string): number {
   const value = getEnvVar(key);
   const num = Number(value);
   return num;
@@ -18,39 +19,45 @@ function getEnvVarAsNumber(key: string): number {
 // ------------------
 export const getOwnerMongoId = () => getEnvVar("OWNER_MONGO_ID");
 
+export const getPaystackSecretKey = () => getEnvVar("PAYSTACK_SECRET_KEY");
+
 // ------------------
 // Rates
 // ------------------
-export const getAppProvisionCost = () => getEnvVarAsNumber("APP_PROVISION_COST");
+export const getAppProvisionRate = () => getEnvVarAsNumber("APP_PROVISION_RATE");
 
 // ------------------
 // Database
 // ------------------
-export const getDatabaseTotalCost = () => getEnvVarAsNumber("DATABASE_TOTAL_COST");
-export const getDatabaseOperationsPercentage = () => getEnvVarAsNumber("DATABASE_OPERATIONS_PERCENTAGE");
-export const getDatabaseDataTransferPercentage = () => getEnvVarAsNumber("DATABASE_DATA_TRANSFER_PERCENTAGE");
-export const getDatabaseDataStorageAndBackupPercentage = () =>
-  getEnvVarAsNumber("DATABASE_DATA_STORAGE_AND_BACKUP_PERCENTAGE");
 
+export const getDatabaseOperationsRate = () =>
+  addVat(getEnvVarAsNumber("DATABASE_OPERATIONS_PERCENTAGE") / 100) * getEnvVarAsNumber("DATABASE_TOTAL_RATE");
+export const getDatabaseDataTransferRate = () =>
+  addVat(getEnvVarAsNumber("DATABASE_DATA_TRANSFER_PERCENTAGE") / 100) * getEnvVarAsNumber("DATABASE_TOTAL_RATE");
+export const getDatabaseDataStorageAndBackupRate = () =>
+  addVat(getEnvVarAsNumber("DATABASE_DATA_STORAGE_AND_BACKUP_PERCENTAGE") / 100) *
+  getEnvVarAsNumber("DATABASE_TOTAL_RATE");
 // ------------------
 // Cloud Storage
 // ------------------
-export const getCloudStorageGbStoredRate = () => getEnvVarAsNumber("CLOUD_STORAGE_GB_STORED_RATE");
-export const getCloudStorageGbDownloadedRate = () => getEnvVarAsNumber("CLOUD_STORAGE_GB_DOWNLOADED_RATE");
-export const getCloudStorageUploadOperationRate = () => getEnvVarAsNumber("CLOUD_STORAGE_UPLOAD_OPERATION_RATE");
-export const getCloudStorageDownloadOperationRate = () => getEnvVarAsNumber("CLOUD_STORAGE_DOWNLOAD_OPERATION_RATE");
+export const getCloudStorageGbStoredRate = () => addVat(getEnvVarAsNumber("CLOUD_STORAGE_GB_STORED_RATE"));
+export const getCloudStorageGbDownloadedRate = () => addVat(getEnvVarAsNumber("CLOUD_STORAGE_GB_DOWNLOADED_RATE"));
+export const getCloudStorageUploadOperationRate = () =>
+  addVat(getEnvVarAsNumber("CLOUD_STORAGE_UPLOAD_OPERATION_RATE"));
+export const getCloudStorageDownloadOperationRate = () =>
+  addVat(getEnvVarAsNumber("CLOUD_STORAGE_DOWNLOAD_OPERATION_RATE"));
 
 // ------------------
 // Backend Server
 // ------------------
-export const getRenderComputeCost = () => getEnvVarAsNumber("RENDER_COMPUTE_COST");
-export const getRenderBaseCost = () => getEnvVarAsNumber("RENDER_BASE_COST");
-export const getRenderBandwidthRate = () => getEnvVarAsNumber("RENDER_BANDWIDTH_RATE");
+export const getRenderComputeRate = () => addVat(getEnvVarAsNumber("RENDER_COMPUTE_RATE"));
+export const getRenderBaseRate = () => addVat(getEnvVarAsNumber("RENDER_BASE_RATE"));
+export const getRenderBandwidthRate = () => addVat(getEnvVarAsNumber("RENDER_BANDWIDTH_RATE"));
 
 // ------------------
 // Frontend Server
 // ------------------
-export const getFrontendBaseCost = () => getEnvVarAsNumber("FRONTEND_BASE_COST");
+export const getFrontendBaseRate = () => addVat(getEnvVarAsNumber("FRONTEND_BASE_RATE"));
 
 // ------------------
 // Currency Rates

@@ -18,7 +18,7 @@ import { diff } from "deep-diff";
 import { Staff } from "../../models/staff/profile.ts";
 import { StaffContract } from "../../models/staff/contracts.ts";
 import { AcademicYear } from "../../models/timeline/academicYear.ts";
-import { registerBillings } from "utils/billingFunctions.ts";
+import { registerBillings } from "../../utils/billingFunctions.ts";
 
 const validateStaffContract = (staffDataParam: any) => {
   const {

@@ -23,6 +23,7 @@ import { StudentEnrollment } from "../models/student/enrollment.ts";
 import { StudentDayAttendanceTemplate } from "../models/student/dayattendance.ts";
 import { StudentSubjectAttendanceTemplate } from "../models/student/subjectAttendance.ts";
 import { Billing } from "../models/admin/billingModel.ts";
+import { getOwnerMongoId } from "./envVariableGetters.ts";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -43,6 +44,15 @@ export async function sendEmail(to: string, subject: string, text: string, html?
 
   try {
     await transporter.sendMail(mailOptions);
+  } catch (error: any) {
+    throwError(error.message || "Error sending email", 500);
+  }
+}
+
+export async function sendEmailToOwner(subject: string, text: string, html?: string) {
+  try {
+    await sendEmail("suhudalyeqeenapp@gmail.com", subject, text, html);
+    await sendEmail("alyekeeniy@gmail.com", subject, text, html);
   } catch (error: any) {
     throwError(error.message || "Error sending email", 500);
   }
@@ -123,13 +133,21 @@ export const getLastMonth = () => {
   date.setMonth(date.getMonth() - 1);
   return `5 ${date.toLocaleString("en-GB", { month: "long", year: "numeric" })}`;
 };
+export const getNextMonth = () => {
+  const date = new Date();
+  date.setMonth(date.getMonth() + 1);
+  return `5 ${date.toLocaleString("en-GB", { month: "long", year: "numeric" })}`;
+};
 
-export const getOwnerMongoId = () => {
-  return process.env.OWNER_MONGO_ID as string;
+export const isExpired = (date: string | Date): boolean => {
+  const expiry = new Date(date).getTime();
+  const now = Date.now();
+
+  return expiry < now;
 };
 
 export const getCurrentMonth = () => {
-  return `5 ${new Date().toLocaleString("en-GB", { month: "long", year: "numeric" })}`;
+  return `${new Date().toLocaleString("en-GB", { month: "long", year: "numeric" })}`;
 };
 
 // throw error function
@@ -184,7 +202,7 @@ export const generateRefreshToken = (accountData: any) => {
 };
 
 export const getVerificationCode = () => {
-  const verificationCode = generateCustomId("", true, 5);
+  const verificationCode = generateCustomId("SUAPP", true, 5);
   const hashedVerificationCode = crypto.createHash("sha256").update(verificationCode).digest("hex");
   return { verificationCode, hashedVerificationCode };
 };
@@ -341,11 +359,35 @@ export const fetchActivityLogs = async (query: any, cursorType: string, limit: n
   };
 };
 
-export const fetchBillings = async (query: any, cursorType: string, limit: number, orgId: string) => {
-  const billings = await Billing.find({ ...query, organisationId: orgId })
-    .sort({ _id: -1 })
-    .limit(limit + 1);
-  const totalCount = await Billing.countDocuments({ ...query, organisationId: orgId });
+export const fetchBillings = async (
+  query: any,
+  cursorType: string,
+  limit: number,
+  orgId: string,
+  accountId: string
+) => {
+  let billings;
+  let totalCount;
+
+  if (accountId === getOwnerMongoId()) {
+    billings = await Billing.find({ ...query })
+      .populate({
+        path: "organisationId",
+        select: "organisationId accountName accountEmail accountPhone organisationInitial accountType"
+      })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+    totalCount = await Billing.countDocuments({ ...query });
+  } else {
+    billings = await Billing.find({ ...query, organisationId: orgId })
+      .populate({
+        path: "organisationId",
+        select: "organisationId accountName accountEmail accountPhone organisationInitial accountType"
+      })
+      .sort({ _id: -1 })
+      .limit(limit + 1);
+    totalCount = await Billing.countDocuments({ ...query, organisationId: orgId });
+  }
 
   if (!billings) {
     throwError("Error fetching billings", 500);

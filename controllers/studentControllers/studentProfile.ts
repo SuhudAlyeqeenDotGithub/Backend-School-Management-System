@@ -1,6 +1,5 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { Account } from "../../models/admin/accountModel";
 import {
   getObjectSize,
   toNegative,
@@ -11,15 +10,13 @@ import {
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllStudentProfiles,
-  validateEmail,
-  validatePhoneNumber
+  fetchAllStudentProfiles
 } from "../../utils/utilsFunctions";
 import { logActivity } from "../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
 import { Student } from "../../models/student/studentProfile";
-import { registerBillings } from "utils/billingFunctions";
+import { registerBillings } from "../../utils/billingFunctions.ts";
 
 const validateStudentProfile = (studentDataParam: any) => {
   const {

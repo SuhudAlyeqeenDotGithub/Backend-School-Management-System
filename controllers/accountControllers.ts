@@ -565,6 +565,7 @@ export const refreshAccessToken = asyncHandler(async (req: Request, res: Respons
 
 export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Response) => {
   const { email } = req.body;
+
   if (!email) {
     throwError("Please provide the associated email", 400);
   }
@@ -584,6 +585,12 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
       "You do not have the permission to change password - Please contact your admin for any password change",
       403
     );
+  }
+
+  let deletedCodes = { deletedCount: 0 };
+  const previousCode = await VerificationCode.find({ accountEmail: email });
+  if (previousCode.length > 0) {
+    deletedCodes = await VerificationCode.deleteMany({ accountEmail: email });
   }
 
   const { verificationCode, hashedVerificationCode } = getVerificationCode();
@@ -624,11 +631,14 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
   );
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 4 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseOperation",
+      value: 4 + (logActivityAllowed ? 2 : 0) + previousCode.length + deletedCodes?.deletedCount
+    },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([roleExist, accountExist, resetPasswordDoc]) +
+        getObjectSize([roleExist, accountExist, resetPasswordDoc, previousCode]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -821,6 +831,11 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
     );
   }
 
+  await sendEmail(
+    reshapedAccount.accountEmail as string,
+    "Password Changed Successfully - From SuSchool Management App",
+    `Hello ${updatedAccountPassword?.accountName}, your password has been changed successfully. If you did not perform this action, please contact support immediately @ suhudalyeqeenapp@gmail.com or alyekeeniy@gmail.com`
+  );
   registerBillings(req, [
     { field: "databaseOperation", value: 9 + (logActivityAllowed ? 4 : 0) },
     {

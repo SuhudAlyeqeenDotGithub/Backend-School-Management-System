@@ -1,11 +1,10 @@
 import mongoose from "mongoose";
 const { Schema, model } = mongoose;
-import { nanoid } from "nanoid";
-import { getAppProvisionCost, getRenderBaseCost } from "../../utils/envVariableGetters";
+import { getAppProvisionRate, getRenderBaseRate } from "../../utils/envVariableGetters";
 
-import { generateCustomId, generateSearchText, getCurrentMonth } from "../../utils/utilsFunctions";
+import { generateCustomId, generateSearchText, getCurrentMonth, getNextMonth } from "../../utils/utilsFunctions";
 
-const valueCostType = new mongoose.Schema(
+export const valueCostType = new mongoose.Schema(
   {
     value: { type: Number, default: 0 },
     costInDollar: { type: Number, default: 0 }
@@ -15,7 +14,7 @@ const valueCostType = new mongoose.Schema(
 
 const billingSchema = new Schema(
   {
-    organisationId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    organisationId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: "Account" },
     billingId: {
       type: String,
       required: true
@@ -24,6 +23,11 @@ const billingSchema = new Schema(
       type: String,
       required: true,
       default: () => getCurrentMonth()
+    },
+    billingDate: {
+      type: String,
+      required: true,
+      default: () => getNextMonth()
     },
     dollarToNairaRate: {
       type: Number,
@@ -44,14 +48,14 @@ const billingSchema = new Schema(
     appProvisionCost: {
       type: Number,
       required: true,
-      default: () => getAppProvisionCost()
+      default: () => getAppProvisionRate()
     },
 
     // render
     renderBaseCost: {
       type: Number,
       required: true,
-      default: () => getRenderBaseCost()
+      default: () => getRenderBaseRate()
     },
     renderBandwidth: {
       type: valueCostType,

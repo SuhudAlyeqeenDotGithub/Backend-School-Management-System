@@ -16,7 +16,7 @@ import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
 import { Syllabus } from "../../../models/curriculum/syllabus";
-import { registerBillings } from "utils/billingFunctions";
+import { registerBillings } from "../../../utils/billingFunctions.ts";
 
 const validateSyllabus = (syllabusDataParam: any) => {
   const {
@@ -359,7 +359,7 @@ export const deleteSyllabus = asyncHandler(async (req: Request, res: Response) =
   }
 
   const deletedSyllabus = await Syllabus.findByIdAndDelete(syllabusToDelete?._id.toString());
-  
+
   if (!deletedSyllabus) {
     throwError("Error deleting syllabus - Please try again", 500);
   }

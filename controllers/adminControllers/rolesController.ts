@@ -14,7 +14,7 @@ import {
 } from "../../utils/utilsFunctions.ts";
 
 import { diff } from "deep-diff";
-import { registerBillings } from "utils/billingFunctions.ts";
+import { registerBillings } from "../../utils/billingFunctions.ts";
 
 export const getRoles = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;

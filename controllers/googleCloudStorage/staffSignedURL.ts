@@ -11,7 +11,7 @@ import {
   toNegative
 } from "../../utils/utilsFunctions.ts";
 import { nanoid } from "nanoid";
-import { registerBillings } from "utils/billingFunctions.ts";
+import { registerBillings } from "../../utils/billingFunctions.ts";
 
 const storage = new Storage({
   projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,

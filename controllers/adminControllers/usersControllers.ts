@@ -17,7 +17,7 @@ import { diff } from "deep-diff";
 import bcrypt from "bcryptjs";
 import { StaffContract } from "../../models/staff/contracts.ts";
 import { Staff } from "../../models/staff/profile.ts";
-import { registerBillings } from "utils/billingFunctions.ts";
+import { registerBillings } from "../../utils/billingFunctions.ts";
 
 export const getUsers = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
@@ -242,6 +242,11 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+
+  const userExists = await Account.findOne({ accountEmail: userEmail });
+  if (userExists && userExists?.organisationId.toString() !== userTokenOrgId) {
+    throwError("This email is already in use - Please provide a different email", 409);
+  }
 
   if (!staffId && !onEditUserIsAbsoluteAdmin) {
     throwError("Please provide staff ID", 400);

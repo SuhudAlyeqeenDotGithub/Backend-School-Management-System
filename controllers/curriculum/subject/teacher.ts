@@ -16,7 +16,7 @@ import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 import { StaffContract } from "../../../models/staff/contracts";
 import { SubjectTeacher } from "../../../models/curriculum/subject";
-import { registerBillings } from "utils/billingFunctions";
+import { registerBillings } from "../../../utils/billingFunctions.ts";
 
 const validateSubjectTeacher = (subjectTeacherDataParam: any) => {
   const { managedUntil, _id, ...copyLocalData } = subjectTeacherDataParam;
@@ -389,21 +389,22 @@ export const deleteSubjectTeacher = asyncHandler(async (req: Request, res: Respo
     );
   }
 
-    registerBillings(req, [
-      {
-        field: "databaseOperation",
-        value: 6 + (logActivityAllowed ? 2 : 0)
-      },
-      {
-        field: "databaseStorageAndBackup",
-        value: toNegative(getObjectSize(deletedSubjectTeacher) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
-      },
-      {
-        field: "databaseDataTransfer",
-        value:
-          getObjectSize([deletedSubjectTeacher, organisation, role, account, subjectTeacherToDelete]) +
-          (logActivityAllowed ? getObjectSize(activityLog) : 0)
-      }
-    ]);
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value:
+        toNegative(getObjectSize(deletedSubjectTeacher) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedSubjectTeacher, organisation, role, account, subjectTeacherToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });

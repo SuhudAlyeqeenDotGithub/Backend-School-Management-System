@@ -24,7 +24,7 @@ import { Level, LevelManager } from "../../models/curriculum/level.ts";
 import { StudentEnrollment } from "../../models/student/enrollment.ts";
 import { Staff } from "../../models/staff/profile.ts";
 import { Subject, SubjectTeacher } from "../../models/curriculum/subject.ts";
-import { registerBillings } from "utils/billingFunctions.ts";
+import { registerBillings } from "../../utils/billingFunctions.ts";
 
 const validateStudentSubjectAttendance = (studentDataParam: any) => {
   const { notes, ...copyLocalData } = studentDataParam;

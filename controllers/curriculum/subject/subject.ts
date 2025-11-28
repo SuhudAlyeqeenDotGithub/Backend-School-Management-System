@@ -20,7 +20,7 @@ import { Subject } from "../../../models/curriculum/subject";
 import { Course } from "../../../models/curriculum/course";
 import { Level } from "../../../models/curriculum/level";
 import { BaseSubject } from "../../../models/curriculum/basesubject";
-import { registerBillings } from "utils/billingFunctions";
+import { registerBillings } from "../../../utils/billingFunctions.ts";
 
 const validateSubject = (subjectDataParam: any) => {
   const { description, subjectDuration, courseName, ...copyLocalData } = subjectDataParam;

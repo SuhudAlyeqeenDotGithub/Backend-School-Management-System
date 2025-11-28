@@ -1,6 +1,5 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { Account } from "../../../models/admin/accountModel";
 import {
   getObjectSize,
   toNegative,
@@ -18,7 +17,7 @@ import { diff } from "deep-diff";
 
 import { Level } from "../../../models/curriculum/level";
 import { Course } from "../../../models/curriculum/course";
-import { registerBillings } from "utils/billingFunctions";
+import { registerBillings } from "../../../utils/billingFunctions.ts";
 
 const validateLevel = (levelDataParam: any) => {
   const { description, levelDuration, courseName, ...copyLocalData } = levelDataParam;

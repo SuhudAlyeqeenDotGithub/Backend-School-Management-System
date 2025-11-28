@@ -19,7 +19,7 @@ import { logActivity } from "../../utils/utilsFunctions.ts";
 import { diff } from "deep-diff";
 
 import { Staff } from "../../models/staff/profile.ts";
-import { registerBillings } from "utils/billingFunctions.ts";
+import { registerBillings } from "../../utils/billingFunctions.ts";
 
 const validateStaffProfile = (staffDataParam: any) => {
   const {

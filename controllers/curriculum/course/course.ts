@@ -17,7 +17,7 @@ import { diff } from "deep-diff";
 
 import { Course } from "../../../models/curriculum/course";
 import { Programme } from "../../../models/curriculum/programme";
-import { registerBillings } from "utils/billingFunctions";
+import { registerBillings } from "../../../utils/billingFunctions.ts";
 
 const validateCourse = (courseDataParam: any) => {
   const { description, courseDuration, programmeName, ...copyLocalData } = courseDataParam;

@@ -13,7 +13,7 @@ import staffRoutes from "./routes/staffRoutes.ts";
 import studentRoutes from "./routes/studentRoutes.ts";
 import curriculumRoutes from "./routes/curriculum.ts";
 import timelineRoutes from "./routes/academicsessionRoutes.ts";
-import { accessTokenChecker } from "./middleware/checkAccess.ts";
+import { accessTokenChecker, checkSubscription } from "./middleware/checkAccess.ts";
 import { Server } from "socket.io";
 import handleWebSocket from "./config/websocket/handleWebSocket.ts";
 import { fetchAccount } from "./controllers/accountControllers.ts";
@@ -53,10 +53,10 @@ app.use(trackResponseSize);
 
 app.get("/alyeqeenschoolapp/api/orgaccount/fetchaccount", fetchAccount);
 app.use("/alyeqeenschoolapp/api/", adminRoutes);
-app.use("/alyeqeenschoolapp/api/", staffRoutes);
-app.use("/alyeqeenschoolapp/api/", studentRoutes);
-app.use("/alyeqeenschoolapp/api/", curriculumRoutes);
-app.use("/alyeqeenschoolapp/api/academicsession/", timelineRoutes);
+app.use("/alyeqeenschoolapp/api/", checkSubscription, staffRoutes);
+app.use("/alyeqeenschoolapp/api/", checkSubscription, studentRoutes);
+app.use("/alyeqeenschoolapp/api/", checkSubscription, curriculumRoutes);
+app.use("/alyeqeenschoolapp/api/academicsession/", checkSubscription, timelineRoutes);
 
 app.use(errorHandler);
 

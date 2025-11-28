@@ -16,7 +16,7 @@ import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 import { StaffContract } from "../../../models/staff/contracts";
 import { LevelManager } from "../../../models/curriculum/level";
-import { registerBillings } from "utils/billingFunctions";
+import { registerBillings } from "../../../utils/billingFunctions.ts";
 
 const validateLevelManager = (levelManagerDataParam: any) => {
   const { managedUntil, _id, ...copyLocalData } = levelManagerDataParam;

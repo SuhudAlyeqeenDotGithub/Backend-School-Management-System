@@ -15,7 +15,7 @@ import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 import { StaffContract } from "../../../models/staff/contracts";
 import { ProgrammeManager } from "../../../models/curriculum/programme";
-import { registerBillings } from "utils/billingFunctions";
+import { registerBillings } from "../../../utils/billingFunctions.ts";
 
 const validateProgrammeManager = (programmeManagerDataParam: any) => {
   const { managedUntil, _id, ...copyLocalData } = programmeManagerDataParam;

@@ -15,7 +15,7 @@ import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 import { StaffContract } from "../../../models/staff/contracts";
 import { BaseSubjectManager } from "../../../models/curriculum/basesubject";
-import { registerBillings } from "utils/billingFunctions";
+import { registerBillings } from "../../../utils/billingFunctions.ts";
 
 const validateBaseSubjectManager = (baseSubjectManagerDataParam: any) => {
   const { managedUntil, _id, ...copyLocalData } = baseSubjectManagerDataParam;
@@ -358,23 +358,22 @@ export const deleteBaseSubjectManager = asyncHandler(async (req: Request, res: R
     );
   }
 
-    registerBillings(req, [
-      {
-        field: "databaseOperation",
-        value: 6 + (logActivityAllowed ? 2 : 0)
-      },
-      {
-        field: "databaseStorageAndBackup",
-        value:
-          toNegative(getObjectSize(deletedBaseSubjectManager) * 2) +
-          (logActivityAllowed ? getObjectSize(activityLog) : 0)
-      },
-      {
-        field: "databaseDataTransfer",
-        value:
-          getObjectSize([deletedBaseSubjectManager, organisation, role, account, baseSubjectManagerToDelete]) +
-          (logActivityAllowed ? getObjectSize(activityLog) : 0)
-      }
-    ]);
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value:
+        toNegative(getObjectSize(deletedBaseSubjectManager) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedBaseSubjectManager, organisation, role, account, baseSubjectManagerToDelete]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });

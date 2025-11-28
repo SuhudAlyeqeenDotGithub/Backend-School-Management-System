@@ -16,7 +16,7 @@ import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 
 import { BaseSubject } from "../../../models/curriculum/basesubject";
-import { registerBillings } from "utils/billingFunctions";
+import { registerBillings } from "../../../utils/billingFunctions.ts";
 
 const validateBaseSubject = (baseSubjectDataParam: any) => {
   const { description, ...copyLocalData } = baseSubjectDataParam;
@@ -364,9 +364,7 @@ export const deleteBaseSubject = asyncHandler(async (req: Request, res: Response
     },
     {
       field: "databaseStorageAndBackup",
-      value:
-        toNegative(getObjectSize(deletedBaseSubject) * 2) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedBaseSubject) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
     },
     {
       field: "databaseDataTransfer",

@@ -16,7 +16,7 @@ import { logActivity } from "../../../utils/utilsFunctions";
 import { diff } from "deep-diff";
 import { StaffContract } from "../../../models/staff/contracts";
 import { CourseManager } from "../../../models/curriculum/course";
-import { registerBillings } from "utils/billingFunctions";
+import { registerBillings } from "../../../utils/billingFunctions.ts";
 
 const validateCourseManager = (courseManagerDataParam: any) => {
   const { managedUntil, _id, ...copyLocalData } = courseManagerDataParam;

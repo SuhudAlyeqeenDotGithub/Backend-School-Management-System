@@ -9,29 +9,42 @@ import {
   updateOrgSettings
 } from "../controllers/adminControllers/usersControllers";
 import { getActivityLogs, getLastActivityLog } from "../controllers/adminControllers/activityLogs";
-import { getBillings, getSubscription } from "../controllers/adminControllers/billing";
+import {
+  chargeOldBills,
+  getBillings,
+  getSubscription,
+  prepareLastBills,
+  getOrganisations,
+  chargeLastBills
+} from "../controllers/adminControllers/billing";
+import { checkSubscription } from "../middleware/checkAccess";
 
 // admin roles endpoints
-router.get("/admin/roles", getRoles);
-router.post("/admin/roles", createRole);
-router.put("/admin/roles", updateRole);
-router.delete("/admin/roles", deleteRole);
+router.get("/admin/roles", checkSubscription, getRoles);
+router.post("/admin/roles", checkSubscription, createRole);
+router.put("/admin/roles", checkSubscription, updateRole);
+router.delete("/admin/roles", checkSubscription, deleteRole);
 
 // admin users endpoints
-router.get("/admin/users", getUsers);
-router.post("/admin/users", createUser);
-router.put("/admin/users", updateUser);
-router.delete("/admin/users", deleteUser);
+router.get("/admin/users", checkSubscription, getUsers);
+router.post("/admin/users", checkSubscription, createUser);
+router.put("/admin/users", checkSubscription, updateUser);
+router.delete("/admin/users", checkSubscription, deleteUser);
 
 // admin activity logs endpoints
-router.get("/admin/activitylogs", getActivityLogs);
-router.get("/admin/lastactivitylog", getLastActivityLog);
+router.get("/admin/activitylogs", checkSubscription, getActivityLogs);
+router.get("/admin/lastactivitylog", checkSubscription, getLastActivityLog);
 
 // admin setting endopoints
-router.post("/admin/settings", updateOrgSettings);
+router.post("/admin/settings", checkSubscription, updateOrgSettings);
 
 // admin billing endopoints
 router.get("/admin/billings", getBillings);
 router.get("/admin/billing/subscription", getSubscription);
+
+// owner prepare bills endpoint
+router.post("/admin/billing/preparelastbills", chargeLastBills);
+router.post("/admin/billing/chargeoldbills", chargeOldBills);
+router.get("/admin/billing/organisations", getOrganisations);
 
 export default router;

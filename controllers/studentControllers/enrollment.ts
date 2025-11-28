@@ -20,7 +20,7 @@ import { StudentEnrollment } from "../../models/student/enrollment.ts";
 import { AcademicYear } from "../../models/timeline/academicYear.ts";
 import { Course } from "../../models/curriculum/course.ts";
 import { Level } from "../../models/curriculum/level.ts";
-import { registerBillings } from "utils/billingFunctions.ts";
+import { registerBillings } from "../../utils/billingFunctions.ts";
 
 const validateStudentEnrollment = (studentDataParam: any) => {
   const { enrollmentExpiresOn, notes, allowances, ...copyLocalData } = studentDataParam;
