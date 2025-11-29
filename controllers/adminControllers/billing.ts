@@ -12,7 +12,8 @@ import {
   getCurrentMonth,
   getNextMonth,
   getLastMonth,
-  generateCustomId
+  generateCustomId,
+  sendEmail
 } from "../../utils/utilsFunctions.ts";
 import { Subscription } from "../../models/admin/subscription.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
@@ -145,6 +146,121 @@ export const getSubscription = asyncHandler(async (req: Request, res: Response) 
 
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([subscription, organisation, role, account])
+      }
+    ]);
+    res.status(201).json(subscription);
+    return;
+  }
+
+  throwError("Unauthorised Action: You do not have access to view billings - Please contact your admin", 403);
+});
+
+export const upgradeToPremium = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+
+  // confirm user
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+
+  const { roleId } = account as any;
+  const { absoluteAdmin, tabAccess } = roleId;
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
+  }
+
+  const hasAccess = checkAccess(account, tabAccess, "Update Subscriptions");
+
+  if (absoluteAdmin || hasAccess) {
+    const subscription = await Subscription.findOneAndUpdate(
+      { organisationId: userTokenOrgId },
+      {
+        $set: {
+          subscriptionType: "Premium",
+          premiumStartDate: new Date()
+        }
+      }
+    );
+    if (!subscription) {
+      sendEmailToOwner(
+        "Premium Subscription Upgrade Failed",
+        `Organisation with the ID: ${userTokenOrgId} tried to upgrade to premium but failed`
+      );
+      throwError("Error fetching subscription - we are working on it", 500);
+    }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([subscription, organisation, role, account])
+      }
+    ]);
+
+    sendEmailToOwner(
+      "Premium Subscription Upgrade",
+      `Organisation with the ID: ${userTokenOrgId} and name ${account!.accountName} upgraded to premium successfully`
+    );
+    sendEmail(
+      account!.accountEmail,
+      "Premium Subscription Upgrade",
+      `You have successfully upgraded to premium with SuSchool`,
+      `<p>Hi ${account!.accountName}</p>
+      <p> Thank you for upgrading to a premium subscription with SuSchool We are glad to have you</p>
+      <p>You bill for this month will be charged on the 5th of the next month. But for the meantime you can track your usage in Billing section of your admin dashboard </p>
+      <p>You can refer to the documentation if you need any help using the app</p>
+      <p>If you have any question or encouter some issue, 
+      please contact us at <a href="mailto:suhudalyeqeenapp@gmail.com">suhudalyeqeenapp@gmail.com</a> or <a href="mailto:alyekeeniy@gmail.com">alyekeeniy@gmail.com</a>
+            </p>`
+    );
+    res.status(201).json(subscription);
+    return;
+  }
+
+  throwError("Unauthorised Action: You do not have access to view billings - Please contact your admin", 403);
+});
+
+export const cancleSubscription = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+
+  // confirm user
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+
+  const { roleId } = account as any;
+  const { absoluteAdmin, tabAccess } = roleId;
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
+  }
+
+  const hasAccess = checkAccess(account, tabAccess, "Update Subscriptions");
+
+  if (absoluteAdmin || hasAccess) {
+    const subscription = await Subscription.findOneAndUpdate(
+      { organisationId: userTokenOrgId },
+      {
+        $set: {
+          subscriptionType: "Premium",
+          premiumStartDate: new Date()
+        }
+      }
+    );
+    if (!subscription) {
+      sendEmailToOwner(
+        "Premium Subscription Upgrade Failed",
+        `Organisation with the ID: ${userTokenOrgId} tried to upgrade to premium but failed`
+      );
+      throwError("Error fetching subscription - we are working on it", 500);
+    }
+
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
       {
         field: "databaseDataTransfer",
         value: getObjectSize([subscription, organisation, role, account])

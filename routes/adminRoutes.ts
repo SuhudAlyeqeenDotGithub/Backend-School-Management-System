@@ -15,7 +15,8 @@ import {
   getSubscription,
   prepareLastBills,
   getOrganisations,
-  chargeLastBills
+  chargeLastBills,
+  upgradeToPremium
 } from "../controllers/adminControllers/billing";
 import { checkSubscription } from "../middleware/checkAccess";
 
@@ -38,9 +39,10 @@ router.get("/admin/lastactivitylog", checkSubscription, getLastActivityLog);
 // admin setting endopoints
 router.post("/admin/settings", checkSubscription, updateOrgSettings);
 
-// admin billing endopoints
+// admin billing endpoints
 router.get("/admin/billings", getBillings);
 router.get("/admin/billing/subscription", getSubscription);
+router.post("/admin/billing/subscription/topremium", upgradeToPremium);
 
 // owner prepare bills endpoint
 router.post("/admin/billing/preparelastbills", chargeLastBills);
