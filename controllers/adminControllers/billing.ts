@@ -181,7 +181,8 @@ export const upgradeToPremium = asyncHandler(async (req: Request, res: Response)
       {
         $set: {
           subscriptionType: "Premium",
-          premiumStartDate: new Date()
+          premiumStartDate: new Date(),
+          subscriptionStatus: "Active"
         }
       }
     );
@@ -211,7 +212,7 @@ export const upgradeToPremium = asyncHandler(async (req: Request, res: Response)
       `You have successfully upgraded to premium with SuSchool`,
       `<p>Hi ${account!.accountName}</p>
       <p> Thank you for upgrading to a premium subscription with SuSchool We are glad to have you</p>
-      <p>You bill for this month will be charged on the 5th of the next month. But for the meantime you can track your usage in Billing section of your admin dashboard </p>
+      <p>Your bill for this month will be charged on the 5th of the next month. For the meantime you can track your usage in Billing section of your admin dashboard </p>
       <p>You can refer to the documentation if you need any help using the app</p>
       <p>If you have any question or encouter some issue, 
       please contact us at <a href="mailto:suhudalyeqeenapp@gmail.com">suhudalyeqeenapp@gmail.com</a> or <a href="mailto:alyekeeniy@gmail.com">alyekeeniy@gmail.com</a>
@@ -247,16 +248,17 @@ export const cancleSubscription = asyncHandler(async (req: Request, res: Respons
       {
         $set: {
           subscriptionType: "Premium",
-          premiumStartDate: new Date()
+          premiumEndDate: new Date(),
+          subscriptionStatus: "Inactive"
         }
       }
     );
     if (!subscription) {
       sendEmailToOwner(
-        "Premium Subscription Upgrade Failed",
-        `Organisation with the ID: ${userTokenOrgId} tried to upgrade to premium but failed`
+        "Premium Subscription Cancellation Failed",
+        `Organisation with the ID: ${userTokenOrgId} tried to cancel premium subscription but failed`
       );
-      throwError("Error fetching subscription - we are working on it", 500);
+      throwError("Error cancelling subscription - we are working on it", 500);
     }
 
     registerBillings(req, [
@@ -266,7 +268,25 @@ export const cancleSubscription = asyncHandler(async (req: Request, res: Respons
         value: getObjectSize([subscription, organisation, role, account])
       }
     ]);
-    res.status(201).json(subscription);
+
+    sendEmailToOwner(
+      "Premium Subscription Cancellation",
+      `Organisation with the ID: ${userTokenOrgId} and name ${
+        account!.accountName
+      } cancelled premium subscription successfully`
+    );
+    sendEmail(
+      account!.accountEmail,
+      "Premium Subscription Cancellation with SuSchool",
+      `You have successfully cancelled your premium subscription with SuSchool - Sorry to see you go`,
+      `<p>Hi ${account!.accountName}</p>
+     <p>You have successfully cancelled your premium subscription with SuSchool - Sorry to see you go</p>
+     <p>Please note that you will still be charged the regular cost for usages before the cancellation date. This will be on the 5th of next month</p>
+      <p>If you have any question or encouter some issue, 
+      please contact us at <a href="mailto:suhudalyeqeenapp@gmail.com">suhudalyeqeenapp@gmail.com</a> or <a href="mailto:alyekeeniy@gmail.com">alyekeeniy@gmail.com</a>
+            </p>`
+    );
+    res.status(201).json("You have successfully cancelled your premium subscription with SuSchool");
     return;
   }
 

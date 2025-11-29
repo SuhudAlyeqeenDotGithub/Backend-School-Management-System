@@ -16,7 +16,8 @@ import {
   prepareLastBills,
   getOrganisations,
   chargeLastBills,
-  upgradeToPremium
+  upgradeToPremium,
+  cancleSubscription
 } from "../controllers/adminControllers/billing";
 import { checkSubscription } from "../middleware/checkAccess";
 
@@ -43,6 +44,7 @@ router.post("/admin/settings", checkSubscription, updateOrgSettings);
 router.get("/admin/billings", getBillings);
 router.get("/admin/billing/subscription", getSubscription);
 router.post("/admin/billing/subscription/topremium", upgradeToPremium);
+router.post("/admin/billing/subscription/cancel", cancleSubscription);
 
 // owner prepare bills endpoint
 router.post("/admin/billing/preparelastbills", chargeLastBills);

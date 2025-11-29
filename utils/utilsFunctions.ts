@@ -24,6 +24,7 @@ import { StudentDayAttendanceTemplate } from "../models/student/dayattendance.ts
 import { StudentSubjectAttendanceTemplate } from "../models/student/subjectAttendance.ts";
 import { Billing } from "../models/admin/billingModel.ts";
 import { getOwnerMongoId } from "./envVariableGetters.ts";
+import path from "path";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -33,13 +34,44 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+const logoPath = path.join(__dirname, "..", "assets", "suhudlogo.png");
+export const buildEmailTemplate = (content: string) => {
+  return `
+  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px;">
+
+    <div style="text-align: center; margin-bottom: 20px;">
+      <img src="cid:logo" width="130" alt="SuSchool Logo" />
+    </div>
+
+    <div style="background: #ffffff; border-radius: 8px; padding: 20px; border: 1px solid #eee;">
+      ${content}
+    </div>
+
+    <div style="text-align: center; margin-top: 20px; color: #666; font-size: 13px;">
+      <p>SuSchool Team</p>
+      <p>If you need help, contact: 
+        <a href="mailto:suhudalyeqeenapp@gmail.com">suhudalyeqeenapp@gmail.com</a>
+      </p>
+    </div>
+
+  </div>
+  `;
+};
+
 export async function sendEmail(to: string, subject: string, text: string, html?: string) {
   const mailOptions = {
     from: process.env.EMAIL,
     to,
     subject,
     text,
-    html
+    html: html ? buildEmailTemplate(html) : undefined,
+    attachments: [
+      {
+        filename: "suhudlogo.png",
+        path: logoPath,
+        cid: "logo"
+      }
+    ]
   };
 
   try {
@@ -51,8 +83,8 @@ export async function sendEmail(to: string, subject: string, text: string, html?
 
 export async function sendEmailToOwner(subject: string, text: string, html?: string) {
   try {
-    await sendEmail("suhudalyeqeenapp@gmail.com", subject, text, html);
-    await sendEmail("alyekeeniy@gmail.com", subject, text, html);
+    await sendEmail("suhudalyeqeenapp@gmail.com", subject, text, text);
+    await sendEmail("alyekeeniy@gmail.com", subject, text, text);
   } catch (error: any) {
     throwError(error.message || "Error sending email", 500);
   }
