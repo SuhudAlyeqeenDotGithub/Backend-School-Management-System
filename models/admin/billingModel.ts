@@ -31,11 +31,11 @@ const billingSchema = new Schema(
     },
     dollarToNairaRate: {
       type: Number,
-      default: 1440.73
+      default: 0
     },
     dollarToPoundsRate: {
       type: Number,
-      default: 0.76
+      default: 0
     },
     billingStatus: { type: String, required: true, enum: ["Billed", "Not Billed"], default: "Not Billed" },
     paymentStatus: { type: String, required: true, enum: ["Paid", "Unpaid", "Pending", "Failed"], default: "Unpaid" },

@@ -317,6 +317,30 @@ export const getOrganisations = asyncHandler(async (req: Request, res: Response)
   return;
 });
 
+export const getOrganisation = asyncHandler(async (req: Request, res: Response) => {
+  const { organisationId } = req.userToken;
+
+  // find the account by email
+  const account = await Account.findOne(
+    { organisationId },
+    "organisationId accountName accountEmail accountPhone organisationInitial accountType"
+  );
+
+  if (!account) {
+    throwError("Error fetching account data", 500);
+  }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 4 },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize(account)
+    }
+  ]);
+
+  res.status(200).json(account);
+});
+
 export const prepareLastBills = async (accountId: string) => {
   // confirm the user is the owner
   if (accountId !== getOwnerMongoId()) {
@@ -604,11 +628,15 @@ export const chargeOldBills = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const inititalizeTransaction = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
 
   const { email, amount } = req.body;
 
   if (!email || !amount) {
+    sendEmailToOwner(
+      "Transaction Initiation Failed - SuSchool Management App",
+      `Please fill in all required fields (email and amount)`
+    );
     throwError("Please fill in all required fields (email and amount)", 400);
   }
 
@@ -624,19 +652,21 @@ export const inititalizeTransaction = asyncHandler(async (req: Request, res: Res
     throwError(message, 409);
   }
 
-  if (!absoluteAdmin) {
+  if (absoluteAdmin && accountId !== getOwnerMongoId()) {
+    sendEmailToOwner(
+      "Unauthorised Action: Transaction Initiation Attempt - SuSchool Management App",
+      `User with ID: ${accountId} and email: ${email} tried to initiate a transaction with amount: ${amount}`
+    );
     throwError("Unauthorised Action: Only absolute admin can perform this action", 403);
     return;
   }
 
-  const reference = generateCustomId("sulpay");
-  console.log("reference", reference);
-  return;
+  const reference = generateCustomId("sulpay", false, 10, true);
 
   try {
     const response = await axios.post(
       "https://api.paystack.co/transaction/initialize",
-      { email, amount, reference },
+      { email, amount: amount * 100, reference, channels: ["card"] },
       {
         headers: {
           Authorization: `Bearer ${getPaystackSecretKey()}`

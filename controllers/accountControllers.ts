@@ -475,7 +475,7 @@ export const fetchAccount = asyncHandler(async (req: Request, res: Response) => 
   const account = await Account.findById(accountId).populate([
     { path: "roleId" },
     { path: "staffId" },
-    { path: "organisationId", select: "organisationId accountName" }
+    { path: "organisationId", select: "organisationId accountName features" }
   ]);
 
   if (!account) {
@@ -502,7 +502,7 @@ export const fetchAccount = asyncHandler(async (req: Request, res: Response) => 
   delete reshapedAccount.accountPassword;
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 4 },
+    { field: "databaseOperation", value: 1 },
     {
       field: "databaseDataTransfer",
       value: getObjectSize(account)

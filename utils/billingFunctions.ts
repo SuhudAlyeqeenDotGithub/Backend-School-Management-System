@@ -1,5 +1,12 @@
 import { Billing } from "../models/admin/billingModel";
-import { getCurrentMonth, getLastMonth, getNextMonth, sendEmailToOwner, throwError } from "./utilsFunctions";
+import {
+  generateCustomId,
+  getCurrentMonth,
+  getLastMonth,
+  getNextMonth,
+  sendEmailToOwner,
+  throwError
+} from "./utilsFunctions";
 import { getObjectSize } from "./utilsFunctions";
 import { Request } from "express";
 
@@ -41,6 +48,7 @@ const createNewMonthBilling = async (organisationId: string, newBillingMonth = g
   const newBillingDoc = await Billing.create({
     organisationId,
     billingMonth: newBillingMonth,
+    billingId: `${generateCustomId("BILL", true)}`,
     billingDate: getNextMonth(),
     databaseStorageAndBackup: { value: lastMonthDatabaseStorage },
     cloudStorageGBStored: { value: lastMonthCloudStorageGBStored }

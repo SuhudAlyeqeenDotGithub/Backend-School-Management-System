@@ -17,15 +17,21 @@ import {
   getOrganisations,
   chargeLastBills,
   upgradeToPremium,
-  cancleSubscription
+  cancleSubscription,
+  inititalizeTransaction,
+  getOrganisation
 } from "../controllers/adminControllers/billing";
 import { checkSubscription } from "../middleware/checkAccess";
+import { getFeatures } from "../controllers/adminControllers/features";
 
 // admin roles endpoints
 router.get("/admin/roles", checkSubscription, getRoles);
 router.post("/admin/roles", checkSubscription, createRole);
 router.put("/admin/roles", checkSubscription, updateRole);
 router.delete("/admin/roles", checkSubscription, deleteRole);
+
+// features endpoints
+router.get("/admin/features", checkSubscription, getFeatures);
 
 // admin users endpoints
 router.get("/admin/users", checkSubscription, getUsers);
@@ -50,5 +56,7 @@ router.post("/admin/billing/subscription/cancel", cancleSubscription);
 router.post("/admin/billing/preparelastbills", chargeLastBills);
 router.post("/admin/billing/chargeoldbills", chargeOldBills);
 router.get("/admin/billing/organisations", getOrganisations);
+router.get("/admin/billing/organisation", getOrganisation);
+router.post("/admin/billing/initializefirstcharge", inititalizeTransaction);
 
 export default router;

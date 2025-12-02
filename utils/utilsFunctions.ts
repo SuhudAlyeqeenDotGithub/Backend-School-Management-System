@@ -49,6 +49,7 @@ export const buildEmailTemplate = (content: string) => {
 
     <div style="text-align: center; margin-top: 20px; color: #666; font-size: 13px;">
       <p>SuSchool Team</p>
+      <p>SUHUD - Evolving through code, technology, fitness, and motivation</p>
       <p>If you need help, contact: 
         <a href="mailto:suhudalyeqeenapp@gmail.com">suhudalyeqeenapp@gmail.com</a>
       </p>
@@ -212,9 +213,19 @@ export const generateSearchText = (fields: any[]) => {
 };
 
 // generateCustomId
-export const generateCustomId = (prefix?: string, neat = false, numberOfCharacters = 7) => {
+export const generateCustomId = (
+  prefix?: string,
+  neat = false,
+  numberOfCharacters = 7,
+  paystackReference?: boolean
+) => {
   if (neat) {
     const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    const nanoid = customAlphabet(alphabet, numberOfCharacters);
+    return `${prefix ? prefix + "-" : ""}${nanoid()}`;
+  }
+  if (paystackReference) {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopgrstuvwxyz0123456789";
     const nanoid = customAlphabet(alphabet, numberOfCharacters);
     return `${prefix ? prefix + "-" : ""}${nanoid()}`;
   }
@@ -403,21 +414,21 @@ export const fetchBillings = async (
 
   if (accountId === getOwnerMongoId()) {
     billings = await Billing.find({ ...query })
+      .sort({ _id: -1 })
+      .limit(limit + 1)
       .populate({
         path: "organisationId",
         select: "organisationId accountName accountEmail accountPhone organisationInitial accountType"
-      })
-      .sort({ _id: -1 })
-      .limit(limit + 1);
+      });
     totalCount = await Billing.countDocuments({ ...query });
   } else {
     billings = await Billing.find({ ...query, organisationId: orgId })
+      .sort({ _id: -1 })
+      .limit(limit + 1)
       .populate({
         path: "organisationId",
         select: "organisationId accountName accountEmail accountPhone organisationInitial accountType"
-      })
-      .sort({ _id: -1 })
-      .limit(limit + 1);
+      });
     totalCount = await Billing.countDocuments({ ...query, organisationId: orgId });
   }
 

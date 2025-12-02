@@ -114,10 +114,10 @@ const checkSubscription = async (req: Request, res: Response, next: NextFunction
         date.getFullYear() === subscription.freemiumEndDate.getFullYear();
 
       if (wasOnFreemiumLastMonth) {
-        next();
+        return next();
       }
 
-      const lastMonthBill = await Billing.findOne({ organisationId, billingMonth: getLastMonth() });
+      const lastMonthBill = await Billing.findOne({ organisationId, billingMonth: getLastMonth().slice(2) });
       if (!lastMonthBill) {
         sendEmailToOwner(
           "Access Denied",
