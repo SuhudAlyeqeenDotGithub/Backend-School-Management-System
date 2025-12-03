@@ -338,7 +338,7 @@ export const fetchUsers = async (
   if (asWho === "Absolute Admin") {
     users = await Account.find(
       { ...query, organisationId: orgId },
-      "_id organisationId staffId roleId uniqueTabAccess searchText accountStatus accountEmail accountName createdAt updatedAt"
+      "_id organisationId staffId roleId uniqueTabAccess features searchText accountStatus accountEmail accountName createdAt updatedAt"
     )
       .sort({ _id: -1 })
       .limit(limit + 1)
@@ -347,7 +347,7 @@ export const fetchUsers = async (
   } else {
     users = await Account.find(
       { ...query, organisationId: orgId, staffId: { $ne: selfId } },
-      "_id organisationId staffId roleId uniqueTabAccess searchText accountStatus accountEmail accountName createdAt updatedAt"
+      "_id organisationId staffId roleId uniqueTabAccess features searchText accountStatus accountEmail accountName createdAt updatedAt"
     )
       .sort({ _id: -1 })
       .limit(limit + 1)

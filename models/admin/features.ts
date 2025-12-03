@@ -7,7 +7,9 @@ const featuresSchema = new Schema(
     price: { type: Number, required: true },
     description: { type: String, required: true },
     requirements: { type: [String], required: true },
-    mandatory: { type: Boolean, required: true }
+    mandatory: { type: Boolean, required: true },
+    tabs: { type: [String], required: true },
+    availability: { type: String, required: true, enum: ["Available", "Launching Soon", "Unavailable"] }
   },
   { timestamps: true }
 );

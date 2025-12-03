@@ -35,6 +35,7 @@ const activityLogSchema = new Schema(
         "StudentEventAttendanceTemplate",
         "Topic",
         "Syllabus",
+        "Feature",
         "None"
       ]
     },

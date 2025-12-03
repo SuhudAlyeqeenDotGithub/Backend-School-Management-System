@@ -13,6 +13,7 @@ const accountSchema = new Schema(
     accountPassword: { type: String, required: true },
     accountPhone: { type: String },
     settings: { type: Schema.Types.Mixed, default: {}, required: true },
+    features: { type: [Schema.Types.Mixed], default: [], required: true },
     accountStatus: { type: String, required: true, default: "Active", enum: ["Active", "Locked"] },
     searchText: { type: String, required: true },
     roleId: { type: mongoose.Schema.Types.ObjectId, ref: "Role" },
@@ -27,7 +28,6 @@ accountSchema.pre("validate", function (next) {
   }
   next();
 });
-
 
 accountSchema.index({ accountEmail: 1, organisationId: 1 }, { unique: true });
 export const Account = model("Account", accountSchema);
