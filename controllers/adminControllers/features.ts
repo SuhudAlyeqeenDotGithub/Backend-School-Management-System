@@ -59,7 +59,7 @@ export const getFeatures = asyncHandler(async (req: Request, res: Response) => {
 // controller to handle role update
 export const purchaseFeature = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
-  const { _id: featureId } = req.body;
+  const { _id: featureId, orgFeatures } = req.body;
 
   if (!featureId) {
     throwError("Missing Feature Id - please refresh and try again", 400);
@@ -95,6 +95,14 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
 
   if (feature?.mandatory) {
     throwError("This feature has already been added by default to your subscription", 400);
+  }
+
+  const featuresRequirements = feature?.requirements;
+  if (!featuresRequirements?.every((f: any) => orgFeatures.includes(f))) {
+    throwError(
+      "You need to have the following features to purchase this feature: " + featuresRequirements?.join(", "),
+      400
+    );
   }
 
   const orgAccount = await Account.findByIdAndUpdate(

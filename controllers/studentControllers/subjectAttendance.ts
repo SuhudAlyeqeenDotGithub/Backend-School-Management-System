@@ -336,6 +336,13 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
 
   const { studentSubjectAttendances, ...rest } = req.body;
 
+  if (studentSubjectAttendances.length === 0) {
+    throwError(
+      "You cannot create an empty student subject attendance - Please load students or come back to create this when you are ready",
+      400
+    );
+  }
+
   if (!validateStudentSubjectAttendance({ ...req.body })) {
     throwError("Please fill in all required fields", 400);
   }

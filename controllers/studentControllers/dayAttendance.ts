@@ -298,6 +298,13 @@ export const createStudentDayAttendance = asyncHandler(async (req: Request, res:
 
   const { studentDayAttendances, ...rest } = req.body;
 
+  if (studentDayAttendances.length === 0) {
+    throwError(
+      "You cannot create an empty student day attendance - Please load students or come back to create this when you are ready",
+      400
+    );
+  }
+
   if (!validateStudentDayAttendance({ ...req.body })) {
     throwError("Please fill in all required fields", 400);
   }
