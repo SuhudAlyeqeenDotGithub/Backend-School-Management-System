@@ -21,6 +21,7 @@ import crypto from "crypto";
 import { Subscription } from "../models/admin/subscription.ts";
 import { logActivity } from "../utils/utilsFunctions.ts";
 import { registerBillings } from "../utils/billingFunctions.ts";
+import { Feature } from "../models/admin/features.ts";
 
 export const signupOrgAccount = asyncHandler(async (req: Request, res: Response) => {
   const {
@@ -193,10 +194,22 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     new Date()
   );
 
-  // update the organization account with the default role
+  const mandatoryFeatures = await Feature.find({ isMandatory: true });
+
+  const defaultFeatures = mandatoryFeatures.map((feature) => {
+    return {
+      featureId: feature._id,
+      featureName: feature.name,
+      addedOn: new Date(),
+      tabs: feature.tabs,
+      mandatory: feature.mandatory
+    };
+  });
+
+  // update the organization account with the default role and mandatory features
   const updatedOrgAccount = await Account.findByIdAndUpdate(
     orgAccount._id,
-    { roleId: defaultRole._id },
+    { roleId: defaultRole._id, features: defaultFeatures },
     { new: true }
   ).populate([
     { path: "roleId" },

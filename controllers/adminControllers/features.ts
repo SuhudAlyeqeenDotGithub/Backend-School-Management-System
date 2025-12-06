@@ -21,6 +21,7 @@ import { registerBillings } from "../../utils/billingFunctions.ts";
 import { Account } from "../../models/admin/accountModel.ts";
 import { Billing } from "../../models/admin/billingModel.ts";
 import { privateDecrypt } from "crypto";
+import { removeFeatureRelatedData } from "utils/featureDataRemover.ts";
 
 export const getFeatures = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
@@ -272,6 +273,132 @@ export const removeFeatureAndKeepData = asyncHandler(async (req: Request, res: R
       `Organisation with the ID: ${userTokenOrgId} tried to remove {${featureToRemove?.name}} to their account but failed`
     );
     throwError("An error occured while adding feature to your account", 500);
+  }
+
+  await sendEmail(
+    orgAccount!.accountEmail,
+    "Feature Removed",
+    `You have successfully removed the feature: ${featureToRemove?.name} from your account. You will still be charged for related data stored`
+  );
+  await sendEmailToOwner(
+    "Feature Removed - Remove Keep Data",
+    `The user: ${orgAccount?.accountName} has successfully removed the feature: ${featureToRemove?.name} from their account. But their data will be kept`
+  );
+
+  let activityLog;
+  const logActivityAllowed = organisation?.settings?.logActivity;
+
+  if (logActivityAllowed) {
+    activityLog = await logActivity(
+      account?.organisationId,
+      accountId,
+      "Feature Removed - Remove Keep Data",
+      "Feature",
+      featureId,
+      featureToRemove?.name,
+      [
+        {
+          kind: "D",
+          rhs: {
+            _id: featureId,
+            name: featureToRemove?.name,
+            tabs: featureToRemove?.tabs,
+            mandatory: featureToRemove?.mandatory
+          }
+        }
+      ],
+      new Date()
+    );
+  }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) + allProviderFeatures.length },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([orgAccount, organisation, role, account, allProviderFeatures]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
+  res.status(201).json(orgAccount);
+  return;
+});
+
+export const removeFeatureAndDeleteData = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { _id: featureId } = req.body;
+
+  if (!featureId) {
+    throwError("Missing Feature Id - please refresh and try again", 400);
+  }
+
+  // confirm user
+  const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
+
+  const { roleId: creatorRoleId } = account as any;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    throwError(message, 409);
+  }
+
+  const hasAccess = checkAccess(account, creatorTabAccess, "Update Features");
+
+  if (!absoluteAdmin && !hasAccess) {
+    throwError("Unauthorised Action: You do not have access to edit roles - Please contact your admin", 403);
+  }
+
+  const orgFeatures = organisation?.features?.map((f: any) => f.name);
+
+  let allProviderFeatures = await Feature.find();
+
+  const featureToRemove = allProviderFeatures.find((f: any) => f._id.toString() === featureId);
+  if (!featureToRemove) {
+    throwError("The feature you are trying to remove may not exist - please refresh and try again", 400);
+  }
+
+  const nonMandatoryFeatures = allProviderFeatures.filter((f: any) => !f.mandatory);
+  const dependentFeatures = nonMandatoryFeatures.filter(
+    (f: any) => orgFeatures.includes(f.name) && f.requirements.includes(featureToRemove?.name)
+  );
+
+  if (dependentFeatures.length > 0) {
+    throwError(
+      `This feature cannot be removed as it is a requirement for the following existing feature : (${dependentFeatures
+        .map((f: any) => f.name)
+        .join(", ")}) - You need to be removed them if you want to remove this feature`,
+      400
+    );
+  }
+
+  const orgAccount = await Account.findByIdAndUpdate(
+    userTokenOrgId,
+    {
+      $set: {
+        features: organisation?.features?.filter((f: any) => f._id.toString() !== featureId)
+      }
+    },
+    { new: true }
+  ).select("organisationId accountName accountEmail accountPhone organisationInitial accountType features");
+
+  if (!orgAccount) {
+    await sendEmailToOwner(
+      "An error occured while removing feature from organisation account",
+      `Organisation with the ID: ${userTokenOrgId} tried to remove {${featureToRemove?.name}} to their account but failed`
+    );
+    throwError("An error occured while adding feature to your account", 500);
+  }
+
+  const removeRelatedData = await removeFeatureRelatedData(featureToRemove!.name, userTokenOrgId);
+
+  if (!removeRelatedData) {
+    await sendEmailToOwner(
+      "An error occured while removing feature data from database",
+      `An error occured while clearing the data related to the feature: ${featureToRemove?.name} from the database for organisation with the ID: ${userTokenOrgId} `
+    );
+    throwError("An error occured while clearing related data", 500);
   }
 
   await sendEmail(
