@@ -11,6 +11,8 @@ import { getObjectSize } from "./utilsFunctions";
 import { Request } from "express";
 
 import { getEnvVarAsNumber, getOwnerMongoId } from "./envVariableGetters";
+import { Account } from "../models/admin/accountModel";
+import { Feature } from "../models/admin/features";
 
 export const addVat = (amount: number): number => {
   const ukVatPercentage = getEnvVarAsNumber("UK_VAT_PERCENTAGE");
@@ -45,13 +47,42 @@ export const registerBillings = (req: Request, fields: { field: string; value: n
 
 const createNewMonthBilling = async (organisationId: string, newBillingMonth = getCurrentMonth()) => {
   const { lastMonthDatabaseStorage, lastMonthCloudStorageGBStored } = await getLastMonthStorages(organisationId);
+  const organisationAccount = await Account.findById(organisationId);
+
+  if (!organisationAccount) {
+    await sendEmailToOwner(
+      "Failed to retrieve organisation account for features - School Management App",
+      `Failed to retrieve organisation account for features for organisation ID: ${organisationId} for month: ${newBillingMonth}`
+    );
+    throwError("Failed to create current month billing document", 500);
+  }
+
+  const features = organisationAccount?.features;
+  const featuresIds = features?.map((feature) => feature._id);
+  const featuresObjects = await Feature.find({ _id: { $in: featuresIds } }, "name _id price");
+
+  if (!featuresObjects) {
+    await sendEmailToOwner(
+      "Failed to retrieve organisation features for new billing document - School Management App",
+      `Failed to retrieve features for new billing document for organisation ID: ${organisationId} for month: ${newBillingMonth}`
+    );
+    throwError("Failed to create current month billing document", 500);
+  }
+
+  const featuresToCharge = featuresObjects.map((feature) => ({
+    _id: feature._id,
+    name: feature.name,
+    price: feature.price
+  }));
+
   const newBillingDoc = await Billing.create({
     organisationId,
     billingMonth: newBillingMonth,
     billingId: `${generateCustomId("BILL", true)}`,
     billingDate: getNextMonth(),
     databaseStorageAndBackup: { value: lastMonthDatabaseStorage },
-    cloudStorageGBStored: { value: lastMonthCloudStorageGBStored }
+    cloudStorageGBStored: { value: lastMonthCloudStorageGBStored },
+    featuresToCharge
   });
 
   if (!newBillingDoc) {
@@ -62,7 +93,7 @@ const createNewMonthBilling = async (organisationId: string, newBillingMonth = g
     throwError("Failed to create current month billing document", 500);
   }
 
-  return { newBillingDoc, returnOperationCount: 3 };
+  return { newBillingDoc, returnOperationCount: 5 + featuresObjects.length };
 };
 
 export const getSelfBillingDoc = async () => {

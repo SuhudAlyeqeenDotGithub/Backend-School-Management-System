@@ -45,10 +45,10 @@ const billingSchema = new Schema(
       required: true,
       default: 0
     },
-    appProvisionCost: {
-      type: Number,
+    featuresToCharge: {
+      type: [{ _id: String, name: String, price: Number }],
       required: true,
-      default: () => getAppProvisionRate()
+      default: []
     },
 
     // render

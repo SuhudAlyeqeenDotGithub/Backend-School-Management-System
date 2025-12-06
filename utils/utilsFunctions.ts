@@ -65,7 +65,7 @@ export async function sendEmail(to: string, subject: string, text: string, html?
     to,
     subject,
     text,
-    html: html ? buildEmailTemplate(html) : undefined,
+    html: html ? buildEmailTemplate(html) : buildEmailTemplate(text),
     attachments: [
       {
         filename: "suhudlogo.png",

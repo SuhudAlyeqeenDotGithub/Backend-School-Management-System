@@ -12,12 +12,15 @@ import {
   getObjectSize,
   toNegative,
   sendEmailToOwner,
-  sendEmail
+  sendEmail,
+  getCurrentMonth
 } from "../../utils/utilsFunctions.ts";
 
 import { diff } from "deep-diff";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 import { Account } from "../../models/admin/accountModel.ts";
+import { Billing } from "../../models/admin/billingModel.ts";
+import { privateDecrypt } from "crypto";
 
 export const getFeatures = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
@@ -125,11 +128,33 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
   ).select("organisationId accountName accountEmail accountPhone organisationInitial accountType features");
 
   if (!orgAccount) {
-    sendEmailToOwner(
+    await sendEmailToOwner(
       "An error occured while adding feature to organisation account",
       `Organisation with the ID: ${userTokenOrgId} tried to add a feature to their account but failed`
     );
     throwError("An error occured while adding feature to your account", 500);
+  }
+
+  const addedToBilling = await Billing.findOneAndUpdate(
+    { organisationId: userTokenOrgId, billingMonth: getCurrentMonth() },
+    {
+      $push: {
+        featuresToCharge: {
+          _id: featureId,
+          name: feature?.name,
+          price: feature?.price
+        }
+      }
+    },
+    { new: true }
+  );
+
+  if (!addedToBilling) {
+    await sendEmailToOwner(
+      "An error occured while adding feature to billing",
+      `Organisation with the ID: ${userTokenOrgId} tried to add a feature to their billing but failed`
+    );
+    throwError("An error occured while adding feature to billing - please try again then contact support", 500);
   }
 
   let activityLog;
@@ -160,7 +185,7 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 8 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
       value:
@@ -169,12 +194,12 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
     }
   ]);
 
-  sendEmail(
+  await sendEmail(
     orgAccount!.accountEmail,
     "Feature Purchased",
     `You have successfully added the feature: ${feature?.name} to your account. You will be charged for this feature from the next billing cycle`
   );
-  sendEmailToOwner(
+  await sendEmailToOwner(
     "Feature Purchased",
     `The user: ${orgAccount?.accountName} has successfully added the feature: ${feature?.name} to their account. `
   );
@@ -242,19 +267,19 @@ export const removeFeatureAndKeepData = asyncHandler(async (req: Request, res: R
   ).select("organisationId accountName accountEmail accountPhone organisationInitial accountType features");
 
   if (!orgAccount) {
-    sendEmailToOwner(
+    await sendEmailToOwner(
       "An error occured while removing feature from organisation account",
       `Organisation with the ID: ${userTokenOrgId} tried to remove {${featureToRemove?.name}} to their account but failed`
     );
     throwError("An error occured while adding feature to your account", 500);
   }
 
-  sendEmail(
+  await sendEmail(
     orgAccount!.accountEmail,
     "Feature Removed",
     `You have successfully removed the feature: ${featureToRemove?.name} from your account. You will still be charged for related data stored`
   );
-  sendEmailToOwner(
+  await sendEmailToOwner(
     "Feature Removed - Remove Keep Data",
     `The user: ${orgAccount?.accountName} has successfully removed the feature: ${featureToRemove?.name} from their account. But their data will be kept`
   );

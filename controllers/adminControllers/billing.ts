@@ -187,7 +187,7 @@ export const upgradeToPremium = asyncHandler(async (req: Request, res: Response)
       }
     );
     if (!subscription) {
-      sendEmailToOwner(
+      await sendEmailToOwner(
         "Premium Subscription Upgrade Failed",
         `Organisation with the ID: ${userTokenOrgId} tried to upgrade to premium but failed`
       );
@@ -202,7 +202,7 @@ export const upgradeToPremium = asyncHandler(async (req: Request, res: Response)
       }
     ]);
 
-    sendEmailToOwner(
+    await sendEmailToOwner(
       "Premium Subscription Upgrade",
       `Organisation with the ID: ${userTokenOrgId} and name ${account!.accountName} upgraded to premium successfully`
     );
@@ -254,7 +254,7 @@ export const cancleSubscription = asyncHandler(async (req: Request, res: Respons
       }
     );
     if (!subscription) {
-      sendEmailToOwner(
+      await sendEmailToOwner(
         "Premium Subscription Cancellation Failed",
         `Organisation with the ID: ${userTokenOrgId} tried to cancel premium subscription but failed`
       );
@@ -269,7 +269,7 @@ export const cancleSubscription = asyncHandler(async (req: Request, res: Respons
       }
     ]);
 
-    sendEmailToOwner(
+    await sendEmailToOwner(
       "Premium Subscription Cancellation",
       `Organisation with the ID: ${userTokenOrgId} and name ${
         account!.accountName
@@ -344,7 +344,7 @@ export const getOrganisation = asyncHandler(async (req: Request, res: Response) 
 export const prepareLastBills = async (accountId: string) => {
   // confirm the user is the owner
   if (accountId !== getOwnerMongoId()) {
-    sendEmailToOwner(
+    await sendEmailToOwner(
       "Unauthorized Prepare Last Bills Attempt - SuSchool  Management App",
       `An unauthorized attempt to prepare old bills was made by account ID: ${accountId}.`
     );
@@ -359,7 +359,7 @@ export const prepareLastBills = async (accountId: string) => {
 
   // check if there are billing documents to process
   if (!billingDocs || billingDocs.length === 0) {
-    sendEmailToOwner(
+    await sendEmailToOwner(
       "Prepare Bills - No unbilled billing documents found - SuSchool Management App",
       `No unbilled billing documents were found during the prepare bills operation. ${billingMonth}`
     );
@@ -400,7 +400,7 @@ export const prepareLastBills = async (accountId: string) => {
 
   const totalUsageDoc = await TotalUsage.create({ ...totalUsages, billingMonth, billingDate: getNextMonth() });
   if (!totalUsageDoc) {
-    sendEmailToOwner(
+    await sendEmailToOwner(
       "Prepare Last Bills - Failed to create total usage document - SuSchool Management App",
       `Failed to create total usage document for billing month: ${billingMonth}.`
     );
@@ -410,14 +410,14 @@ export const prepareLastBills = async (accountId: string) => {
 
   // check if the number of total usages and cost calculations are the same
   if (Object.keys(totalUsages).length !== Object.keys(targetUsageRates).length) {
-    sendEmailToOwner(
+    await sendEmailToOwner(
       "Prepare Last Bills - Mismatch in total usages and cost calculations - SuSchool Management App",
       `There was a mismatch in the number of total usages and cost calculations for billing month: ${billingMonth}. Please investigate.`
     );
     throwError("Mismatch in total usages and cost calculations", 500);
   }
 
-  sendEmailToOwner(
+  await sendEmailToOwner(
     "Total Usages and Cost Calculations - SuSchool Management App",
     `The total usages for billing month: ${billingMonth} are as follows: ${JSON.stringify(totalUsages)}`
   );
@@ -441,7 +441,10 @@ export const prepareLastBills = async (accountId: string) => {
       }
     }
 
-    billingDoc.totalCost = totalCost + billingDoc.appProvisionCost;
+    const featuresCost = billingDoc.featuresToCharge?.reduce((acc, feature) => acc + (feature.price ?? 0), 0);
+    totalCost += featuresCost;
+
+    billingDoc.totalCost = totalCost;
     updatedBillingDocs.push(billingDoc);
 
     // update billing doc to the database
@@ -460,7 +463,7 @@ export const prepareLastBills = async (accountId: string) => {
     );
     // check if the update was successful
     if (!updatedBill) {
-      sendEmailToOwner(
+      await sendEmailToOwner(
         "Prepare Last Bills - Error updating billing document - SuSchool Management App",
         `An error occurred while updating billing document ID: ${billingDoc._id} for billing month: ${billingMonth}.`
       );
@@ -474,7 +477,7 @@ export const prepareLastBills = async (accountId: string) => {
 export const prepareOldBills = async (accountId: string) => {
   // confirm the user is the owner
   if (accountId !== getOwnerMongoId()) {
-    sendEmailToOwner(
+    await sendEmailToOwner(
       "Unauthorized Prepare Old Bills Attempt - SuSchool  Management App",
       `An unauthorized attempt to prepare old bills was made by account ID: ${accountId}.`
     );
@@ -489,7 +492,7 @@ export const prepareOldBills = async (accountId: string) => {
 
   // check if there are billing documents to process
   if (!billingDocs || billingDocs.length === 0) {
-    sendEmailToOwner(
+    await sendEmailToOwner(
       "Prepare Bills - No unbilled billing documents found - SuSchool Management App",
       `No unbilled billing documents were found during the prepare bills operation.`
     );
@@ -534,7 +537,7 @@ export const prepareOldBills = async (accountId: string) => {
 
     const totalUsageDoc = await TotalUsage.create({ ...totalUsages, billingMonth, billingDate: getNextMonth() });
     if (!totalUsageDoc) {
-      sendEmailToOwner(
+      await sendEmailToOwner(
         "Prepare Old Bills - Failed to create total usage document - SuSchool Management App",
         `Failed to create total usage document for billing month: ${billingMonth}.`
       );
@@ -544,14 +547,14 @@ export const prepareOldBills = async (accountId: string) => {
 
     // check if the number of total usages and cost calculations are the same
     if (Object.keys(totalUsages).length !== Object.keys(targetUsageRates).length) {
-      sendEmailToOwner(
+      await sendEmailToOwner(
         "Prepare Old Bills - Mismatch in total usages and cost calculations - SuSchool Management App",
         `There was a mismatch in the number of total usages and cost calculations for billing month: ${billingMonth}. Please investigate.`
       );
       throwError("Mismatch in total usages and cost calculations", 500);
     }
 
-    sendEmailToOwner(
+    await sendEmailToOwner(
       "Total Usages and Cost Calculations - SuSchool Management App",
       `The total usages and cost calculations for billing month: ${billingMonth} are as follows: ${JSON.stringify(
         totalUsages
@@ -577,7 +580,10 @@ export const prepareOldBills = async (accountId: string) => {
         }
       }
 
-      billingDoc.totalCost = totalCost + billingDoc.appProvisionCost;
+      const featuresCost = billingDoc.featuresToCharge?.reduce((acc, feature) => acc + (feature.price ?? 0), 0);
+      totalCost += featuresCost;
+
+      billingDoc.totalCost = totalCost;
       updatedBillingDocs.push(billingDoc);
 
       // update billing doc to the database
@@ -596,7 +602,7 @@ export const prepareOldBills = async (accountId: string) => {
       );
       // check if the update was successful
       if (!updatedBill) {
-        sendEmailToOwner(
+        await sendEmailToOwner(
           "Prepare Old Bills - Error updating billing document - SuSchool Management App",
           `An error occurred while updating billing document ID: ${billingDoc._id} for billing month: ${billingMonth}.`
         );
@@ -633,7 +639,7 @@ export const inititalizeTransaction = asyncHandler(async (req: Request, res: Res
   const { email, amount } = req.body;
 
   if (!email || !amount) {
-    sendEmailToOwner(
+    await sendEmailToOwner(
       "Transaction Initiation Failed - SuSchool Management App",
       `Please fill in all required fields (email and amount)`
     );
@@ -653,7 +659,7 @@ export const inititalizeTransaction = asyncHandler(async (req: Request, res: Res
   }
 
   if (absoluteAdmin && accountId !== getOwnerMongoId()) {
-    sendEmailToOwner(
+    await sendEmailToOwner(
       "Unauthorised Action: Transaction Initiation Attempt - SuSchool Management App",
       `User with ID: ${accountId} and email: ${email} tried to initiate a transaction with amount: ${amount}`
     );
