@@ -22,7 +22,12 @@ import {
   getOrganisation
 } from "../controllers/adminControllers/billing";
 import { checkSubscription } from "../middleware/checkAccess";
-import { getFeatures, purchaseFeature, removeFeatureAndKeepData } from "../controllers/adminControllers/features";
+import {
+  getFeatures,
+  purchaseFeature,
+  removeFeatureAndDeleteData,
+  removeFeatureAndKeepData
+} from "../controllers/adminControllers/features";
 
 // admin roles endpoints
 router.get("/admin/roles", checkSubscription, getRoles);
@@ -34,6 +39,7 @@ router.delete("/admin/roles", checkSubscription, deleteRole);
 router.get("/admin/features", checkSubscription, getFeatures);
 router.post("/admin/feature/purchase", checkSubscription, purchaseFeature);
 router.delete("/admin/feature/remove-keep", checkSubscription, removeFeatureAndKeepData);
+router.delete("/admin/feature/remove-delete", checkSubscription, removeFeatureAndDeleteData);
 
 // admin users endpoints
 router.get("/admin/users", checkSubscription, getUsers);

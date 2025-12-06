@@ -295,10 +295,10 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   await VerificationCode.deleteOne({ verificationCode });
   const emailSent = await sendEmail(
     orgAccount.accountEmail,
-    "Welcome to Al-Yeqeen School Management App - Account Created Successfully",
+    "Welcome to SuSchool Management App - Account Created Successfully",
     `Hi ${updatedOrgAccount?.accountName}, your account has been created successfully.`,
     `   <h1 >Welcome!</h1>
-    <p>Thank you for creating an account with Al-Yeqeen School Management App. We are glad to have you.</p>
+    <p>Thank you for creating an account with SuSchool. We are glad to have you.</p>
     <a href="https://suhud-ayodeji-yekini-portfolio.vercel.app/"  style="
            display: inline-block;
            padding: 12px 20px;

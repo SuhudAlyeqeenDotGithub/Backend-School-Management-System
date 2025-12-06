@@ -23,25 +23,25 @@ export const removeFeatureRelatedData = async (feature: string, organisationId: 
       );
       throwError("Error deleting student enrollments", 500);
     }
-    return true;
+    return deleteProfile.deletedCount + deleteEnrollment.deletedCount;
   }
   if (feature === "Student Attendance") {
-    // const deleteDayAttendanceTemplate = await StudentDayAttendanceTemplate.deleteMany({ organisationId });
-    // if (!deleteDayAttendanceTemplate) {
-    //   await sendEmailToOwner(
-    //     "Error deleting student day attendance templates",
-    //     `Error deleting student day attendance templates for organisation ID: ${organisationId}`
-    //   );
-    //   throwError("Error deleting student day attendance templates", 500);
-    // }
-    // const deleteDayAttendanceStore = await StudentDayAttendanceStore.deleteMany({ organisationId });
-    // if (!deleteDayAttendanceStore) {
-    //   await sendEmailToOwner(
-    //     "Error deleting student day attendance stores",
-    //     `Error deleting student day attendance stores for organisation ID: ${organisationId}`
-    //   );
-    //   throwError("Error deleting student day attendance stores", 500);
-    // }
+    const deleteDayAttendanceTemplate = await StudentDayAttendanceTemplate.deleteMany({ organisationId });
+    if (!deleteDayAttendanceTemplate) {
+      await sendEmailToOwner(
+        "Error deleting student day attendance templates",
+        `Error deleting student day attendance templates for organisation ID: ${organisationId}`
+      );
+      throwError("Error deleting student day attendance templates", 500);
+    }
+    const deleteDayAttendanceStore = await StudentDayAttendanceStore.deleteMany({ organisationId });
+    if (!deleteDayAttendanceStore) {
+      await sendEmailToOwner(
+        "Error deleting student day attendance stores",
+        `Error deleting student day attendance stores for organisation ID: ${organisationId}`
+      );
+      throwError("Error deleting student day attendance stores", 500);
+    }
 
     const deleteSubjectAttendanceTemplate = await StudentSubjectAttendanceTemplate.deleteMany({ organisationId });
     if (!deleteSubjectAttendanceTemplate) {
@@ -60,9 +60,10 @@ export const removeFeatureRelatedData = async (feature: string, organisationId: 
       );
       throwError("Error deleting student subject attendance stores", 500);
     }
-    return true;
+
+    return deleteSubjectAttendanceTemplate.deletedCount + deleteSubjectAttendanceStore.deletedCount;
   }
   if (feature === "Student Assessments") {
-    return true;
+    return 0;
   }
 };

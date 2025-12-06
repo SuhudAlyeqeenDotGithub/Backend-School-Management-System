@@ -15,13 +15,10 @@ import {
   sendEmail,
   getCurrentMonth
 } from "../../utils/utilsFunctions.ts";
-
-import { diff } from "deep-diff";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 import { Account } from "../../models/admin/accountModel.ts";
 import { Billing } from "../../models/admin/billingModel.ts";
-import { privateDecrypt } from "crypto";
-import { removeFeatureRelatedData } from "utils/featureDataRemover.ts";
+import { removeFeatureRelatedData } from "../../utils/featureDataRemover.ts";
 
 export const getFeatures = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
@@ -136,26 +133,36 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
     throwError("An error occured while adding feature to your account", 500);
   }
 
-  const addedToBilling = await Billing.findOneAndUpdate(
-    { organisationId: userTokenOrgId, billingMonth: getCurrentMonth() },
-    {
-      $push: {
-        featuresToCharge: {
-          _id: featureId,
-          name: feature?.name,
-          price: feature?.price
-        }
-      }
-    },
-    { new: true }
-  );
+  const existInBill = await Billing.findOne({
+    organisationId: userTokenOrgId,
+    billingMonth: getCurrentMonth(),
+    "featuresToCharge._id": featureId
+  });
 
-  if (!addedToBilling) {
-    await sendEmailToOwner(
-      "An error occured while adding feature to billing",
-      `Organisation with the ID: ${userTokenOrgId} tried to add a feature to their billing but failed`
+  if (!existInBill) {
+    const addedToBilling = await Billing.findOneAndUpdate(
+      { organisationId: userTokenOrgId, billingMonth: getCurrentMonth() },
+      {
+        $push: {
+          featuresToCharge: {
+            _id: featureId,
+            name: feature?.name,
+            price: feature?.price
+          }
+        }
+      },
+      { new: true }
     );
-    throwError("An error occured while adding feature to billing - please try again then contact support", 500);
+    if (!addedToBilling) {
+      await sendEmailToOwner(
+        "An error occured while adding feature to billing",
+        `Organisation with the ID: ${userTokenOrgId} tried to add a feature to their billing but failed`
+      );
+      throwError(
+        "An error occured while adding feature to billing - please try again and contact support if the issue persists",
+        500
+      );
+    }
   }
 
   let activityLog;
@@ -186,7 +193,7 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 8 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) + (!existInBill ? 2 : 0) },
     {
       field: "databaseDataTransfer",
       value:
@@ -398,17 +405,17 @@ export const removeFeatureAndDeleteData = asyncHandler(async (req: Request, res:
       "An error occured while removing feature data from database",
       `An error occured while clearing the data related to the feature: ${featureToRemove?.name} from the database for organisation with the ID: ${userTokenOrgId} `
     );
-    throwError("An error occured while clearing related data", 500);
+    throwError("An error occured while clearing related data - it could be there is no related data prior", 500);
   }
 
   await sendEmail(
     orgAccount!.accountEmail,
-    "Feature Removed",
-    `You have successfully removed the feature: ${featureToRemove?.name} from your account. You will still be charged for related data stored`
+    "Feature Removed - Data Cleared",
+    `You have successfully removed the feature: ${featureToRemove?.name} from your account. All related data has been cleared`
   );
   await sendEmailToOwner(
-    "Feature Removed - Remove Keep Data",
-    `The user: ${orgAccount?.accountName} has successfully removed the feature: ${featureToRemove?.name} from their account. But their data will be kept`
+    "Feature Removed - Remove and Delete Data",
+    `The user: ${orgAccount?.accountName} has successfully removed the feature: ${featureToRemove?.name} from their account. All related data has been cleared`
   );
 
   let activityLog;
@@ -418,7 +425,7 @@ export const removeFeatureAndDeleteData = asyncHandler(async (req: Request, res:
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Feature Removed - Remove Keep Data",
+      "Feature Removed - Remove Delete Data",
       "Feature",
       featureId,
       featureToRemove?.name,
@@ -438,7 +445,10 @@ export const removeFeatureAndDeleteData = asyncHandler(async (req: Request, res:
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) + allProviderFeatures.length },
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0) + allProviderFeatures.length + (removeRelatedData ? removeRelatedData : 0)
+    },
     {
       field: "databaseDataTransfer",
       value:
