@@ -31,6 +31,16 @@ export const getStudentImageUploadSignedUrl = asyncHandler(async (req: Request, 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
+  const orgHasRequiredFeature = organisation?.features
+    ?.map((feature) => feature.name)
+    .includes("Student Profile & Enrollment");
+  if (!orgHasRequiredFeature) {
+    throwError(
+      "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
+      403
+    );
+  }
+
   const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
@@ -92,6 +102,15 @@ export const getStudentImageViewSignedUrl = asyncHandler(async (req: Request, re
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const orgHasRequiredFeature = organisation?.features
+    ?.map((feature) => feature.name)
+    .includes("Student Profile & Enrollment");
+  if (!orgHasRequiredFeature) {
+    throwError(
+      "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
+      403
+    );
+  }
 
   const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
@@ -105,7 +124,7 @@ export const getStudentImageViewSignedUrl = asyncHandler(async (req: Request, re
   const hasCreateStudentAccess = checkAccess(account, tabAccess, "View Student Profile");
 
   if (!hasCreateStudentAccess && !absoluteAdmin) {
-    throwError("Unauthorised Action: You do not have access to upload image- Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to view image- Please contact your admin", 403);
   }
 
   const file = storage.bucket(bucketName).file(imageLocalDestination);
@@ -147,6 +166,15 @@ export const deleteStudentImageInBucket = asyncHandler(async (req: Request, res:
   }
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const orgHasRequiredFeature = organisation?.features
+    ?.map((feature) => feature.name)
+    .includes("Student Profile & Enrollment");
+  if (!orgHasRequiredFeature) {
+    throwError(
+      "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
+      403
+    );
+  }
 
   const { roleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;

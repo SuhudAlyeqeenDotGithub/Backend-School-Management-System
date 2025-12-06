@@ -50,6 +50,13 @@ export const fetchSubjectAttendanceStore = asyncHandler(async (req: Request, res
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const orgHasRequiredFeature = organisation?.features?.map((feature) => feature.name).includes("Student Attendance");
+  if (!orgHasRequiredFeature) {
+    throwError(
+      "This feature is not enabled for this organisation - You need to purchase Student Attendance to use it",
+      403
+    );
+  }
 
   const { roleId, accountStatus, studentId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
@@ -117,6 +124,13 @@ export const getEnrolledSubjectAttendanceStudents = asyncHandler(async (req: Req
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const orgHasRequiredFeature = organisation?.features?.map((feature) => feature.name).includes("Student Attendance");
+  if (!orgHasRequiredFeature) {
+    throwError(
+      "This feature is not enabled for this organisation - You need to purchase Student Attendance to use it",
+      403
+    );
+  }
 
   const { roleId, accountStatus, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
@@ -240,6 +254,13 @@ export const getStudentSubjectAttendances = asyncHandler(async (req: Request, re
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const orgHasRequiredFeature = organisation?.features?.map((feature) => feature.name).includes("Student Attendance");
+  if (!orgHasRequiredFeature) {
+    throwError(
+      "This feature is not enabled for this organisation - You need to purchase Student Attendance to use it",
+      403
+    );
+  }
 
   const { roleId, staffId, studentId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
@@ -347,9 +368,15 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
     throwError("Please fill in all required fields", 400);
   }
 
-  // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-  // confirm organisation
+  const orgHasRequiredFeature = organisation?.features?.map((feature) => feature.name).includes("Student Attendance");
+  if (!orgHasRequiredFeature) {
+    throwError(
+      "This feature is not enabled for this organisation - You need to purchase Student Attendance to use it",
+      403
+    );
+  }
+
   const orgParsedId = account!.organisationId!._id.toString();
 
   const { roleId } = account as any;
@@ -603,9 +630,15 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
     throwError("Please fill in all required fields", 400);
   }
 
-  // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-  // confirm organisation
+  const orgHasRequiredFeature = organisation?.features?.map((feature) => feature.name).includes("Student Attendance");
+  if (!orgHasRequiredFeature) {
+    throwError(
+      "This feature is not enabled for this organisation - You need to purchase Student Attendance to use it",
+      403
+    );
+  }
+
   const orgParsedId = account!.organisationId!._id.toString();
 
   const { roleId, accountStatus } = account as any;
@@ -851,6 +884,13 @@ export const deleteStudentSubjectAttendance = asyncHandler(async (req: Request, 
   }
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const orgHasRequiredFeature = organisation?.features?.map((feature) => feature.name).includes("Student Attendance");
+  if (!orgHasRequiredFeature) {
+    throwError(
+      "This feature is not enabled for this organisation - You need to purchase Student Attendance to use it",
+      403
+    );
+  }
 
   const { roleId: creatorRoleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;

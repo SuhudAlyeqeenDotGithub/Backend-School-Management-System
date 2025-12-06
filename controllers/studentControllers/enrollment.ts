@@ -62,6 +62,15 @@ export const getStudentEnrollments = asyncHandler(async (req: Request, res: Resp
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const orgHasRequiredFeature = organisation?.features
+    ?.map((feature) => feature.name)
+    .includes("Student Profile & Enrollment");
+  if (!orgHasRequiredFeature) {
+    throwError(
+      "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
+      403
+    );
+  }
 
   const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
@@ -171,6 +180,15 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const orgHasRequiredFeature = organisation?.features
+    ?.map((feature) => feature.name)
+    .includes("Student Profile & Enrollment");
+  if (!orgHasRequiredFeature) {
+    throwError(
+      "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
+      403
+    );
+  }
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
 
@@ -325,9 +343,17 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
     throwError("Please fill in all required fields", 400);
   }
 
-  // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-  // confirm organisation
+  const orgHasRequiredFeature = organisation?.features
+    ?.map((feature) => feature.name)
+    .includes("Student Profile & Enrollment");
+  if (!orgHasRequiredFeature) {
+    throwError(
+      "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
+      403
+    );
+  }
+
   const orgParsedId = account!.organisationId!._id.toString();
 
   const { roleId, accountStatus } = account as any;
@@ -458,6 +484,15 @@ export const deleteStudentEnrollment = asyncHandler(async (req: Request, res: Re
   }
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  const orgHasRequiredFeature = organisation?.features
+    ?.map((feature) => feature.name)
+    .includes("Student Profile & Enrollment");
+  if (!orgHasRequiredFeature) {
+    throwError(
+      "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
+      403
+    );
+  }
 
   const { roleId: creatorRoleId, accountStatus } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
