@@ -2,16 +2,14 @@ import { Storage } from "@google-cloud/storage";
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  throwError,
   confirmUserOrgRole,
   checkOrgAndUserActiveness,
   checkAccess,
-  getObjectSize,
-  getGoogleCloudFileSize,
-  toNegative
-} from "../../utils/utilsFunctions.ts";
+  getGoogleCloudFileSize
+} from "../../utils/databaseFunctions.ts";
 import { nanoid } from "nanoid";
 import { registerBillings } from "../../utils/billingFunctions.ts";
+import { throwError, toNegative, getObjectSize } from "../../utils/pureFuctions.ts";
 
 const storage = new Storage({
   projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
@@ -21,7 +19,7 @@ const storage = new Storage({
 const bucketName = "alyeqeenappsimages";
 
 export const getStudentImageUploadSignedUrl = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { imageName, imageType } = req.body;
 
   const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
@@ -47,9 +45,12 @@ export const getStudentImageUploadSignedUrl = asyncHandler(async (req: Request, 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasCreateStudentAccess = checkAccess(account, tabAccess, "Create Student Profile");
 
   if (!hasCreateStudentAccess && !absoluteAdmin) {
@@ -118,9 +119,12 @@ export const getStudentImageViewSignedUrl = asyncHandler(async (req: Request, re
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasCreateStudentAccess = checkAccess(account, tabAccess, "View Student Profile");
 
   if (!hasCreateStudentAccess && !absoluteAdmin) {
@@ -182,9 +186,12 @@ export const deleteStudentImageInBucket = asyncHandler(async (req: Request, res:
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasCreateStudentAccess = checkAccess(account, tabAccess, "Edit Student Profile");
 
   if (!hasCreateStudentAccess && !absoluteAdmin) {

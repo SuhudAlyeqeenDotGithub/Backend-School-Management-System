@@ -1,10 +1,6 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  getObjectSize,
-  toNegative,
-  throwError,
-  generateSearchText,
   fetchStudentEnrollments,
   emitToOrganisation,
   logActivity,
@@ -12,8 +8,8 @@ import {
   checkOrgAndUserActiveness,
   checkAccess,
   fetchAllStudentEnrollments
-} from "../../utils/utilsFunctions.ts";
-
+} from "../../utils/databaseFunctions.ts";
+import { throwError, toNegative, generateSearchText, getObjectSize } from "../../utils/pureFuctions.ts";
 import { diff } from "deep-diff";
 import { Student } from "../../models/student/studentProfile.ts";
 import { StudentEnrollment } from "../../models/student/enrollment.ts";
@@ -78,9 +74,12 @@ export const getStudentEnrollments = asyncHandler(async (req: Request, res: Resp
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Student Enrollments");
 
   if (absoluteAdmin || hasAccess) {
@@ -125,9 +124,12 @@ export const getAllStudentEnrollments = asyncHandler(async (req: Request, res: R
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Student Enrollments");
 
   if (absoluteAdmin || hasAccess) {
@@ -198,9 +200,12 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Student Enrollment");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -321,7 +326,7 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
 
 // controller to handle role update
 export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const {
     academicYearId,
     academicYear,
@@ -356,15 +361,18 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
 
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const { roleId, accountStatus } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Student Enrollment");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -477,7 +485,7 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
 
 // controller to handle deleting roles
 export const deleteStudentEnrollment = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { studentEnrollmentIDToDelete } = req.body;
   if (!studentEnrollmentIDToDelete) {
     throwError("Unknown delete request - Please try again", 400);
@@ -494,15 +502,18 @@ export const deleteStudentEnrollment = asyncHandler(async (req: Request, res: Re
     );
   }
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Student Enrollment");
 
   if (!absoluteAdmin && !hasAccess) {

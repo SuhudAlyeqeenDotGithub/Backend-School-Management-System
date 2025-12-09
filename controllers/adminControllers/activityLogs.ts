@@ -1,15 +1,14 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  throwError,
   checkOrgAndUserActiveness,
   checkAccess,
   confirmUserOrgRole,
-  fetchActivityLogs,
-  getObjectSize
-} from "../../utils/utilsFunctions.ts";
+  fetchActivityLogs
+} from "../../utils/databaseFunctions.ts";
 import { ActivityLog } from "../../models/admin/activityLogModel.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
+import { getObjectSize, throwError } from "../../utils/pureFuctions.ts";
 
 export const getActivityLogs = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
@@ -21,7 +20,6 @@ export const getActivityLogs = asyncHandler(async (req: Request, res: Response) 
 
   const parsedLimit = parseInt(limit as string);
 
-  const queryOrgId = organisation!._id.toString();
   const query: any = { organisationId: userTokenOrgId };
 
   if (search) {
@@ -60,9 +58,12 @@ export const getActivityLogs = asyncHandler(async (req: Request, res: Response) 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Activity Logs");
 
   if (absoluteAdmin || hasAccess) {
@@ -88,7 +89,7 @@ export const getActivityLogs = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const getLastActivityLog = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
@@ -99,9 +100,12 @@ export const getLastActivityLog = asyncHandler(async (req: Request, res: Respons
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Activity Logs");
 
   if (absoluteAdmin || hasAccess) {

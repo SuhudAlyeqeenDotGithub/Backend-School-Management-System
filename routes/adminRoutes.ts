@@ -13,7 +13,6 @@ import {
   chargeOldBills,
   getBillings,
   getSubscription,
-  prepareLastBills,
   getOrganisations,
   chargeLastBills,
   upgradeToPremium,

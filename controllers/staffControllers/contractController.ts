@@ -1,10 +1,6 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  getObjectSize,
-  toNegative,
-  throwError,
-  generateSearchText,
   fetchStaffContracts,
   emitToOrganisation,
   logActivity,
@@ -12,7 +8,8 @@ import {
   checkOrgAndUserActiveness,
   checkAccess,
   fetchAllStaffContracts
-} from "../../utils/utilsFunctions.ts";
+} from "../../utils/databaseFunctions.ts";
+import { throwError, toNegative, generateSearchText, getObjectSize } from "../../utils/pureFuctions.ts";
 
 import { diff } from "deep-diff";
 import { Staff } from "../../models/staff/profile.ts";
@@ -80,9 +77,12 @@ export const getStaffContracts = asyncHandler(async (req: Request, res: Response
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Staff Contracts");
 
   if (absoluteAdmin || hasAccess) {
@@ -126,9 +126,12 @@ export const getAllStaffContracts = asyncHandler(async (req: Request, res: Respo
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Staff Contracts");
 
   if (absoluteAdmin || hasAccess) {
@@ -186,9 +189,12 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Staff Contract");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -281,7 +287,7 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
 
 // controller to handle role update
 export const updateStaffContract = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const {
     academicYearId,
     academicYear,
@@ -303,15 +309,18 @@ export const updateStaffContract = asyncHandler(async (req: Request, res: Respon
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const { roleId, accountStatus } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Staff Contract");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -388,7 +397,7 @@ export const updateStaffContract = asyncHandler(async (req: Request, res: Respon
 
 // controller to handle deleting roles
 export const deleteStaffContract = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { staffContractIDToDelete } = req.body;
   if (!staffContractIDToDelete) {
     throwError("Unknown delete request - Please try again", 400);
@@ -396,15 +405,18 @@ export const deleteStaffContract = asyncHandler(async (req: Request, res: Respon
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Staff Contract");
 
   if (!absoluteAdmin && !hasAccess) {

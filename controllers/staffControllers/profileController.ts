@@ -2,22 +2,17 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { Account } from "../../models/admin/accountModel.ts";
 import {
-  getObjectSize,
-  toNegative,
-  throwError,
-  generateSearchText,
   fetchStaffProfiles,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
   fetchAllStaffProfiles,
-  validateEmail,
   validatePhoneNumber
-} from "../../utils/utilsFunctions.ts";
-import { logActivity } from "../../utils/utilsFunctions.ts";
+} from "../../utils/databaseFunctions.ts";
+import { logActivity } from "../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
-
+import { throwError, toNegative, validateEmail, generateSearchText, getObjectSize } from "../../utils/pureFuctions.ts";
 import { Staff } from "../../models/staff/profile.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 
@@ -64,9 +59,12 @@ export const getAllStaffProfiles = asyncHandler(async (req: Request, res: Respon
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Staff Profiles");
 
   if (absoluteAdmin || hasAccess) {
@@ -127,9 +125,12 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Staff Profiles");
 
   if (absoluteAdmin || hasAccess) {
@@ -162,7 +163,7 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
 
 // controller to handle role creation
 export const createStaffProfile = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
   const {
     staffCustomId,
@@ -188,9 +189,12 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Staff Profile");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -295,9 +299,12 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Staff Profile");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -378,9 +385,12 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Staff Profile");
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete staff profile - Please contact your admin", 403);

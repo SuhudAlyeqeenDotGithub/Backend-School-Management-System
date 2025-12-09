@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { Subscription } from "../models/admin/subscription.ts";
-import { getLastMonth, isExpired, sendEmailToOwner } from "../utils/utilsFunctions.ts";
+import { sendEmailToOwner } from "../utils/databaseFunctions.ts";
 import { Billing } from "../models/admin/billingModel.ts";
+import { getLastBillingDate, isExpired } from "../utils/pureFuctions.ts";
 import { getOwnerMongoId } from "../utils/envVariableGetters.ts";
 
 // Extend Express Request interface to include 'user'
@@ -117,7 +118,7 @@ const checkSubscription = async (req: Request, res: Response, next: NextFunction
         return next();
       }
 
-      const lastMonthBill = await Billing.findOne({ organisationId, billingMonth: getLastMonth().slice(2) });
+      const lastMonthBill = await Billing.findOne({ organisationId, billingMonth: getLastBillingDate().slice(2) });
       if (!lastMonthBill) {
         sendEmailToOwner(
           "Access Denied",

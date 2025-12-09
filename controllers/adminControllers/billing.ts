@@ -2,19 +2,21 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import axios from "axios";
 import {
-  throwError,
   checkOrgAndUserActiveness,
   checkAccess,
   confirmUserOrgRole,
   fetchBillings,
-  getObjectSize,
   sendEmailToOwner,
-  getCurrentMonth,
-  getNextMonth,
-  getLastMonth,
   generateCustomId,
   sendEmail
-} from "../../utils/utilsFunctions.ts";
+} from "../../utils/databaseFunctions.ts";
+import {
+  throwError,
+  getObjectSize,
+  getCurrentMonth,
+  getNextBillingDate,
+  getLastBillingDate
+} from "../../utils/pureFuctions.ts";
 import { Subscription } from "../../models/admin/subscription.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 import { Billing } from "../../models/admin/billingModel.ts";
@@ -90,9 +92,12 @@ export const getBillings = asyncHandler(async (req: Request, res: Response) => {
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Billings");
   if (absoluteAdmin || hasAccess) {
     const result = await fetchBillings(
@@ -133,9 +138,12 @@ export const getSubscription = asyncHandler(async (req: Request, res: Response) 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Subscriptions");
 
   if (absoluteAdmin || hasAccess) {
@@ -170,9 +178,12 @@ export const upgradeToPremium = asyncHandler(async (req: Request, res: Response)
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "Update Subscriptions");
 
   if (absoluteAdmin || hasAccess) {
@@ -237,9 +248,12 @@ export const cancleSubscription = asyncHandler(async (req: Request, res: Respons
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "Update Subscriptions");
 
   if (absoluteAdmin || hasAccess) {
@@ -351,7 +365,7 @@ export const prepareLastBills = async (accountId: string) => {
     throwError("Unauthorized Action: Only owner account can perform this action", 403);
   }
 
-  const billingMonth = getLastMonth();
+  const billingMonth = getLastBillingDate();
   const billingDocs = await Billing.find({
     billingStatus: "Not Billed",
     billingMonth: { $ne: billingMonth }
@@ -398,7 +412,7 @@ export const prepareLastBills = async (accountId: string) => {
     }
   }
 
-  const totalUsageDoc = await TotalUsage.create({ ...totalUsages, billingMonth, billingDate: getNextMonth() });
+  const totalUsageDoc = await TotalUsage.create({ ...totalUsages, billingMonth, billingDate: getNextBillingDate() });
   if (!totalUsageDoc) {
     await sendEmailToOwner(
       "Prepare Last Bills - Failed to create total usage document - SuSchool Management App",
@@ -535,7 +549,7 @@ export const prepareOldBills = async (accountId: string) => {
       }
     }
 
-    const totalUsageDoc = await TotalUsage.create({ ...totalUsages, billingMonth, billingDate: getNextMonth() });
+    const totalUsageDoc = await TotalUsage.create({ ...totalUsages, billingMonth, billingDate: getNextBillingDate() });
     if (!totalUsageDoc) {
       await sendEmailToOwner(
         "Prepare Old Bills - Failed to create total usage document - SuSchool Management App",
@@ -655,9 +669,12 @@ export const inititalizeTransaction = asyncHandler(async (req: Request, res: Res
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   if (absoluteAdmin && accountId !== getOwnerMongoId()) {
     await sendEmailToOwner(
       "Unauthorised Action: Transaction Initiation Attempt - SuSchool Management App",

@@ -1,19 +1,16 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  throwError,
-  generateSearchText,
   fetchLevelManagers,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllLevelManagers,
-  getObjectSize,
-  toNegative
-} from "../../../utils/utilsFunctions";
-import { logActivity } from "../../../utils/utilsFunctions";
+  fetchAllLevelManagers
+} from "../../../utils/databaseFunctions.ts";
+import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
+import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
 import { StaffContract } from "../../../models/staff/contracts";
 import { LevelManager } from "../../../models/curriculum/level";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
@@ -35,15 +32,18 @@ export const getAllLevelManagers = asyncHandler(async (req: Request, res: Respon
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus, courseId, staffId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Level Managers");
 
   if (absoluteAdmin || hasAccess) {
@@ -93,15 +93,18 @@ export const getLevelManagers = asyncHandler(async (req: Request, res: Response)
     }
   }
 
-  const { roleId, accountStatus, levelId, staffId } = account as any;
+  const { roleId, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Level Managers");
 
   if (absoluteAdmin || hasAccess) {
@@ -133,7 +136,7 @@ export const getLevelManagers = asyncHandler(async (req: Request, res: Response)
 
 // controller to handle role creation
 export const createLevelManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
 
   const { levelCustomId, status, levelId, levelFullTitle, levelManagerCustomStaffId, levelManagerFullName } = body;
@@ -171,9 +174,12 @@ export const createLevelManager = asyncHandler(async (req: Request, res: Respons
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Level Manager");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -229,9 +235,9 @@ export const createLevelManager = asyncHandler(async (req: Request, res: Respons
 
 // controller to handle role update
 export const updateLevelManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
-  const { levelCustomId, levelId, status, levelFullTitle, levelManagerCustomStaffId, levelManagerFullName } = body;
+  const { levelCustomId, levelFullTitle, levelManagerCustomStaffId, levelManagerFullName } = body;
 
   if (!validateLevelManager(body)) {
     throwError("Please fill in all required fields", 400);
@@ -248,9 +254,12 @@ export const updateLevelManager = asyncHandler(async (req: Request, res: Respons
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Level Manager");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -308,7 +317,7 @@ export const updateLevelManager = asyncHandler(async (req: Request, res: Respons
 
 // controller to handle deleting roles
 export const deleteLevelManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { levelManagerId } = req.body;
   if (!levelManagerId) {
     throwError("Unknown delete request - Please try again", 400);
@@ -316,16 +325,19 @@ export const deleteLevelManager = asyncHandler(async (req: Request, res: Respons
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
 
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Level Manager");
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete level manager - Please contact your admin", 403);

@@ -1,10 +1,10 @@
 import jwt from "jsonwebtoken";
-import { ActivityLog } from "../models/admin/activityLogModel";
+import { ActivityLog } from "../models/admin/activityLogModel.ts";
 import { Account } from "../models/admin/accountModel.ts";
 import { Role } from "../models/admin/roleModel.ts";
 import { nanoid } from "nanoid";
 import { Staff } from "../models/staff/profile.ts";
-import { io } from "../server";
+import { io } from "../server.ts";
 import { StaffContract } from "../models/staff/contracts.ts";
 import { AcademicYear } from "../models/timeline/academicYear.ts";
 import nodemailer from "nodemailer";
@@ -25,6 +25,7 @@ import { StudentSubjectAttendanceTemplate } from "../models/student/subjectAtten
 import { Billing } from "../models/admin/billingModel.ts";
 import { getOwnerMongoId } from "./envVariableGetters.ts";
 import path from "path";
+import { generateSearchText, throwError } from "./pureFuctions.ts";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -91,6 +92,13 @@ export async function sendEmailToOwner(subject: string, text: string, html?: str
   }
 }
 
+export const validatePhoneNumber = (phoneNumber: string) => {
+  const trimmedPhoneNumber = phoneNumber.trim();
+  const startsWithPlus = trimmedPhoneNumber.startsWith("+");
+  const libParsed = parsePhoneNumberFromString(trimmedPhoneNumber);
+  return startsWithPlus && libParsed?.isValid();
+};
+
 export const checkAccess = (accountData: any, tabAccess: any, action: string) => {
   const assignedTabAccess = tabAccess;
 
@@ -152,67 +160,18 @@ export const emitToOrganisation = (
   io.to(organisationId).emit("databaseChange", { collection, fullDocument, changeOperation });
 };
 
-export const toNegative = (value: number) => {
-  return Math.abs(value) * -1;
+export const generateAccessToken = (accountData: any) => {
+  return jwt.sign(accountData, process.env.JWT_ACCESS_TOKEN_SECRET_KEY as string, {
+    expiresIn: "1d"
+  });
 };
 
-export const getObjectSize = (obj: any): number => {
-  if (obj == null || !obj) return 0;
-  return parseFloat((Buffer.byteLength(JSON.stringify(obj), "utf8") / 1024 ** 3).toString());
+export const generateRefreshToken = (accountData: any) => {
+  return jwt.sign(accountData, process.env.JWT_REFRESH_TOKEN_SECRET_KEY as string, {
+    expiresIn: "30d"
+  });
 };
 
-export const getLastMonth = () => {
-  const date = new Date();
-  date.setMonth(date.getMonth() - 1);
-  return `5 ${date.toLocaleString("en-GB", { month: "long", year: "numeric" })}`;
-};
-export const getNextMonth = () => {
-  const date = new Date();
-  date.setMonth(date.getMonth() + 1);
-  return `5 ${date.toLocaleString("en-GB", { month: "long", year: "numeric" })}`;
-};
-
-export const isExpired = (date: string | Date): boolean => {
-  const expiry = new Date(date).getTime();
-  const now = Date.now();
-
-  return expiry < now;
-};
-
-export const getCurrentMonth = () => {
-  return `${new Date().toLocaleString("en-GB", { month: "long", year: "numeric" })}`;
-};
-
-// throw error function
-export const throwError = (message: string, statusCode: number) => {
-  const error = new Error(message);
-  (error as any).statusCode = statusCode;
-  throw error;
-};
-
-export const validatePassword = (password: string) => {
-  const passwordStrengthRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>~+\-]).{8,}$/;
-  return passwordStrengthRegex.test(password.trim());
-};
-
-export const validateEmail = (email: string) => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email.trim());
-};
-
-export const validatePhoneNumber = (phoneNumber: string) => {
-  const trimmedPhoneNumber = phoneNumber.trim();
-  const startsWithPlus = trimmedPhoneNumber.startsWith("+");
-  const libParsed = parsePhoneNumberFromString(trimmedPhoneNumber);
-  return startsWithPlus && libParsed?.isValid();
-};
-
-// generateSearchTextFunction
-export const generateSearchText = (fields: any[]) => {
-  return fields.join("|");
-};
-
-// generateCustomId
 export const generateCustomId = (
   prefix?: string,
   neat = false,
@@ -232,18 +191,6 @@ export const generateCustomId = (
   return `${prefix ? prefix + "-" : ""}${nanoid()}`;
 };
 
-export const generateAccessToken = (accountData: any) => {
-  return jwt.sign(accountData, process.env.JWT_ACCESS_TOKEN_SECRET_KEY as string, {
-    expiresIn: "1d"
-  });
-};
-
-export const generateRefreshToken = (accountData: any) => {
-  return jwt.sign(accountData, process.env.JWT_REFRESH_TOKEN_SECRET_KEY as string, {
-    expiresIn: "30d"
-  });
-};
-
 export const getVerificationCode = () => {
   const verificationCode = generateCustomId("SUAPP", true, 5);
   const hashedVerificationCode = crypto.createHash("sha256").update(verificationCode).digest("hex");
@@ -254,7 +201,6 @@ export const codeMatches = (code: string, hashedCode: string) => {
   const hashedVerificationCode = crypto.createHash("sha256").update(code).digest("hex");
   return hashedVerificationCode === hashedCode;
 };
-
 // function to log acitivy
 
 export const logActivity = async (
@@ -567,7 +513,7 @@ export const fetchStudentProfiles = async (
 };
 
 export const fetchAllProgrammes = async (orgId: string) => {
-  const programmes = await Programme.find({ organisationId: orgId }).sort({ _id: -1 });
+  const programmes = await Programme.find({ organisationId: orgId });
 
   if (!programmes) {
     throwError("Error fetching programmes", 500);

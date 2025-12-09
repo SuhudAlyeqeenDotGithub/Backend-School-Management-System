@@ -3,23 +3,16 @@ import asyncHandler from "express-async-handler";
 import bcrypt from "bcryptjs";
 
 import { Account, defaultSettings } from "../models/admin/accountModel.ts";
-import {
-  codeMatches,
-  getObjectSize,
-  getVerificationCode,
-  sendEmail,
-  throwError,
-  validateEmail,
-  validatePassword,
-  validatePhoneNumber
-} from "../utils/utilsFunctions.ts";
+import { codeMatches, getVerificationCode, sendEmail, validatePhoneNumber } from "../utils/databaseFunctions.ts";
+
+import { throwError, validateEmail, validatePassword, generateSearchText, getObjectSize } from "../utils/pureFuctions.ts";
 import { Role } from "../models/admin/roleModel.ts";
-import { generateRefreshToken, generateAccessToken, generateSearchText } from "../utils/utilsFunctions.ts";
+import { generateRefreshToken, generateAccessToken } from "../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
 import { VerificationCode } from "../models/authentication/resetPasswordModel.ts";
 import crypto from "crypto";
 import { Subscription } from "../models/admin/subscription.ts";
-import { logActivity } from "../utils/utilsFunctions.ts";
+import { logActivity } from "../utils/databaseFunctions.ts";
 import { registerBillings } from "../utils/billingFunctions.ts";
 import { Feature } from "../models/admin/features.ts";
 
@@ -31,6 +24,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     organisationEmail,
     organisationPhone,
     organisationPassword,
+    country,
     organisationConfirmPassword
   } = req.body;
 
@@ -47,7 +41,8 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     !organisationEmail ||
     !organisationPhone ||
     !organisationPassword ||
-    !organisationConfirmPassword
+    !organisationConfirmPassword ||
+    !country
   ) {
     throwError("Please provide all required fields", 400);
   }
@@ -109,6 +104,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     accountEmail: organisationEmail,
     accountPhone: organisationPhone,
     accountPassword: hashedPassword,
+    country,
     settings: { ...defaultSettings },
     searchText: generateSearchText([organisationName, organisationEmail, organisationPhone])
   });

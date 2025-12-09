@@ -2,37 +2,38 @@ import { Request, Response } from "express";
 import asyncHandler from "express-async-handler";
 
 import {
-  throwError,
-  generateSearchText,
   fetchAcademicYears,
   emitToOrganisation,
   logActivity,
-  toNegative,
   confirmUserOrgRole,
   checkOrgAndUserActiveness,
-  checkAccess,
-  getObjectSize
-} from "../../utils/utilsFunctions.ts";
+  checkAccess
+} from "../../utils/databaseFunctions.ts";
+
+import { throwError, toNegative, getObjectSize } from "../../utils/pureFuctions.ts";
 
 import { diff } from "deep-diff";
 import { AcademicYear } from "../../models/timeline/academicYear.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 import { Period } from "../../models/timeline/period.ts";
 export const getAcademicYears = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus, staffId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Academic Years");
 
   if (absoluteAdmin || hasAccess) {
@@ -59,7 +60,7 @@ export const getAcademicYears = asyncHandler(async (req: Request, res: Response)
 
 // controller to handle role creation
 export const createAcademicYear = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { academicYear, startDate, endDate, periods } = req.body;
 
   // validate input
@@ -77,15 +78,18 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
     throwError("This academic year name is already in use in this organisation - Please use a different name", 409);
   }
 
-  const { roleId, accountStatus, accountName, staffId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(
     account,
 
@@ -174,7 +178,7 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
 
 // controller to handle role update
 export const updateAcademicYear = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { _id: academicYearId, academicYear, startDate, endDate } = req.body;
 
   // validate input
@@ -184,14 +188,17 @@ export const updateAcademicYear = asyncHandler(async (req: Request, res: Respons
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
-  const orgParsedId = account!.organisationId!._id.toString();
 
-  const { roleId, accountStatus } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Academic Year");
@@ -250,7 +257,7 @@ export const updateAcademicYear = asyncHandler(async (req: Request, res: Respons
 
 // controller to handle deleting roles
 export const deleteAcademicYear = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { academicYearIdToDelete } = req.body;
   if (!academicYearIdToDelete) {
     throwError("Unknown delete request - Please try again", 400);
@@ -258,15 +265,18 @@ export const deleteAcademicYear = asyncHandler(async (req: Request, res: Respons
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Academic Year");
 
   if (!absoluteAdmin && !hasAccess) {

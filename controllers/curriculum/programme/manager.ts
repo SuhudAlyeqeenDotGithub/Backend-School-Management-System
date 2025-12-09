@@ -1,21 +1,18 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  throwError,
-  generateSearchText,
   fetchProgrammeManagers,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
-  confirmUserOrgRole,
-  getObjectSize,
-  toNegative
-} from "../../../utils/utilsFunctions";
-import { logActivity } from "../../../utils/utilsFunctions";
+  confirmUserOrgRole
+} from "../../../utils/databaseFunctions.ts";
+import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
 import { StaffContract } from "../../../models/staff/contracts";
 import { ProgrammeManager } from "../../../models/curriculum/programme";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
+import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
 
 const validateProgrammeManager = (programmeManagerDataParam: any) => {
   const { managedUntil, _id, ...copyLocalData } = programmeManagerDataParam;
@@ -57,15 +54,18 @@ export const getProgrammeManagers = asyncHandler(async (req: Request, res: Respo
     }
   }
 
-  const { roleId, accountStatus, programmeId, staffId } = account as any;
+  const { roleId, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Programme Managers");
 
   if (absoluteAdmin || hasAccess) {
@@ -98,7 +98,7 @@ export const getProgrammeManagers = asyncHandler(async (req: Request, res: Respo
 
 // controller to handle role creation
 export const createProgrammeManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
 
   const {
@@ -145,9 +145,12 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Programme Manager");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -212,16 +215,9 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
 
 // controller to handle role update
 export const updateProgrammeManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
-  const {
-    programmeCustomId,
-    programmeId,
-    status,
-    programmeName,
-    programmeManagerCustomStaffId,
-    programmeManagerFullName
-  } = body;
+  const { programmeCustomId, programmeName, programmeManagerCustomStaffId, programmeManagerFullName } = body;
 
   if (!validateProgrammeManager(body)) {
     throwError("Please fill in all required fields", 400);
@@ -238,9 +234,12 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Programme Manager");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -305,7 +304,7 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
 
 // controller to handle deleting roles
 export const deleteProgrammeManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { programmeManagerId } = req.body;
   if (!programmeManagerId) {
     throwError("Unknown delete request - Please try again", 400);
@@ -313,16 +312,19 @@ export const deleteProgrammeManager = asyncHandler(async (req: Request, res: Res
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
 
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Programme Manager");
   if (!absoluteAdmin && !hasAccess) {
     throwError(

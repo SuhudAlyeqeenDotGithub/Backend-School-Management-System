@@ -1,19 +1,15 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  getObjectSize,
-  toNegative,
-  throwError,
-  generateSearchText,
   emitToOrganisation,
   logActivity,
   confirmUserOrgRole,
   checkOrgAndUserActiveness,
   checkAccess,
   fetchStudentSubjectAttendances
-} from "../../utils/utilsFunctions.ts";
+} from "../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
-
+import { throwError, toNegative, generateSearchText, getObjectSize } from "../../utils/pureFuctions.ts";
 import {
   StudentSubjectAttendanceStore,
   StudentSubjectAttendanceTemplate
@@ -58,12 +54,16 @@ export const fetchSubjectAttendanceStore = asyncHandler(async (req: Request, res
     );
   }
 
-  const { roleId, accountStatus, studentId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
   const hasAdminAccess = checkAccess(account, tabAccess, "View Student Subject Attendances (Admin Access)");
@@ -132,15 +132,18 @@ export const getEnrolledSubjectAttendanceStudents = asyncHandler(async (req: Req
     );
   }
 
-  const { roleId, accountStatus, staffId } = account as any;
+  const { roleId, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAdminAccess = checkAccess(account, tabAccess, "View Student Subject Attendances (Admin Access)");
 
   const isStaff = await Staff.findOne({ _id: staffId });
@@ -262,15 +265,18 @@ export const getStudentSubjectAttendances = asyncHandler(async (req: Request, re
     );
   }
 
-  const { roleId, staffId, studentId } = account as any;
+  const { roleId, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAdminAccess = checkAccess(account, tabAccess, "View Student Subject Attendances (Admin Access)");
 
   if (!absoluteAdmin && !hasAdminAccess) {
@@ -329,7 +335,7 @@ export const getStudentSubjectAttendances = asyncHandler(async (req: Request, re
 
 // // controller to handle role creation
 export const createStudentSubjectAttendance = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const {
     attendanceCustomId,
     academicYearId,
@@ -385,9 +391,12 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAdminAccess = checkAccess(account, creatorTabAccess, "Create Student Subject Attendance (Admin Access)");
   const hasManagerAccess = checkAccess(
     account,
@@ -598,7 +607,7 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
 
 // controller to handle role update
 export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const {
     attendanceCustomId,
     academicYearId,
@@ -641,15 +650,18 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
 
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const { roleId, accountStatus } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAdminAccess = checkAccess(account, creatorTabAccess, "Create Student Subject Attendance (Admin Access)");
   const hasManagerAccess = checkAccess(
     account,
@@ -898,6 +910,10 @@ export const deleteStudentSubjectAttendance = asyncHandler(async (req: Request, 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
   const hasAdminAccess = checkAccess(account, creatorTabAccess, "Create Student Subject Attendance (Admin Access)");

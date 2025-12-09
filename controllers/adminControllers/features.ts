@@ -2,19 +2,15 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { Feature } from "../../models/admin/features.ts";
 import {
-  throwError,
-  fetchRoles,
-  emitToOrganisation,
   logActivity,
   checkOrgAndUserActiveness,
   checkAccess,
   confirmUserOrgRole,
-  getObjectSize,
-  toNegative,
   sendEmailToOwner,
-  sendEmail,
-  getCurrentMonth
-} from "../../utils/utilsFunctions.ts";
+  sendEmail
+} from "../../utils/databaseFunctions.ts";
+
+import { throwError, getCurrentMonth, getObjectSize } from "../../utils/pureFuctions.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 import { Account } from "../../models/admin/accountModel.ts";
 import { Billing } from "../../models/admin/billingModel.ts";
@@ -32,9 +28,12 @@ export const getFeatures = asyncHandler(async (req: Request, res: Response) => {
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "Update Features");
 
   if (absoluteAdmin || hasAccess) {
@@ -76,9 +75,12 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Update Features");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -232,9 +234,12 @@ export const removeFeatureAndKeepData = asyncHandler(async (req: Request, res: R
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Update Features");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -348,9 +353,12 @@ export const removeFeatureAndDeleteData = asyncHandler(async (req: Request, res:
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Update Features");
 
   if (!absoluteAdmin && !hasAccess) {

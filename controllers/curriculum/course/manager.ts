@@ -1,18 +1,15 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  throwError,
-  generateSearchText,
   fetchCourseManagers,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllCourseManagers,
-  getObjectSize,
-  toNegative
-} from "../../../utils/utilsFunctions";
-import { logActivity } from "../../../utils/utilsFunctions";
+  fetchAllCourseManagers
+} from "../../../utils/databaseFunctions.ts";
+import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
+import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
 import { StaffContract } from "../../../models/staff/contracts";
 import { CourseManager } from "../../../models/curriculum/course";
@@ -41,9 +38,12 @@ export const getAllCourseManagers = asyncHandler(async (req: Request, res: Respo
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Course Managers");
 
   if (absoluteAdmin || hasAccess) {
@@ -94,15 +94,18 @@ export const getCourseManagers = asyncHandler(async (req: Request, res: Response
     }
   }
 
-  const { roleId, accountStatus, courseId, staffId } = account as any;
+  const { roleId, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Course Managers");
 
   if (absoluteAdmin || hasAccess) {
@@ -135,7 +138,7 @@ export const getCourseManagers = asyncHandler(async (req: Request, res: Response
 
 // controller to handle role creation
 export const createCourseManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
 
   const { courseCustomId, status, courseId, courseFullTitle, courseManagerCustomStaffId, courseManagerFullName } = body;
@@ -174,9 +177,12 @@ export const createCourseManager = asyncHandler(async (req: Request, res: Respon
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Course Manager");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -233,9 +239,9 @@ export const createCourseManager = asyncHandler(async (req: Request, res: Respon
 
 // controller to handle role update
 export const updateCourseManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
-  const { courseCustomId, courseId, status, courseFullTitle, courseManagerCustomStaffId, courseManagerFullName } = body;
+  const { courseCustomId, courseFullTitle, courseManagerCustomStaffId, courseManagerFullName } = body;
 
   if (!validateCourseManager(body)) {
     throwError("Please fill in all required fields", 400);
@@ -252,9 +258,12 @@ export const updateCourseManager = asyncHandler(async (req: Request, res: Respon
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Course Manager");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -317,7 +326,7 @@ export const updateCourseManager = asyncHandler(async (req: Request, res: Respon
 
 // controller to handle deleting roles
 export const deleteCourseManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { courseManagerId } = req.body;
   if (!courseManagerId) {
     throwError("Unknown delete request - Please try again", 400);
@@ -325,16 +334,19 @@ export const deleteCourseManager = asyncHandler(async (req: Request, res: Respon
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
 
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Course Manager");
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete course manager - Please contact your admin", 403);

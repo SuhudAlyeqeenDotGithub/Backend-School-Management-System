@@ -1,20 +1,16 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  getObjectSize,
-  toNegative,
-  throwError,
-  generateSearchText,
   fetchStudentProfiles,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
   fetchAllStudentProfiles
-} from "../../utils/utilsFunctions";
-import { logActivity } from "../../utils/utilsFunctions";
+} from "../../utils/databaseFunctions.ts";
+import { logActivity } from "../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
-
+import { throwError, toNegative, generateSearchText, getObjectSize } from "../../utils/pureFuctions.ts";
 import { Student } from "../../models/student/studentProfile";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 
@@ -62,9 +58,12 @@ export const getAllStudentProfiles = asyncHandler(async (req: Request, res: Resp
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Student Profiles");
 
   if (absoluteAdmin || hasAccess) {
@@ -134,9 +133,12 @@ export const getStudentProfiles = asyncHandler(async (req: Request, res: Respons
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Student Profiles");
 
   if (absoluteAdmin || hasAccess) {
@@ -203,9 +205,12 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Student Profile");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -313,9 +318,12 @@ export const updateStudentProfile = asyncHandler(async (req: Request, res: Respo
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Student Profile");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -404,9 +412,12 @@ export const deleteStudentProfile = asyncHandler(async (req: Request, res: Respo
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Student Profile");
   if (!absoluteAdmin && !hasAccess) {
     throwError(

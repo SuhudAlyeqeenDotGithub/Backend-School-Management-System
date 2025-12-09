@@ -1,20 +1,16 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  throwError,
-  generateSearchText,
   fetchSyllabuses,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllSyllabuses,
-  getObjectSize,
-  toNegative
-} from "../../../utils/utilsFunctions";
-import { logActivity } from "../../../utils/utilsFunctions";
+  fetchAllSyllabuses
+} from "../../../utils/databaseFunctions.ts";
+import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
+import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
-
 import { Syllabus } from "../../../models/curriculum/syllabus";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
 
@@ -41,18 +37,21 @@ const validateSyllabus = (syllabusDataParam: any) => {
 };
 
 export const getAllSyllabuses = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus, syllabusId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Syllabuses");
 
   if (absoluteAdmin || hasAccess) {
@@ -102,15 +101,18 @@ export const getSyllabuses = asyncHandler(async (req: Request, res: Response) =>
     }
   }
 
-  const { roleId, accountStatus, syllabusId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Syllabuses");
 
   if (absoluteAdmin || hasAccess) {
@@ -135,7 +137,7 @@ export const getSyllabuses = asyncHandler(async (req: Request, res: Response) =>
 
 // controller to handle role creation
 export const createSyllabus = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
   const {
     syllabusCustomId,
@@ -156,9 +158,12 @@ export const createSyllabus = asyncHandler(async (req: Request, res: Response) =
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Syllabus");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -231,7 +236,7 @@ export const createSyllabus = asyncHandler(async (req: Request, res: Response) =
 
 // controller to handle role update
 export const updateSyllabus = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
   const {
     syllabusCustomId,
@@ -258,9 +263,12 @@ export const updateSyllabus = asyncHandler(async (req: Request, res: Response) =
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Syllabus");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -326,7 +334,7 @@ export const updateSyllabus = asyncHandler(async (req: Request, res: Response) =
 
 // controller to handle deleting roles
 export const deleteSyllabus = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { syllabusCustomId } = req.body;
   if (!syllabusCustomId) {
     throwError("Unknown delete request - Please try again", 400);
@@ -334,16 +342,19 @@ export const deleteSyllabus = asyncHandler(async (req: Request, res: Response) =
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
 
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Syllabus");
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete syllabus - Please contact your admin", 403);

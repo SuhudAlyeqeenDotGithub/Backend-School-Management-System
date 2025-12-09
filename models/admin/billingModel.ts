@@ -2,7 +2,10 @@ import mongoose from "mongoose";
 const { Schema, model } = mongoose;
 import { getAppProvisionRate, getRenderBaseRate } from "../../utils/envVariableGetters";
 
-import { generateCustomId, generateSearchText, getCurrentMonth, getNextMonth } from "../../utils/utilsFunctions";
+import {
+  generateCustomId,
+} from "../../utils/databaseFunctions";
+import { generateSearchText, getCurrentMonth, getNextBillingDate } from "../../utils/pureFuctions.ts";
 
 export const valueCostType = new mongoose.Schema(
   {
@@ -27,7 +30,7 @@ const billingSchema = new Schema(
     billingDate: {
       type: String,
       required: true,
-      default: () => getNextMonth()
+      default: () => getNextBillingDate()
     },
     dollarToNairaRate: {
       type: Number,

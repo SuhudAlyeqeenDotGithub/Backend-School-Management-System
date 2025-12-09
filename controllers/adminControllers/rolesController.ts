@@ -2,35 +2,36 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { Role } from "../../models/admin/roleModel.ts";
 import {
-  throwError,
   fetchRoles,
   emitToOrganisation,
   logActivity,
   checkOrgAndUserActiveness,
   checkAccess,
-  confirmUserOrgRole,
-  getObjectSize,
-  toNegative
-} from "../../utils/utilsFunctions.ts";
+  confirmUserOrgRole
+} from "../../utils/databaseFunctions.ts";
 
 import { diff } from "deep-diff";
 import { registerBillings } from "../../utils/billingFunctions.ts";
+import { throwError, toNegative, getObjectSize } from "../../utils/pureFuctions.ts";
 
 export const getRoles = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
 
   // confirm user
   const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
 
-  const { roleId, accountStatus } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess, _id: selfRoleId } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Roles");
 
   if (absoluteAdmin || hasAccess) {
@@ -61,7 +62,7 @@ export const getRoles = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle role creation
 export const createRole = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { roleName, roleDescription, tabAccess } = req.body;
 
   if (!roleName) {
@@ -71,15 +72,18 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
   // confirm user
   const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
 
-  const { roleId, accountStatus } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess, _id: selfRoleId } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Role");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -143,7 +147,7 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle role update
 export const updateRole = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { roleId, roleName, roleDescription, tabAccess } = req.body;
 
   if (!roleName) {
@@ -153,15 +157,18 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   // confirm user
   const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess, _id: selfRoleId } = creatorRoleId;
+  const { roleId: creatorRoleId } = account as any;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Role");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -220,8 +227,8 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle deleting roles
 export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
-  const { roleIdToDelete, roleName, roleDescription, absoluteAdmin: roleAbsoluteAdmin, tabAccess } = req.body;
+  const { accountId } = req.userToken;
+  const { roleIdToDelete, roleName, absoluteAdmin: roleAbsoluteAdmin } = req.body;
 
   if (!roleIdToDelete) {
     throwError("Unknown delete request - Please try again", 400);
@@ -238,15 +245,18 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   // confirm user
   const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess, _id: selfRoleId } = creatorRoleId;
+  const { roleId: creatorRoleId } = account as any;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Role");
 
   if (!absoluteAdmin && !hasAccess) {

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { billOrganisation, registerBillings } from "../utils/billingFunctions.ts";
-import { getObjectSize } from "../utils/utilsFunctions.ts";
+import { getObjectSize } from "../utils/pureFuctions.ts";
 
 const recordComputeSeconds = async (req: Request, start: [number, number], organisationId: string) => {
   const [seconds, nanoseconds] = process.hrtime(start);

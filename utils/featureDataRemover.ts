@@ -1,8 +1,9 @@
 import { Student } from "../models/student/studentProfile";
-import { sendEmailToOwner, throwError } from "./utilsFunctions";
+import { sendEmailToOwner } from "./databaseFunctions";
 import { StudentEnrollment } from "../models/student/enrollment";
 import { StudentDayAttendanceStore, StudentDayAttendanceTemplate } from "../models/student/dayattendance";
 import { StudentSubjectAttendanceStore, StudentSubjectAttendanceTemplate } from "../models/student/subjectAttendance";
+import { throwError } from "./pureFuctions";
 
 export const removeFeatureRelatedData = async (feature: string, organisationId: string) => {
   if (feature === "Student Profile & Enrollment") {

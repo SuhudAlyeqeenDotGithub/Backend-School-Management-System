@@ -60,6 +60,16 @@ export const defaultTabAccess = [
 
   // Curriculum
   {
+    tab: "Stage",
+    group: "Curriculum",
+    actions: [
+      { action: "Create Stage", permission: true },
+      { action: "View Stages", permission: true },
+      { action: "Edit Stage", permission: true },
+      { action: "Delete Stage", permission: true }
+    ]
+  },
+  {
     tab: "Programme",
     group: "Curriculum",
     actions: [
@@ -117,24 +127,24 @@ export const defaultTabAccess = [
       { action: "View Subjects", permission: true },
       { action: "Edit Subject", permission: true },
       { action: "Delete Subject", permission: true },
-      { action: "Create Subject Teacher", permission: false },
-      { action: "View Subject Teachers", permission: false },
-      { action: "Edit Subject Teacher", permission: false },
-      { action: "Delete Subject Teacher", permission: false }
+      { action: "Create Subject Teacher", permission: true },
+      { action: "View Subject Teachers", permission: true },
+      { action: "Edit Subject Teacher", permission: true },
+      { action: "Delete Subject Teacher", permission: true }
     ]
   },
   {
     tab: "Event",
     group: "Curriculum",
     actions: [
-      { action: "Create Event", permission: false },
-      { action: "View Events", permission: false },
-      { action: "Edit Event", permission: false },
-      { action: "Delete Event", permission: false },
-      { action: "Create Event Manager", permission: false },
-      { action: "View Event Managers", permission: false },
-      { action: "Edit Event Manager", permission: false },
-      { action: "Delete Event Manager", permission: false }
+      { action: "Create Event", permission: true },
+      { action: "View Events", permission: true },
+      { action: "Edit Event", permission: true },
+      { action: "Delete Event", permission: true },
+      { action: "Create Event Manager", permission: true },
+      { action: "View Event Managers", permission: true },
+      { action: "Edit Event Manager", permission: true },
+      { action: "Delete Event Manager", permission: true }
     ]
   },
   {
@@ -251,49 +261,49 @@ export const defaultTabAccess = [
     tab: "Student Attendance",
     group: "Student",
     actions: [
-      { action: "View Student Day Attendances (Admin Access)", permission: false },
-      { action: "View Student Day Attendances (For Level | Course Managers)", permission: false },
+      { action: "View Student Day Attendances (Admin Access)", permission: true },
+      { action: "View Student Day Attendances (For Level | Course Managers)", permission: true },
 
-      { action: "Create Student Day Attendance (Admin Access)", permission: false },
-      { action: "Create Student Day Attendance (For Level | Course Managers)", permission: false },
+      { action: "Create Student Day Attendance (Admin Access)", permission: true },
+      { action: "Create Student Day Attendance (For Level | Course Managers)", permission: true },
 
-      { action: "Edit Student Day Attendance (Admin Access)", permission: false },
-      { action: "Edit Student Day Attendance (For Level | Course Managers)", permission: false },
+      { action: "Edit Student Day Attendance (Admin Access)", permission: true },
+      { action: "Edit Student Day Attendance (For Level | Course Managers)", permission: true },
 
-      { action: "Delete Student Day Attendance (Admin Access)", permission: false },
-      { action: "Delete Student Day Attendance (For Level | Course Managers)", permission: false },
+      { action: "Delete Student Day Attendance (Admin Access)", permission: true },
+      { action: "Delete Student Day Attendance (For Level | Course Managers)", permission: true },
 
-      { action: "View Student Event Attendances (Admin Access)", permission: false },
-      { action: "View Student Event Attendances (For Level | Course Managers)", permission: false },
+      { action: "View Student Event Attendances (Admin Access)", permission: true },
+      { action: "View Student Event Attendances (For Level | Course Managers)", permission: true },
 
-      { action: "Create Student Event Attendance (Admin Access)", permission: false },
-      { action: "Create Student Event Attendance (For Level | Course Managers)", permission: false },
+      { action: "Create Student Event Attendance (Admin Access)", permission: true },
+      { action: "Create Student Event Attendance (For Level | Course Managers)", permission: true },
 
-      { action: "Edit Student Event Attendance (Admin Access)", permission: false },
-      { action: "Edit Student Event Attendance (For Level | Course Managers)", permission: false },
+      { action: "Edit Student Event Attendance (Admin Access)", permission: true },
+      { action: "Edit Student Event Attendance (For Level | Course Managers)", permission: true },
 
-      { action: "Delete Student Event Attendance (Admin Access)", permission: false },
-      { action: "Delete Student Event Attendance (For Level | Course Managers)", permission: false },
+      { action: "Delete Student Event Attendance (Admin Access)", permission: true },
+      { action: "Delete Student Event Attendance (For Level | Course Managers)", permission: true },
 
-      { action: "View Student Subject Attendances (Admin Access)", permission: false },
+      { action: "View Student Subject Attendances (Admin Access)", permission: true },
       {
         action: "View Student Subject Attendances (For Level | Course Managers | Subject Teachers)",
-        permission: false
+        permission: true
       },
 
-      { action: "Create Student Subject Attendance (Admin Access)", permission: false },
+      { action: "Create Student Subject Attendance (Admin Access)", permission: true },
       {
         action: "Create Student Subject Attendance (For Level | Course Managers | Subject Teachers)",
-        permission: false
+        permission: true
       },
 
-      { action: "Edit Student Subject Attendance (Admin Access)", permission: false },
-      { action: "Edit Student Subject Attendance (For Level | Course Managers | Subject Teachers)", permission: false },
+      { action: "Edit Student Subject Attendance (Admin Access)", permission: true },
+      { action: "Edit Student Subject Attendance (For Level | Course Managers | Subject Teachers)", permission: true },
 
-      { action: "Delete Student Subject Attendance (Admin Access)", permission: false },
+      { action: "Delete Student Subject Attendance (Admin Access)", permission: true },
       {
         action: "Delete Student Subject Attendance (For Level | Course Managers | Subject Teachers)",
-        permission: false
+        permission: true
       }
     ]
   }

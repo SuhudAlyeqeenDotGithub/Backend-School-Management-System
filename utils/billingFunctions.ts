@@ -1,36 +1,30 @@
 import { Billing } from "../models/admin/billingModel";
-import {
-  generateCustomId,
-  getCurrentMonth,
-  getLastMonth,
-  getNextMonth,
-  sendEmailToOwner,
-  throwError
-} from "./utilsFunctions";
-import { getObjectSize } from "./utilsFunctions";
+import { generateCustomId, sendEmailToOwner } from "./databaseFunctions";
+import { throwError, getCurrentMonth, getObjectSize, getNextBillingDate } from "../utils/pureFuctions.ts";
 import { Request } from "express";
 
 import { getEnvVarAsNumber, getOwnerMongoId } from "./envVariableGetters";
 import { Account } from "../models/admin/accountModel";
 import { Feature } from "../models/admin/features";
+import { getLastBillingDate } from "./pureFuctions.ts";
 
 export const addVat = (amount: number): number => {
   const ukVatPercentage = getEnvVarAsNumber("UK_VAT_PERCENTAGE");
   const vatAmount = (amount * ukVatPercentage) / 100;
   return amount + vatAmount;
 };
-export const getLastMonthBill = async (organisationId: string) => {
+export const getLastBillingDateBill = async (organisationId: string) => {
   const lastMonthBillingDoc = await Billing.findOne({
     organisationId,
-    billingMonth: getLastMonth()
+    billingMonth: getLastBillingDate()
   });
   return lastMonthBillingDoc;
 };
 
-export const getLastMonthStorages = async (organisationId: string) => {
+export const getLastBillingDateStorages = async (organisationId: string) => {
   const lastMonthBillingDoc = await Billing.findOne({
     organisationId,
-    billingMonth: getLastMonth()
+    billingMonth: getLastBillingDate()
   });
 
   const lastMonthDatabaseStorage = lastMonthBillingDoc ? lastMonthBillingDoc?.databaseStorageAndBackup.value : 0;
@@ -38,15 +32,15 @@ export const getLastMonthStorages = async (organisationId: string) => {
   return { lastMonthDatabaseStorage, lastMonthCloudStorageGBStored };
 };
 
-export const registerBillings = (req: Request, fields: { field: string; value: number }[]) => {
+export const registerBillings = (req: Request, usageObjects: { field: string; value: number }[]) => {
   if (!req.billings) {
     req.billings = [];
   }
-  req.billings.push(...fields);
+  req.billings.push(...usageObjects);
 };
 
 const createNewMonthBilling = async (organisationId: string, newBillingMonth = getCurrentMonth()) => {
-  const { lastMonthDatabaseStorage, lastMonthCloudStorageGBStored } = await getLastMonthStorages(organisationId);
+  const { lastMonthDatabaseStorage, lastMonthCloudStorageGBStored } = await getLastBillingDateStorages(organisationId);
   const organisationAccount = await Account.findById(organisationId);
 
   if (!organisationAccount) {
@@ -79,7 +73,7 @@ const createNewMonthBilling = async (organisationId: string, newBillingMonth = g
     organisationId,
     billingMonth: newBillingMonth,
     billingId: `${generateCustomId("BILL", true)}`,
-    billingDate: getNextMonth(),
+    billingDate: getNextBillingDate(),
     databaseStorageAndBackup: { value: lastMonthDatabaseStorage },
     cloudStorageGBStored: { value: lastMonthCloudStorageGBStored },
     featuresToCharge
@@ -122,7 +116,7 @@ export const getBillingDoc = async (organisationId: string) => {
   const existingBillingDoc = await Billing.findOne({
     organisationId: organisationId,
     billingMonth: newBillingMonth,
-    billingDate: getNextMonth()
+    billingDate: getNextBillingDate()
   });
 
   operationCount++;

@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import { logActivity } from "utils/utilsFunctions";
 const { Schema, model } = mongoose;
 
 const accountSchema = new Schema(
@@ -11,6 +10,7 @@ const accountSchema = new Schema(
     accountName: { type: String },
     accountEmail: { type: String, unique: true, required: true, index: true },
     accountPassword: { type: String, required: true },
+    country: { required: true, type: String },
     accountPhone: { type: String },
     settings: { type: Schema.Types.Mixed, default: {}, required: true },
     features: { type: [Schema.Types.Mixed], default: [], required: true },

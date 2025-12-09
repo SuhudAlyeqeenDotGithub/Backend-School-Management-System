@@ -1,4 +1,3 @@
-import mongoose from "mongoose";
 import { Schema, model } from "mongoose";
 
 const totalUsageSchema = new Schema(

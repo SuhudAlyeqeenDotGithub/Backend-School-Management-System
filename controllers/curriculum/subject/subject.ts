@@ -2,25 +2,21 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import { Account } from "../../../models/admin/accountModel";
 import {
-  getObjectSize,
-  toNegative,
-  throwError,
-  generateSearchText,
   fetchSubjects,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
   fetchAllSubjects
-} from "../../../utils/utilsFunctions";
-import { logActivity } from "../../../utils/utilsFunctions";
+} from "../../../utils/databaseFunctions.ts";
+import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
-
 import { Subject } from "../../../models/curriculum/subject";
 import { Course } from "../../../models/curriculum/course";
 import { Level } from "../../../models/curriculum/level";
 import { BaseSubject } from "../../../models/curriculum/basesubject";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
+import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
 
 const validateSubject = (subjectDataParam: any) => {
   const { description, subjectDuration, courseName, ...copyLocalData } = subjectDataParam;
@@ -36,18 +32,21 @@ const validateSubject = (subjectDataParam: any) => {
 };
 
 export const getAllSubjects = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus, subjectId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Subjects");
 
   if (absoluteAdmin || hasAccess) {
@@ -104,9 +103,12 @@ export const getSubjects = asyncHandler(async (req: Request, res: Response) => {
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Subjects");
 
   if (absoluteAdmin || hasAccess) {
@@ -132,7 +134,7 @@ export const getSubjects = asyncHandler(async (req: Request, res: Response) => {
 
 // controller to handle role creation
 export const createSubject = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
 
   const { subjectCustomId, subject, courseCustomId, subjectFullTitle, levelCustomId, baseSubjectCustomId } = body;
@@ -146,9 +148,12 @@ export const createSubject = asyncHandler(async (req: Request, res: Response) =>
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Subject");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -240,7 +245,7 @@ export const createSubject = asyncHandler(async (req: Request, res: Response) =>
 
 // controller to handle role update
 export const updateSubject = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
   const { subjectCustomId, subject, courseCustomId, subjectFullTitle, levelCustomId, baseSubjectCustomId } = body;
 
@@ -259,9 +264,12 @@ export const updateSubject = asyncHandler(async (req: Request, res: Response) =>
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Subject");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -350,7 +358,7 @@ export const updateSubject = asyncHandler(async (req: Request, res: Response) =>
 
 // controller to handle deleting roles
 export const deleteSubject = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { subjectCustomId } = req.body;
   if (!subjectCustomId) {
     throwError("Unknown delete request - Please try again", 400);
@@ -358,16 +366,19 @@ export const deleteSubject = asyncHandler(async (req: Request, res: Response) =>
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
 
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Subject");
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete subject - Please contact your admin", 403);

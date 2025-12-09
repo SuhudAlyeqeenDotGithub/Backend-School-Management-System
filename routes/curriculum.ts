@@ -87,6 +87,7 @@ import {
   deleteSyllabus,
   getAllSyllabuses
 } from "../controllers/curriculum/learningplan/syllabus";
+import { createStage, getStages, updateStage, deleteStage } from "../controllers/stage/stage";
 
 // end point for curriculum / programme
 router.get("/curriculum/programmes", getProgrammes);
@@ -95,10 +96,18 @@ router.post("/curriculum/programme", createProgramme);
 router.put("/curriculum/programme", updateProgramme);
 router.delete("/curriculum/programme", deleteProgramme);
 
+// end point for curriculum / programme manager
+
 router.get("/curriculum/programme/managers", getProgrammeManagers);
 router.post("/curriculum/programme/manager", createProgrammeManager);
 router.put("/curriculum/programme/manager", updateProgrammeManager);
 router.delete("/curriculum/programme/manager", deleteProgrammeManager);
+
+// end point for curriculum / stage
+router.get("/curriculum/stages", getStages);
+router.post("/curriculum/stage", createStage);
+router.put("/curriculum/stage", updateStage);
+router.delete("/curriculum/stage", deleteStage);
 
 // end point for curriculum / course
 router.get("/curriculum/courses", getCourses);

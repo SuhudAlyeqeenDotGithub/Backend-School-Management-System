@@ -1,23 +1,18 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  getObjectSize,
-  toNegative,
-  throwError,
-  generateSearchText,
   fetchProgrammes,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
   fetchAllProgrammes
-} from "../../../utils/utilsFunctions";
-import { logActivity } from "../../../utils/utilsFunctions";
+} from "../../../utils/databaseFunctions.ts";
+import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
-
+import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
 import { Programme } from "../../../models/curriculum/programme";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
-import { VerificationCode } from "../../../models/authentication/resetPasswordModel.ts";
 
 const validateProgramme = (programmeDataParam: any) => {
   const { description, programmeDuration, ...copyLocalData } = programmeDataParam;
@@ -42,26 +37,29 @@ export const getAllProgrammes = asyncHandler(async (req: Request, res: Response)
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Programmes");
 
   if (absoluteAdmin || hasAccess) {
-    const programmeProfiles = await fetchAllProgrammes(organisation!._id.toString());
+    const programmes = await fetchAllProgrammes(organisation!._id.toString());
 
-    if (!programmeProfiles) {
+    if (!programmes) {
       throwError("Error fetching programme", 500);
     }
 
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + programmeProfiles.length },
+      { field: "databaseOperation", value: 3 + programmes.length },
       {
         field: "databaseDataTransfer",
-        value: getObjectSize([programmeProfiles, organisation, role, account])
+        value: getObjectSize([programmes, organisation, role, account])
       }
     ]);
-    res.status(201).json(programmeProfiles);
+    res.status(201).json(programmes);
     return;
   }
 
@@ -101,9 +99,12 @@ export const getProgrammes = asyncHandler(async (req: Request, res: Response) =>
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Programmes");
 
   if (absoluteAdmin || hasAccess) {
@@ -129,7 +130,7 @@ export const getProgrammes = asyncHandler(async (req: Request, res: Response) =>
 
 // controller to handle role creation
 export const createProgramme = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
 
   const { programmeCustomId, programmeName } = body;
@@ -143,9 +144,12 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Programme");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -232,9 +236,12 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Programme");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -292,7 +299,7 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
 
 // controller to handle deleting roles
 export const deleteProgramme = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { programmeCustomId } = req.body;
   if (!programmeCustomId) {
     throwError("Unknown delete request - Please try again", 400);
@@ -300,16 +307,19 @@ export const deleteProgramme = asyncHandler(async (req: Request, res: Response) 
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
 
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Programme");
   if (!absoluteAdmin && !hasAccess) {
     throwError("Unauthorised Action: You do not have access to delete programme - Please contact your admin", 403);

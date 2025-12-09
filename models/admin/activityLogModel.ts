@@ -36,6 +36,7 @@ const activityLogSchema = new Schema(
         "Topic",
         "Syllabus",
         "Feature",
+        "Stage",
         "None"
       ]
     },

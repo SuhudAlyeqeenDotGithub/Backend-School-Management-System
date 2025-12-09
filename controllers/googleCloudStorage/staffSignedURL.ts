@@ -2,16 +2,14 @@ import { Storage } from "@google-cloud/storage";
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  throwError,
   confirmUserOrgRole,
   checkOrgAndUserActiveness,
   checkAccess,
-  getObjectSize,
-  getGoogleCloudFileSize,
-  toNegative
-} from "../../utils/utilsFunctions.ts";
+  getGoogleCloudFileSize
+} from "../../utils/databaseFunctions.ts";
 import { nanoid } from "nanoid";
 import { registerBillings } from "../../utils/billingFunctions.ts";
+import { throwError, toNegative, getObjectSize } from "../../utils/pureFuctions.ts";
 
 const storage = new Storage({
   projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
@@ -21,7 +19,7 @@ const storage = new Storage({
 const bucketName = "alyeqeenappsimages";
 
 export const getStaffImageUploadSignedUrl = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { imageName, imageType, imageSize } = req.body;
 
   const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
@@ -35,15 +33,18 @@ export const getStaffImageUploadSignedUrl = asyncHandler(async (req: Request, re
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasCreateStaffAccess = checkAccess(account, tabAccess, "Create Staff Profile");
 
   if (!hasCreateStaffAccess && !absoluteAdmin) {
@@ -91,7 +92,7 @@ export const getStaffImageUploadSignedUrl = asyncHandler(async (req: Request, re
 });
 
 export const getStaffImageViewSignedUrl = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { imageLocalDestination } = req.body;
 
   // confirm user
@@ -103,9 +104,12 @@ export const getStaffImageViewSignedUrl = asyncHandler(async (req: Request, res:
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasCreateStaffAccess = checkAccess(account, tabAccess, "View Staff Profile");
 
   if (!hasCreateStaffAccess && !absoluteAdmin) {
@@ -158,9 +162,12 @@ export const deleteStaffImageInBucket = asyncHandler(async (req: Request, res: R
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasCreateStaffAccess = checkAccess(account, tabAccess, "Edit Staff Profile");
 
   if (!hasCreateStaffAccess && !absoluteAdmin) {

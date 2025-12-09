@@ -2,24 +2,21 @@ import { Request, Response } from "express";
 import asyncHandler from "express-async-handler";
 
 import {
-  throwError,
   emitToOrganisation,
   logActivity,
-  getObjectSize,
-  toNegative,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole
-} from "../../utils/utilsFunctions.ts";
+} from "../../utils/databaseFunctions.ts";
+import { throwError, toNegative, getObjectSize } from "../../utils/pureFuctions.ts";
 
 import { diff } from "deep-diff";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 import { Period } from "../../models/timeline/period.ts";
-import { log } from "console";
 
 // controller to handle role creation
 export const createPeriod = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { period, startDate, endDate, academicYearId, customId, academicYear } = req.body;
 
   // validate input
@@ -40,15 +37,18 @@ export const createPeriod = asyncHandler(async (req: Request, res: Response) => 
     throwError("This period name is already in use under a same academic year - Please use a different name", 409);
   }
 
-  const { roleId, accountStatus } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Academic Year");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -110,7 +110,7 @@ export const createPeriod = asyncHandler(async (req: Request, res: Response) => 
 
 // controller to handle role update
 export const updatePeriod = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { _id: periodId, period, startDate, endDate, academicYearId, customId, academicYear } = req.body;
 
   // validate input
@@ -124,15 +124,18 @@ export const updatePeriod = asyncHandler(async (req: Request, res: Response) => 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, accountStatus } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Academic Year");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -189,7 +192,7 @@ export const updatePeriod = asyncHandler(async (req: Request, res: Response) => 
 
 // controller to handle deleting roles
 export const deletePeriod = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { periodIdToDelete } = req.body;
   if (!periodIdToDelete) {
     throwError("Unknown delete request - Please try again", 400);
@@ -197,14 +200,17 @@ export const deletePeriod = asyncHandler(async (req: Request, res: Response) => 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Academic Year");
 
   if (!absoluteAdmin && !hasAccess) {

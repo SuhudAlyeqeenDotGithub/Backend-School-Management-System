@@ -1,21 +1,18 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  throwError,
-  generateSearchText,
   fetchBaseSubjectManagers,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
-  confirmUserOrgRole,
-  getObjectSize,
-  toNegative
-} from "../../../utils/utilsFunctions";
-import { logActivity } from "../../../utils/utilsFunctions";
+  confirmUserOrgRole
+} from "../../../utils/databaseFunctions.ts";
+import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
 import { StaffContract } from "../../../models/staff/contracts";
 import { BaseSubjectManager } from "../../../models/curriculum/basesubject";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
+import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
 
 const validateBaseSubjectManager = (baseSubjectManagerDataParam: any) => {
   const { managedUntil, _id, ...copyLocalData } = baseSubjectManagerDataParam;
@@ -63,9 +60,12 @@ export const getBaseSubjectManagers = asyncHandler(async (req: Request, res: Res
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, tabAccess, "View Base Subject Managers");
 
   if (absoluteAdmin || hasAccess) {
@@ -98,7 +98,7 @@ export const getBaseSubjectManagers = asyncHandler(async (req: Request, res: Res
 
 // controller to handle role creation
 export const createBaseSubjectManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
 
   const {
@@ -143,9 +143,12 @@ export const createBaseSubjectManager = asyncHandler(async (req: Request, res: R
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Base Subject Manager");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -206,7 +209,7 @@ export const createBaseSubjectManager = asyncHandler(async (req: Request, res: R
 
 // controller to handle role update
 export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const body = req.body;
   const { baseSubjectCustomId, baseSubjectName, baseSubjectManagerCustomStaffId, baseSubjectManagerFullName } = body;
 
@@ -225,9 +228,12 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Base Subject Manager");
 
   if (!absoluteAdmin && !hasAccess) {
@@ -293,7 +299,7 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
 
 // controller to handle deleting roles
 export const deleteBaseSubjectManager = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
+  const { accountId } = req.userToken;
   const { baseSubjectManagerId } = req.body;
   if (!baseSubjectManagerId) {
     throwError("Unknown delete request - Please try again", 400);
@@ -308,9 +314,12 @@ export const deleteBaseSubjectManager = asyncHandler(async (req: Request, res: R
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(message, 409);
   }
-
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Base Subject Manager");
   if (!absoluteAdmin && !hasAccess) {
     throwError(
