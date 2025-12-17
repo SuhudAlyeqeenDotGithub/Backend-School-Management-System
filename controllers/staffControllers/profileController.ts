@@ -18,23 +18,23 @@ import { registerBillings } from "../../utils/billingFunctions.ts";
 
 const validateStaffProfile = (staffDataParam: any) => {
   const {
-    staffImageUrl,
+    imageUrl,
     imageLocalDestination,
-    staffQualification,
+    qualifications,
     workExperience,
-    identification,
+    identifications,
     skills,
-    staffPostCode,
-    staffEndDate,
+    postCode,
+    endDate,
     ...copyLocalData
   } = staffDataParam;
 
-  if (!validateEmail(staffDataParam.staffEmail)) {
+  if (!validateEmail(staffDataParam.email)) {
     throwError("Please enter a valid email address.", 400);
     return;
   }
 
-  if (!validatePhoneNumber(staffDataParam.staffPhone)) {
+  if (!validatePhoneNumber(staffDataParam.phone)) {
     throwError("Please enter a valid phone number with the country code. e.g +234, +447", 400);
     return;
   }
@@ -71,10 +71,14 @@ export const getAllStaffProfiles = asyncHandler(async (req: Request, res: Respon
     const staffProfiles = await fetchAllStaffProfiles(
       absoluteAdmin ? "Absolute Admin" : "User",
       organisation!._id.toString(),
-      absoluteAdmin ? "" : staffId.staffCustomId.toString()
+      absoluteAdmin ? "" : staffId.customId.toString()
     );
 
     if (!staffProfiles) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 4 },
+        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      ]);
       throwError("Error fetching staff profiles", 500);
     }
 
@@ -140,10 +144,14 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
       parsedLimit,
       absoluteAdmin ? "Absolute Admin" : "User",
       organisation!._id.toString(),
-      absoluteAdmin ? "" : staffId.staffCustomId.toString()
+      absoluteAdmin ? "" : staffId.customId.toString()
     );
 
     if (!result || !result.staffProfiles) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 4 },
+        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      ]);
       throwError("Error fetching staff profiles", 500);
     }
 
@@ -165,15 +173,7 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
 export const createStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const {
-    staffCustomId,
-    staffFullName,
-    staffDateOfBirth,
-    staffGender,
-    staffEmail,
-    staffNationality,
-    staffNextOfKinName
-  } = body;
+  const { customId, fullName, dateOfBirth, gender, email, nationality, nextOfKinName } = body;
 
   if (!validateStaffProfile(body)) {
     throwError("Please fill in all required fields", 400);
@@ -198,16 +198,28 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Staff Profile");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to create staff - Please contact your admin", 403);
   }
 
-  const usedEmail = await Account.findOne({ staffEmail, organisationId: orgParsedId });
+  const usedEmail = await Account.findOne({ email, organisationId: orgParsedId }).lean();
   if (usedEmail) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([usedEmail, organisation, role, account]) }
+    ]);
     throwError("This email is already in use by another staff member - Please use a different email", 409);
   }
 
-  const staffExists = await Staff.findOne({ organisationId: orgParsedId, staffCustomId });
+  const staffExists = await Staff.findOne({ organisationId: orgParsedId, customId }).lean();
   if (staffExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([staffExists, organisation, role, account]) }
+    ]);
     throwError(
       "A staff with this Custom Id already exist - Either refer to that record or change the staff custom Id",
       409
@@ -217,16 +229,16 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
   const newStaff = await Staff.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([
-      staffCustomId,
-      staffFullName,
-      staffGender,
-      staffEmail,
-      staffDateOfBirth,
-      staffNationality,
-      staffNextOfKinName
-    ])
+    searchText: generateSearchText([customId, fullName, gender, email, dateOfBirth, nationality, nextOfKinName])
   });
+
+  if (!newStaff) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 7 },
+      { field: "databaseDataTransfer", value: getObjectSize([newStaff, staffExists, organisation, role, account]) }
+    ]);
+    throwError("Error creating staff profile - Please try again", 500);
+  }
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
@@ -238,14 +250,14 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
       "Staff Profile Creation",
       "Staff",
       newStaff?._id,
-      staffFullName,
+      fullName,
       [
         {
           kind: "N",
           rhs: {
             _id: newStaff._id,
-            staffId: newStaff.staffCustomId,
-            staffFullName
+            staffId: newStaff.customId,
+            fullName
           }
         }
       ],
@@ -274,15 +286,8 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
 export const updateStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const {
-    staffCustomId,
-    staffFullName,
-    staffDateOfBirth,
-    staffGender,
-    staffEmail,
-    staffNationality,
-    staffNextOfKinName
-  } = body;
+  const { customId, fullName, dateOfBirth, gender, email, nationality, nextOfKinName } = body;
+
 
   if (!validateStaffProfile(body)) {
     throwError("Please fill in all required fields", 400);
@@ -308,12 +313,20 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Staff Profile");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to edit staff - Please contact your admin", 403);
   }
 
-  const originalStaff = await Staff.findOne({ organisationId: orgParsedId, staffCustomId });
+  const originalStaff = await Staff.findOne({ organisationId: orgParsedId, customId }).lean();
 
   if (!originalStaff) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("An error occured whilst getting old staff data", 500);
   }
 
@@ -321,20 +334,16 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
     originalStaff?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([
-        staffCustomId,
-        staffGender,
-        staffFullName,
-        staffEmail,
-        staffDateOfBirth,
-        staffNationality,
-        staffNextOfKinName
-      ])
+      searchText: generateSearchText([customId, gender, fullName, email, dateOfBirth, nationality, nextOfKinName])
     },
     { new: true }
-  );
+  ).lean();
 
   if (!updatedStaff) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      { field: "databaseDataTransfer", value: getObjectSize([originalStaff, organisation, role, account]) }
+    ]);
     throwError("Error updating staff profile", 500);
   }
 
@@ -349,7 +358,7 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
       "Staff Profile Update",
       "Staff",
       updatedStaff?._id,
-      staffFullName,
+      fullName,
       difference,
       new Date()
     );
@@ -371,8 +380,8 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
 // controller to handle deleting roles
 export const deleteStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { staffIDToDelete } = req.body;
-  if (!staffIDToDelete) {
+  const { _id } = req.body;
+  if (!_id) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
@@ -392,21 +401,21 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
     throwError(message, 409);
   }
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Staff Profile");
+
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to delete staff profile - Please contact your admin", 403);
   }
 
-  const staffProfileToDelete = await Staff.findOne({
-    organisationId: organisation?._id.toString(),
-    staffCustomId: staffIDToDelete
-  });
-
-  if (!staffProfileToDelete) {
-    throwError("Error finding staff profile with provided Custom Id - Please try again", 404);
-  }
-
-  const deletedStaffProfile = await Staff.findByIdAndDelete(staffProfileToDelete?._id.toString());
+  const deletedStaffProfile = await Staff.findByIdAndDelete(_id).lean();
   if (!deletedStaffProfile) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Error deleting staff profile - Please try again", 500);
   }
 
@@ -423,18 +432,11 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
       "Staff Delete",
       "Staff",
       deletedStaffProfile?._id,
-      deletedStaffProfile?.staffFullName,
+      deletedStaffProfile?.fullName,
       [
         {
           kind: "D" as any,
-          lhs: {
-            _id: deletedStaffProfile?._id,
-            staffCustomId: deletedStaffProfile?.staffCustomId,
-            staffFullName: deletedStaffProfile?.staffFullName,
-            staffEmail: deletedStaffProfile?.staffEmail,
-            staffNextOfKinName: deletedStaffProfile?.staffNextOfKinName,
-            staffQualification: deletedStaffProfile?.staffQualification
-          }
+          lhs: deletedStaffProfile
         }
       ],
       new Date()
@@ -444,7 +446,7 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
   registerBillings(req, [
     {
       field: "databaseOperation",
-      value: 6 + (logActivityAllowed ? 2 : 0)
+      value: 5 + (logActivityAllowed ? 2 : 0)
     },
     {
       field: "databaseStorageAndBackup",
@@ -453,7 +455,7 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([deletedStaffProfile, organisation, role, account, staffProfileToDelete]) +
+        getObjectSize([deletedStaffProfile, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);

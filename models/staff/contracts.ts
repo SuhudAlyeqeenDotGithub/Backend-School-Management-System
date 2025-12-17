@@ -6,13 +6,12 @@ const staffContractSchema = new Schema(
     organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
     academicYearId: { type: mongoose.Schema.Types.ObjectId, ref: "AcademicYear", required: true },
     staffId: { type: String, required: true },
-    academicYear: { type: String, required: true },
-    staffCustomId: { type: String, required: true },
-    contractCustomId: { type: String, required: true },
     staffFullName: { type: String, required: true },
+    academicYear: { type: String, required: true },
+    customId: { type: String, required: true },
     jobTitle: { type: String, required: true },
-    contractStartDate: { type: String, required: true },
-    contractEndDate: String,
+    startDate: { type: String, required: true },
+    endDate: String,
     responsibilities: {
       type: [{ _id: String, role: String, responsibility: String, description: String }],
       required: true
@@ -27,9 +26,9 @@ const staffContractSchema = new Schema(
     probationStartDate: String,
     probationEndDate: String,
     probationMonths: Number,
-    contractStatus: { type: String, required: true, enum: ["Active", "Closed"] },
+    status: { type: String, required: true, enum: ["Active", "Closed"] },
     department: String,
-    contractSalary: { type: Number, required: true, default: "0.00" },
+    salary: { type: String, required: true },
     payFrequency: String,
     allowances: {
       type: [{ _id: String, allowanceType: String, amount: String }],
@@ -44,7 +43,7 @@ const staffContractSchema = new Schema(
   { timestamps: true }
 );
 
-staffContractSchema.index({ organisationId: 1, staffCustomId: 1 });
-staffContractSchema.index({ staffId: 1, contractStatus: 1 });
+staffContractSchema.index({ organisationId: 1, staffId: 1 });
+staffContractSchema.index({ staffId: 1, status: 1 });
 
 export const StaffContract = model("StaffContract", staffContractSchema);

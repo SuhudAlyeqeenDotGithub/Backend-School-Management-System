@@ -1,22 +1,22 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  fetchCourses,
+  fetchPathways,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllCourses
+  fetchAllPathways
 } from "../../../utils/databaseFunctions.ts";
 import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
-import { Course } from "../../../models/curriculum/course";
-import { Programme } from "../../../models/curriculum/programme";
+import { Pathway } from "../../../models/curriculum/pathway";
+import { Programme } from "../../../models/curriculum/programme.ts";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
 
-const validateCourse = (courseDataParam: any) => {
-  const { description, courseDuration, programmeName, ...copyLocalData } = courseDataParam;
+const validatePathway = (pathwayDataParam: any) => {
+  const { description, startDate, endDate, ...copyLocalData } = pathwayDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -28,7 +28,7 @@ const validateCourse = (courseDataParam: any) => {
   return true;
 };
 
-export const getAllCourses = asyncHandler(async (req: Request, res: Response) => {
+export const getAllPathways = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
@@ -44,30 +44,34 @@ export const getAllCourses = asyncHandler(async (req: Request, res: Response) =>
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Courses");
+  const hasAccess = checkAccess(account, tabAccess, "View Pathways");
 
   if (absoluteAdmin || hasAccess) {
-    const courses = await fetchAllCourses(organisation!._id.toString());
+    const pathways = await fetchAllPathways(organisation!._id.toString());
 
-    if (!courses) {
-      throwError("Error fetching courses", 500);
+    if (!pathways) {
+      throwError("Error fetching pathways", 500);
     }
 
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + courses.length },
+      { field: "databaseOperation", value: 3 + pathways.length },
       {
         field: "databaseDataTransfer",
-        value: getObjectSize([courses, organisation, role, account])
+        value: getObjectSize([pathways, organisation, role, account])
       }
     ]);
-    res.status(201).json(courses);
+    res.status(201).json(pathways);
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view courses - Please contact your admin", 403);
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 },
+    { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+  ]);
+  throwError("Unauthorised Action: You do not have access to view pathways - Please contact your admin", 403);
 });
 
-export const getCourses = asyncHandler(async (req: Request, res: Response) => {
+export const getPathways = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
@@ -106,17 +110,17 @@ export const getCourses = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Courses");
+  const hasAccess = checkAccess(account, tabAccess, "View Pathways");
 
   if (absoluteAdmin || hasAccess) {
-    const result = await fetchCourses(query, cursorType as string, parsedLimit, organisation!._id.toString());
+    const result = await fetchPathways(query, cursorType as string, parsedLimit, organisation!._id.toString());
 
-    if (!result || !result.courses) {
-      throwError("Error fetching courses", 500);
+    if (!result || !result.pathways) {
+      throwError("Error fetching pathways", 500);
     }
 
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + result.courses.length },
+      { field: "databaseOperation", value: 3 + result.pathways.length },
       {
         field: "databaseDataTransfer",
         value: getObjectSize([result, organisation, role, account])
@@ -126,15 +130,19 @@ export const getCourses = asyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view course - Please contact your admin", 403);
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 },
+    { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+  ]);
+  throwError("Unauthorised Action: You do not have access to view pathway - Please contact your admin", 403);
 });
 
 // controller to handle role creation
-export const createCourse = asyncHandler(async (req: Request, res: Response) => {
+export const createPathway = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { courseCustomId, courseName, programmeCustomId, courseFullTitle } = body;
+  const { customId, pathway, programmeId } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
@@ -151,33 +159,59 @@ export const createCourse = asyncHandler(async (req: Request, res: Response) => 
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Create Course");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create Pathway");
 
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to create course - Please contact your admin", 403);
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Unauthorised Action: You do not have access to create pathway - Please contact your admin", 403);
   }
 
-  const courseExists = await Course.findOne({ organisationId: orgParsedId, courseCustomId });
-  if (courseExists) {
+  const pathwayExists = await Pathway.findOne({ organisationId: orgParsedId, customId });
+  if (pathwayExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([pathwayExists, organisation, role, account]) }
+    ]);
     throwError(
-      "A course with this Custom Id already exist - Either refer to that record or change the course custom Id",
+      "A pathway with this Custom Id already exist - Either refer to that record or change the pathway custom Id",
       409
     );
   }
 
-  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, programmeCustomId });
+  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, customId });
   if (!programmeExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, programmeExists, pathwayExists])
+      }
+    ]);
     throwError(
       "No programme with the provided Custom Id exist - Please create the programme or change the programme custom Id",
       409
     );
   }
 
-  const newCourse = await Course.create({
+  const newPathway = await Pathway.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([courseCustomId, courseName, courseFullTitle])
+    searchText: generateSearchText([customId, pathway, programmeId])
   });
+
+  if (!newPathway) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, programmeExists, pathwayExists, newPathway])
+      }
+    ]);
+    throwError("Error creating pathway - Please try again", 500);
+  }
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
@@ -186,17 +220,17 @@ export const createCourse = asyncHandler(async (req: Request, res: Response) => 
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Course Creation",
-      "Course",
-      newCourse?._id,
-      courseName,
+      "Pathway Creation",
+      "Pathway",
+      newPathway?._id,
+      pathway,
       [
         {
           kind: "N",
           rhs: {
-            _id: newCourse._id,
-            courseId: newCourse.courseCustomId,
-            courseName
+            _id: newPathway._id,
+            pathwayId: newPathway.customId,
+            pathway
           }
         }
       ],
@@ -208,12 +242,12 @@ export const createCourse = asyncHandler(async (req: Request, res: Response) => 
     { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newCourse) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: (getObjectSize(newPathway) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
     },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([newCourse, programmeExists, courseExists, organisation, role, account]) +
+        getObjectSize([newPathway, programmeExists, pathwayExists, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -222,12 +256,12 @@ export const createCourse = asyncHandler(async (req: Request, res: Response) => 
 });
 
 // controller to handle role update
-export const updateCourse = asyncHandler(async (req: Request, res: Response) => {
+export const updatePathway = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { courseCustomId, courseName, programmeCustomId, courseFullTitle } = body;
+  const { pathway, customId, programmeId } = body;
 
-  if (!validateCourse(body)) {
+  if (!validatePathway(body)) {
     throwError("Please fill in all required fields", 400);
   }
 
@@ -248,51 +282,76 @@ export const updateCourse = asyncHandler(async (req: Request, res: Response) => 
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Course");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Pathway");
 
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to edit course - Please contact your admin", 403);
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Unauthorised Action: You do not have access to edit pathway - Please contact your admin", 403);
   }
 
-  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, programmeCustomId });
+  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, customId });
   if (!programmeExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, programmeExists])
+      }
+    ]);
     throwError(
       "No programme with the provided Custom Id exist - Please create the programme or change the programme custom Id",
       409
     );
   }
 
-  const originalCourse = await Course.findOne({ organisationId: orgParsedId, courseCustomId });
+  const originalPathway = await Pathway.findOne({ organisationId: orgParsedId, customId });
 
-  if (!originalCourse) {
-    throwError("An error occured whilst getting old course data, Ensure it has not been deleted", 500);
+  if (!originalPathway) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, originalPathway, programmeExists])
+      }
+    ]);
+    throwError("An error occured whilst getting old pathway data, Ensure it has not been deleted", 500);
   }
 
-  const updatedCourse = await Course.findByIdAndUpdate(
-    originalCourse?._id.toString(),
+  const updatedPathway = await Pathway.findByIdAndUpdate(
+    originalPathway?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([courseCustomId, courseName, courseFullTitle])
+      searchText: generateSearchText([customId, pathway, programmeId])
     },
     { new: true }
   );
 
-  if (!updatedCourse) {
-    throwError("Error updating course", 500);
+  if (!updatedPathway) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 7 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, originalPathway, updatedPathway, programmeExists])
+      }
+    ]);
+    throwError("Error updating pathway", 500);
   }
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    const difference = diff(originalCourse, updatedCourse);
+    const difference = diff(originalPathway, updatedPathway);
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Course Update",
-      "Course",
-      updatedCourse?._id,
-      courseName,
+      "Pathway Update",
+      "Pathway",
+      updatedPathway?._id,
+      pathway,
       difference,
       new Date()
     );
@@ -303,7 +362,7 @@ export const updateCourse = asyncHandler(async (req: Request, res: Response) => 
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([updatedCourse, programmeExists, organisation, role, account, originalCourse]) +
+        getObjectSize([updatedPathway, programmeExists, organisation, role, account, originalPathway]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -312,10 +371,10 @@ export const updateCourse = asyncHandler(async (req: Request, res: Response) => 
 });
 
 // controller to handle deleting roles
-export const deleteCourse = asyncHandler(async (req: Request, res: Response) => {
+export const deletePathway = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { courseCustomId } = req.body;
-  if (!courseCustomId) {
+  const { _id } = req.body;
+  if (!_id) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
@@ -334,27 +393,30 @@ export const deleteCourse = asyncHandler(async (req: Request, res: Response) => 
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Course ");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Pathway ");
+
   if (!absoluteAdmin && !hasAccess) {
-    throwError("Unauthorised Action: You do not have access to delete course - Please contact your admin", 403);
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Unauthorised Action: You do not have access to delete pathway - Please contact your admin", 403);
   }
 
-  const courseToDelete = await Course.findOne({
-    organisationId: organisation?._id.toString(),
-    courseCustomId: courseCustomId
-  });
-
-  if (!courseToDelete) {
-    throwError("Error finding course with provided Custom Id - Please try again", 404);
+  const deletedPathway = await Pathway.findByIdAndDelete(_id);
+  if (!deletedPathway) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account])
+      }
+    ]);
+    throwError("Error deleting pathway - Please try again", 500);
   }
 
-  const deletedCourse = await Course.findByIdAndDelete(courseToDelete?._id.toString());
-  if (!deletedCourse) {
-    throwError("Error deleting course - Please try again", 500);
-  }
-
-  const emitRoom = deletedCourse?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "courses", deletedCourse, "delete");
+  const emitRoom = deletedPathway?.organisationId?.toString() ?? "";
+  emitToOrganisation(emitRoom, "pathways", deletedPathway, "delete");
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
@@ -363,14 +425,14 @@ export const deleteCourse = asyncHandler(async (req: Request, res: Response) => 
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Course Delete",
-      "Course",
-      deletedCourse?._id,
-      deletedCourse?.courseName,
+      "Pathway Delete",
+      "Pathway",
+      deletedPathway?._id,
+      deletedPathway?.pathway,
       [
         {
           kind: "D" as any,
-          lhs: deletedCourse
+          lhs: deletedPathway
         }
       ],
       new Date()
@@ -384,12 +446,12 @@ export const deleteCourse = asyncHandler(async (req: Request, res: Response) => 
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedCourse) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedPathway) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
     },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([deletedCourse, organisation, role, account, courseToDelete]) +
+        getObjectSize([deletedPathway, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);

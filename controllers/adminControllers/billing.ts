@@ -215,13 +215,13 @@ export const upgradeToPremium = asyncHandler(async (req: Request, res: Response)
 
     await sendEmailToOwner(
       "Premium Subscription Upgrade",
-      `Organisation with the ID: ${userTokenOrgId} and name ${account!.accountName} upgraded to premium successfully`
+      `Organisation with the ID: ${userTokenOrgId} and name ${account!.name} upgraded to premium successfully`
     );
     sendEmail(
-      account!.accountEmail,
+      account!.email,
       "Premium Subscription Upgrade",
       `You have successfully upgraded to premium with SuSchool`,
-      `<p>Hi ${account!.accountName}</p>
+      `<p>Hi ${account!.name}</p>
       <p> Thank you for upgrading to a premium subscription with SuSchool We are glad to have you</p>
       <p>Your bill for this month will be charged on the 5th of the next month. For the meantime you can track your usage in Billing section of your admin dashboard </p>
       <p>You can refer to the documentation if you need any help using the app</p>
@@ -286,14 +286,14 @@ export const cancleSubscription = asyncHandler(async (req: Request, res: Respons
     await sendEmailToOwner(
       "Premium Subscription Cancellation",
       `Organisation with the ID: ${userTokenOrgId} and name ${
-        account!.accountName
+        account!.name
       } cancelled premium subscription successfully`
     );
     sendEmail(
-      account!.accountEmail,
+      account!.email,
       "Premium Subscription Cancellation with SuSchool",
       `You have successfully cancelled your premium subscription with SuSchool - Sorry to see you go`,
-      `<p>Hi ${account!.accountName}</p>
+      `<p>Hi ${account!.name}</p>
      <p>You have successfully cancelled your premium subscription with SuSchool - Sorry to see you go</p>
      <p>Please note that you will still be charged the regular cost for usages before the cancellation date. This will be on the 5th of next month</p>
       <p>If you have any question or encouter some issue, 
@@ -314,7 +314,7 @@ export const getOrganisations = asyncHandler(async (req: Request, res: Response)
     return;
   }
 
-  const organisations = await Account.find({ accountType: { $in: ["Organization", "Owner"] } }, "_id accountName");
+  const organisations = await Account.find({ accountType: { $in: ["Organization", "Owner"] } }, "_id name");
 
   if (!organisations) {
     throwError("Error fetching organisations", 500);
@@ -337,7 +337,7 @@ export const getOrganisation = asyncHandler(async (req: Request, res: Response) 
   // find the account by email
   const account = await Account.findOne(
     { organisationId },
-    "organisationId accountName accountEmail accountPhone organisationInitial accountType"
+    "organisationId name email phone organisationInitial accountType"
   );
 
   if (!account) {

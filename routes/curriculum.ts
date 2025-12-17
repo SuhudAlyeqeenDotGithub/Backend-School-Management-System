@@ -17,30 +17,36 @@ import {
 } from "../controllers/curriculum/programme/manager";
 
 import {
-  getCourses,
-  createCourse,
-  updateCourse,
-  deleteCourse,
-  getAllCourses
-} from "../controllers/curriculum/course/course";
+  getPathways,
+  createPathway,
+  updatePathway,
+  deletePathway,
+  getAllPathways
+} from "../controllers/curriculum/pathway/pathway";
 
 import {
-  getCourseManagers,
-  createCourseManager,
-  updateCourseManager,
-  deleteCourseManager,
-  getAllCourseManagers
-} from "../controllers/curriculum/course/manager";
-
-import { getLevels, createLevel, updateLevel, deleteLevel, getAllLevels } from "../controllers/curriculum/level/level";
+  getPathwayManagers,
+  createPathwayManager,
+  updatePathwayManager,
+  deletePathwayManager,
+  getAllPathwayManagers
+} from "../controllers/curriculum/pathway/manager";
 
 import {
-  getLevelManagers,
-  createLevelManager,
-  updateLevelManager,
-  deleteLevelManager,
-  getAllLevelManagers
-} from "../controllers/curriculum/level/manager";
+  getClasses,
+  createClass,
+  updateClass,
+  deleteClass,
+  getAllClasses
+} from "../controllers/curriculum/class/class";
+
+import {
+  getClassTutors,
+  createClassTutor,
+  updateClassTutor,
+  deleteClassTutor,
+  getAllClassTutors
+} from "../controllers/curriculum/class/tutor";
 
 import {
   getBaseSubjects,
@@ -57,20 +63,20 @@ import {
   deleteBaseSubjectManager
 } from "../controllers/curriculum/basesubject/manager";
 import {
-  getSubjects,
-  createSubject,
-  updateSubject,
-  deleteSubject,
-  getAllSubjects
-} from "../controllers/curriculum/subject/subject";
+  getClassSubjects,
+  createClassSubject,
+  updateClassSubject,
+  deleteClassSubject,
+  getAllClassSubjects
+} from "../controllers/curriculum/classSubject/classSubject";
 
 import {
-  getSubjectTeachers,
-  createSubjectTeacher,
-  updateSubjectTeacher,
-  deleteSubjectTeacher,
-  getAllSubjectTeachers
-} from "../controllers/curriculum/subject/teacher";
+  getClassSubjectTeachers,
+  createClassSubjectTeacher,
+  updateClassSubjectTeacher,
+  deleteClassSubjectTeacher,
+  getAllClassSubjectTeachers
+} from "../controllers/curriculum/classSubject/teacher";
 
 import {
   getTopics,
@@ -91,7 +97,7 @@ import { createStage, getStages, updateStage, deleteStage } from "../controllers
 
 // end point for curriculum / programme
 router.get("/curriculum/programmes", getProgrammes);
-router.get("/curriculum/allprogrammes", getAllProgrammes);
+router.get("/curriculum/all-programmes", getAllProgrammes);
 router.post("/curriculum/programme", createProgramme);
 router.put("/curriculum/programme", updateProgramme);
 router.delete("/curriculum/programme", deleteProgramme);
@@ -109,67 +115,67 @@ router.post("/curriculum/stage", createStage);
 router.put("/curriculum/stage", updateStage);
 router.delete("/curriculum/stage", deleteStage);
 
-// end point for curriculum / course
-router.get("/curriculum/courses", getCourses);
-router.get("/curriculum/allcourses", getAllCourses);
-router.post("/curriculum/course", createCourse);
-router.put("/curriculum/course", updateCourse);
-router.delete("/curriculum/course", deleteCourse);
+// end point for curriculum / pathway
+router.get("/curriculum/pathways", getPathways);
+router.get("/curriculum/all-pathways", getAllPathways);
+router.post("/curriculum/pathway", createPathway);
+router.put("/curriculum/pathway", updatePathway);
+router.delete("/curriculum/pathway", deletePathway);
 
-router.get("/curriculum/course/managers", getCourseManagers);
-router.get("/curriculum/course/allmanagers", getAllCourseManagers);
-router.post("/curriculum/course/manager", createCourseManager);
-router.put("/curriculum/course/manager", updateCourseManager);
-router.delete("/curriculum/course/manager", deleteCourseManager);
+router.get("/curriculum/pathway/managers", getPathwayManagers);
+router.get("/curriculum/pathway/all-managers", getAllPathwayManagers);
+router.post("/curriculum/pathway/manager", createPathwayManager);
+router.put("/curriculum/pathway/manager", updatePathwayManager);
+router.delete("/curriculum/pathway/manager", deletePathwayManager);
 
-// end point for curriculum / level
-router.get("/curriculum/levels", getLevels);
-router.get("/curriculum/alllevels", getAllLevels);
-router.post("/curriculum/level", createLevel);
-router.put("/curriculum/level", updateLevel);
-router.delete("/curriculum/level", deleteLevel);
+// end point for curriculum / class
+router.get("/curriculum/classs", getClasses);
+router.get("/curriculum/all-classs", getAllClasses);
+router.post("/curriculum/class", createClass);
+router.put("/curriculum/class", updateClass);
+router.delete("/curriculum/class", deleteClass);
 
-router.get("/curriculum/level/managers", getLevelManagers);
-router.get("/curriculum/level/allmanagers", getAllLevelManagers);
-router.post("/curriculum/level/manager", createLevelManager);
-router.put("/curriculum/level/manager", updateLevelManager);
-router.delete("/curriculum/level/manager", deleteLevelManager);
+router.get("/curriculum/class/tutors", getClassTutors);
+router.get("/curriculum/class/all-tutors", getAllClassTutors);
+router.post("/curriculum/class/tutor", createClassTutor);
+router.put("/curriculum/class/tutor", updateClassTutor);
+router.delete("/curriculum/class/tutor", deleteClassTutor);
 
 // end point for curriculum / basesubject
-router.get("/curriculum/basesubjects", getBaseSubjects);
-router.get("/curriculum/allbasesubjects", getAllBaseSubjects);
-router.post("/curriculum/basesubject", createBaseSubject);
-router.put("/curriculum/basesubject", updateBaseSubject);
-router.delete("/curriculum/basesubject", deleteBaseSubject);
+router.get("/curriculum/base-subjects", getBaseSubjects);
+router.get("/curriculum/allbase-subjects", getAllBaseSubjects);
+router.post("/curriculum/base-subject", createBaseSubject);
+router.put("/curriculum/base-subject", updateBaseSubject);
+router.delete("/curriculum/base-subject", deleteBaseSubject);
 
-router.get("/curriculum/basesubject/managers", getBaseSubjectManagers);
-router.post("/curriculum/basesubject/manager", createBaseSubjectManager);
-router.put("/curriculum/basesubject/manager", updateBaseSubjectManager);
-router.delete("/curriculum/basesubject/manager", deleteBaseSubjectManager);
+router.get("/curriculum/base-subject/managers", getBaseSubjectManagers);
+router.post("/curriculum/base-subject/manager", createBaseSubjectManager);
+router.put("/curriculum/base-subject/manager", updateBaseSubjectManager);
+router.delete("/curriculum/base-subject/manager", deleteBaseSubjectManager);
 
 // end point for curriculum / subjects
-router.get("/curriculum/subjects", getSubjects);
-router.get("/curriculum/allsubjects", getAllSubjects);
-router.post("/curriculum/subject", createSubject);
-router.put("/curriculum/subject", updateSubject);
-router.delete("/curriculum/subject", deleteSubject);
+router.get("/curriculum/class-subjects", getClassSubjects);
+router.get("/curriculum/all-class-subjects", getAllClassSubjects);
+router.post("/curriculum/class-subject", createClassSubject);
+router.put("/curriculum/class-subject", updateClassSubject);
+router.delete("/curriculum/class-subject", deleteClassSubject);
 
-router.get("/curriculum/subject/teachers", getSubjectTeachers);
-router.get("/curriculum/subject/allteachers", getAllSubjectTeachers);
-router.post("/curriculum/subject/teacher", createSubjectTeacher);
-router.put("/curriculum/subject/teacher", updateSubjectTeacher);
-router.delete("/curriculum/subject/teacher", deleteSubjectTeacher);
+router.get("/curriculum/class-subject/teachers", getClassSubjectTeachers);
+router.get("/curriculum/class-subject/all-teachers", getAllClassSubjectTeachers);
+router.post("/curriculum/class-subject/teacher", createClassSubjectTeacher);
+router.put("/curriculum/class-subject/teacher", updateClassSubjectTeacher);
+router.delete("/curriculum/class-subject/teacher", deleteClassSubjectTeacher);
 
 // end point for curriculum / topics
 router.get("/curriculum/topics", getTopics);
-router.get("/curriculum/alltopics", getAllTopics);
+router.get("/curriculum/all-topics", getAllTopics);
 router.post("/curriculum/topic", createTopic);
 router.put("/curriculum/topic", updateTopic);
 router.delete("/curriculum/topic", deleteTopic);
 
 // end point for curriculum / syllabus
 router.get("/curriculum/syllabuses", getSyllabuses);
-router.get("/curriculum/allyllabuses", getAllSyllabuses);
+router.get("/curriculum/all-yllabuses", getAllSyllabuses);
 router.post("/curriculum/syllabus", createSyllabus);
 router.put("/curriculum/syllabus", updateSyllabus);
 router.delete("/curriculum/syllabus", deleteSyllabus);

@@ -52,6 +52,10 @@ export const createPeriod = asyncHandler(async (req: Request, res: Response) => 
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Academic Year");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to create academic year - Please contact your admin", 403);
   }
 
@@ -139,6 +143,10 @@ export const updatePeriod = asyncHandler(async (req: Request, res: Response) => 
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Academic Year");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to edit academic year - Please contact your admin", 403);
   }
 
@@ -214,6 +222,10 @@ export const deletePeriod = asyncHandler(async (req: Request, res: Response) => 
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Academic Year");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to delete academic year - Please contact your admin", 403);
   }
 

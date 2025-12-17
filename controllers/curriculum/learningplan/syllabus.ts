@@ -13,18 +13,12 @@ import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
 import { Syllabus } from "../../../models/curriculum/syllabus";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
+import { Programme } from "../../../models/curriculum/programme.ts";
+import { BaseSubject } from "../../../models/curriculum/basesubject.ts";
+import { Pathway } from "../../../models/curriculum/pathway.ts";
 
 const validateSyllabus = (syllabusDataParam: any) => {
-  const {
-    description,
-    syllabusDuration,
-    offeringStartDate,
-    offeringEndDate,
-    topics,
-    learningOutcomes,
-    notes,
-    ...copyLocalData
-  } = syllabusDataParam;
+  const { description, startDate, endDate, topics, learningOutcomes, notes, ...copyLocalData } = syllabusDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -139,15 +133,7 @@ export const getSyllabuses = asyncHandler(async (req: Request, res: Response) =>
 export const createSyllabus = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const {
-    syllabusCustomId,
-    syllabus,
-    subjectFullTitle,
-    courseCustomId,
-    levelCustomId,
-    baseSubjectCustomId,
-    subjectCustomId
-  } = body;
+  const { customId, syllabus, programmeId, baseSubjectId, pathwayId } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
@@ -167,13 +153,67 @@ export const createSyllabus = asyncHandler(async (req: Request, res: Response) =
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Syllabus");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to create syllabus - Please contact your admin", 403);
   }
 
-  const syllabusExists = await Syllabus.findOne({ organisationId: orgParsedId, syllabusCustomId });
+  const syllabusExists = await Syllabus.findOne({ organisationId: orgParsedId, customId }).lean();
+
   if (syllabusExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([syllabusExists, organisation, role, account]) }
+    ]);
     throwError(
       "A syllabus with this Custom Id already exist - Either refer to that record or change the syllabus custom Id",
+      409
+    );
+  }
+
+  let pathwayOrProgramme;
+  if (pathwayId !== "") {
+    const pathwayProgrammeMatchExists = await Pathway.findOne({ _id: pathwayId, programmeId }).lean();
+    pathwayOrProgramme = pathwayProgrammeMatchExists;
+    if (!pathwayProgrammeMatchExists) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 5 },
+        {
+          field: "databaseDataTransfer",
+          value: getObjectSize([organisation, role, account, syllabusExists])
+        }
+      ]);
+      throwError(
+        "The selected pathway does not belong to the selected programme - Please change the selected pathway or programme",
+        409
+      );
+    }
+  } else {
+    const programmeExists = await Programme.findById(programmeId).lean();
+    pathwayOrProgramme = programmeExists;
+    if (!programmeExists) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 5 },
+        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, syllabusExists]) }
+      ]);
+      throwError("This programme does not exist - Please create the programme or change the picked programme", 409);
+    }
+  }
+
+  const baseSubjectExists = await BaseSubject.findById(baseSubjectId).lean();
+
+  if (!baseSubjectExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, syllabusExists, pathwayOrProgramme])
+      }
+    ]);
+    throwError(
+      "This base subject does not exist - Please create the base subject or change the picked base subject",
       409
     );
   }
@@ -181,16 +221,19 @@ export const createSyllabus = asyncHandler(async (req: Request, res: Response) =
   const newSyllabus = await Syllabus.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([
-      syllabusCustomId,
-      syllabus,
-      subjectFullTitle,
-      courseCustomId,
-      levelCustomId,
-      baseSubjectCustomId,
-      subjectCustomId
-    ])
+    searchText: generateSearchText([syllabus, customId])
   });
+
+  if (!newSyllabus) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 8 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, syllabusExists, pathwayOrProgramme, baseSubjectExists])
+      }
+    ]);
+    throwError("Error creating syllabus - Please try again", 500);
+  }
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
@@ -206,11 +249,7 @@ export const createSyllabus = asyncHandler(async (req: Request, res: Response) =
       [
         {
           kind: "N",
-          rhs: {
-            _id: newSyllabus._id,
-            syllabusId: newSyllabus.syllabusCustomId,
-            syllabus
-          }
+          rhs: newSyllabus
         }
       ],
       new Date()
@@ -218,7 +257,7 @@ export const createSyllabus = asyncHandler(async (req: Request, res: Response) =
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 8 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
       value: (getObjectSize(newSyllabus) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
@@ -238,15 +277,7 @@ export const createSyllabus = asyncHandler(async (req: Request, res: Response) =
 export const updateSyllabus = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const {
-    syllabusCustomId,
-    syllabus,
-    subjectFullTitle,
-    courseCustomId,
-    levelCustomId,
-    baseSubjectCustomId,
-    subjectCustomId
-  } = body;
+  const { customId, syllabus, programmeId, baseSubjectId, pathwayId } = body;
 
   if (!validateSyllabus(body)) {
     throwError("Please fill in all required fields", 400);
@@ -272,33 +303,69 @@ export const updateSyllabus = asyncHandler(async (req: Request, res: Response) =
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Syllabus");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to edit syllabus - Please contact your admin", 403);
   }
 
-  const originalSyllabus = await Syllabus.findOne({ organisationId: orgParsedId, syllabusCustomId });
+  const originalSyllabus = await Syllabus.findOne({ organisationId: orgParsedId, customId }).lean();
 
   if (!originalSyllabus) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("An error occured whilst getting old syllabus data, Ensure it has not been deleted", 500);
+  }
+
+  let pathwayOrProgramme;
+  if (pathwayId !== "") {
+    const pathwayProgrammeMatchExists = await Pathway.findOne({ _id: pathwayId, programmeId }).lean();
+    pathwayOrProgramme = pathwayProgrammeMatchExists;
+    if (!pathwayProgrammeMatchExists) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 5 },
+        {
+          field: "databaseDataTransfer",
+          value: getObjectSize([organisation, role, account, originalSyllabus])
+        }
+      ]);
+      throwError(
+        "The selected pathway does not belong to the selected programme - Please change the selected pathway or programme",
+        409
+      );
+    }
+  } else {
+    const programmeExists = await Programme.findById(programmeId).lean();
+    pathwayOrProgramme = programmeExists;
+    if (!programmeExists) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 5 },
+        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalSyllabus]) }
+      ]);
+      throwError("This programme does not exist - Please create the programme or change the picked programme", 409);
+    }
   }
 
   const updatedSyllabus = await Syllabus.findByIdAndUpdate(
     originalSyllabus?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([
-        syllabusCustomId,
-        syllabus,
-        subjectFullTitle,
-        courseCustomId,
-        levelCustomId,
-        baseSubjectCustomId,
-        subjectCustomId
-      ])
+      searchText: generateSearchText([syllabus, customId])
     },
     { new: true }
-  );
+  ).lean();
 
   if (!updatedSyllabus) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 7 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, originalSyllabus, pathwayOrProgramme])
+      }
+    ]);
     throwError("Error updating syllabus", 500);
   }
 
@@ -320,7 +387,7 @@ export const updateSyllabus = asyncHandler(async (req: Request, res: Response) =
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
       value:
@@ -335,8 +402,8 @@ export const updateSyllabus = asyncHandler(async (req: Request, res: Response) =
 // controller to handle deleting roles
 export const deleteSyllabus = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { syllabusCustomId } = req.body;
-  if (!syllabusCustomId) {
+  const { _id } = req.body;
+  if (!_id) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
@@ -356,22 +423,22 @@ export const deleteSyllabus = asyncHandler(async (req: Request, res: Response) =
     throwError(message, 409);
   }
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Syllabus");
+
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to delete syllabus - Please contact your admin", 403);
   }
 
-  const syllabusToDelete = await Syllabus.findOne({
-    organisationId: organisation?._id.toString(),
-    syllabusCustomId: syllabusCustomId
-  });
-
-  if (!syllabusToDelete) {
-    throwError("Error finding syllabus with provided Custom Id - Please try again", 404);
-  }
-
-  const deletedSyllabus = await Syllabus.findByIdAndDelete(syllabusToDelete?._id.toString());
+  const deletedSyllabus = await Syllabus.findByIdAndDelete(_id).lean();
 
   if (!deletedSyllabus) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Error deleting syllabus - Please try again", 500);
   }
 
@@ -402,7 +469,7 @@ export const deleteSyllabus = asyncHandler(async (req: Request, res: Response) =
   registerBillings(req, [
     {
       field: "databaseOperation",
-      value: 6 + (logActivityAllowed ? 2 : 0)
+      value: 5 + (logActivityAllowed ? 2 : 0)
     },
     {
       field: "databaseStorageAndBackup",
@@ -411,7 +478,7 @@ export const deleteSyllabus = asyncHandler(async (req: Request, res: Response) =
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([deletedSyllabus, organisation, role, account, syllabusToDelete]) +
+        getObjectSize([deletedSyllabus, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);

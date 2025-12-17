@@ -15,7 +15,7 @@ import { registerBillings } from "../../../utils/billingFunctions.ts";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
 
 const validateProgrammeManager = (programmeManagerDataParam: any) => {
-  const { managedUntil, _id, ...copyLocalData } = programmeManagerDataParam;
+  const { managedUntil, ...copyLocalData } = programmeManagerDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -68,32 +68,42 @@ export const getProgrammeManagers = asyncHandler(async (req: Request, res: Respo
   }
   const hasAccess = checkAccess(account, tabAccess, "View Programme Managers");
 
-  if (absoluteAdmin || hasAccess) {
-    const result = await fetchProgrammeManagers(
-      query,
-      cursorType as string,
-      parsedLimit,
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      staffId
-    );
-
-    if (!result || !result.programmeManagers) {
-      throwError("Error fetching programme managers", 500);
-    }
-
+  if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + result.programmeManagers.length },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([result, organisation, role, account])
-      }
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    res.status(201).json(result);
-    return;
+    throwError(
+      "Unauthorised Action: You do not have access to view programme managers - Please contact your admin",
+      403
+    );
   }
 
-  throwError("Unauthorised Action: You do not have access to view programme profile - Please contact your admin", 403);
+  const result = await fetchProgrammeManagers(
+    query,
+    cursorType as string,
+    parsedLimit,
+    absoluteAdmin ? "Absolute Admin" : "User",
+    organisation!._id.toString(),
+    staffId
+  );
+
+  if (!result || !result.programmeManagers) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, result]) }
+    ]);
+    throwError("Error fetching programme managers", 500);
+  }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 + result.programmeManagers.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([result, organisation, role, account])
+    }
+  ]);
+  res.status(201).json(result);
 });
 
 // controller to handle role creation
@@ -101,14 +111,7 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const {
-    programmeCustomId,
-    status,
-    programmeId,
-    programmeName,
-    programmeManagerCustomStaffId,
-    programmeManagerFullName
-  } = body;
+  const { programmeCustomId, programme, status, programmeId, managerFullName, staffId } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
@@ -116,9 +119,13 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
 
   const staffHasContract = await StaffContract.findOne({
     organisationId: orgParsedId,
-    staffCustomId: programmeManagerCustomStaffId
-  });
+    staffId
+  }).lean();
   if (!staffHasContract) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, staffHasContract]) }
+    ]);
     throwError("The staff has no contract with this organisation - Please create one for them", 409);
   }
 
@@ -128,10 +135,17 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
     programmeAlreadyManaged = await ProgrammeManager.findOne({
       organisationId: orgParsedId,
       programmeId,
-      programmeManagerCustomStaffId,
+      staffId,
       status: "Active"
-    });
+    }).lean();
     if (programmeAlreadyManaged) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 4 },
+        {
+          field: "databaseDataTransfer",
+          value: getObjectSize([organisation, role, account, programmeAlreadyManaged, staffHasContract])
+        }
+      ]);
       throwError(
         "The staff is already an active manager of this programme - Please assign another staff or deactivate their current management, or set this current one to inactive",
         409
@@ -154,6 +168,10 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Programme Manager");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "Unauthorised Action: You do not have access to create programme manager - Please contact your admin",
       403
@@ -163,13 +181,16 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
   const newProgrammeManager = await ProgrammeManager.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([
-      programmeCustomId,
-      programmeName,
-      programmeManagerCustomStaffId,
-      programmeManagerFullName
-    ])
+    searchText: generateSearchText([programmeId, programmeCustomId, programme, staffId, managerFullName])
   });
+
+  if (!newProgrammeManager) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, newProgrammeManager]) }
+    ]);
+    throwError("Error creating programme manager", 500);
+  }
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
@@ -181,7 +202,7 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
       "Programme Manager Creation",
       "ProgrammeManager",
       newProgrammeManager?._id,
-      programmeManagerFullName,
+      managerFullName,
       [
         {
           kind: "N",
@@ -217,7 +238,7 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
 export const updateProgrammeManager = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { programmeCustomId, programmeName, programmeManagerCustomStaffId, programmeManagerFullName } = body;
+  const { programmeCustomId, programme, staffId, managerFullName } = body;
 
   if (!validateProgrammeManager(body)) {
     throwError("Please fill in all required fields", 400);
@@ -225,8 +246,6 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-  // confirm organisation
-  const orgParsedId = account!.organisationId!.toString();
 
   const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
@@ -243,15 +262,23 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Programme Manager");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "Unauthorised Action: You do not have access to edit programme manager - Please contact your admin",
       403
     );
   }
 
-  const originalProgrammeManager = await ProgrammeManager.findOne({ _id: body._id });
+  const originalProgrammeManager = await ProgrammeManager.findById(body._id).lean();
 
   if (!originalProgrammeManager) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalProgrammeManager]) }
+    ]);
     throwError("An error occured whilst getting old programme manager data, Ensure it has not been deleted", 500);
   }
 
@@ -259,17 +286,19 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
     originalProgrammeManager?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([
-        programmeCustomId,
-        programmeName,
-        programmeManagerCustomStaffId,
-        programmeManagerFullName
-      ])
+      searchText: generateSearchText([programmeCustomId, programme, staffId, managerFullName])
     },
     { new: true }
-  );
+  ).lean();
 
   if (!updatedProgrammeManager) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, updatedProgrammeManager, originalProgrammeManager])
+      }
+    ]);
     throwError("Error updating programme", 500);
   }
 
@@ -284,7 +313,7 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
       "Programme Manager Update",
       "ProgrammeManager",
       updatedProgrammeManager?._id,
-      programmeName,
+      programme,
       difference,
       new Date()
     );
@@ -305,8 +334,8 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
 // controller to handle deleting roles
 export const deleteProgrammeManager = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { programmeManagerId } = req.body;
-  if (!programmeManagerId) {
+  const { _id } = req.body;
+  if (!_id) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
@@ -326,23 +355,27 @@ export const deleteProgrammeManager = asyncHandler(async (req: Request, res: Res
     throwError(message, 409);
   }
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Programme Manager");
+
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "Unauthorised Action: You do not have access to delete programme manager - Please contact your admin",
       403
     );
   }
 
-  const programmeManagerToDelete = await ProgrammeManager.findOne({
-    _id: programmeManagerId
-  });
-
-  if (!programmeManagerToDelete) {
-    throwError("Error finding programme Manager with provided Custom Id - Please try again", 404);
-  }
-
-  const deletedProgrammeManager = await ProgrammeManager.findByIdAndDelete(programmeManagerToDelete?._id.toString());
+  const deletedProgrammeManager = await ProgrammeManager.findByIdAndDelete(_id).lean();
   if (!deletedProgrammeManager) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, deletedProgrammeManager])
+      }
+    ]);
     throwError("Error deleting programme Manager - Please try again", 500);
   }
 
@@ -359,7 +392,7 @@ export const deleteProgrammeManager = asyncHandler(async (req: Request, res: Res
       "Programme Manager Deletion",
       "ProgrammeManager",
       deletedProgrammeManager?._id,
-      deletedProgrammeManager?.programmeManagerFullName,
+      deletedProgrammeManager?.managerFullName,
       [
         {
           kind: "D" as any,
@@ -373,7 +406,7 @@ export const deleteProgrammeManager = asyncHandler(async (req: Request, res: Res
   registerBillings(req, [
     {
       field: "databaseOperation",
-      value: 6 + (logActivityAllowed ? 2 : 0)
+      value: 5 + (logActivityAllowed ? 2 : 0)
     },
     {
       field: "databaseStorageAndBackup",
@@ -383,7 +416,7 @@ export const deleteProgrammeManager = asyncHandler(async (req: Request, res: Res
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([deletedProgrammeManager, organisation, role, account, programmeManagerToDelete]) +
+        getObjectSize([deletedProgrammeManager, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);

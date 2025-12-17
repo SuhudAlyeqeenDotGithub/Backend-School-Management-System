@@ -15,7 +15,7 @@ import { Programme } from "../../../models/curriculum/programme";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
 
 const validateProgramme = (programmeDataParam: any) => {
-  const { description, programmeDuration, ...copyLocalData } = programmeDataParam;
+  const { description, duration, startDate, endDate, ...copyLocalData } = programmeDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -45,25 +45,33 @@ export const getAllProgrammes = asyncHandler(async (req: Request, res: Response)
   }
   const hasAccess = checkAccess(account, tabAccess, "View Programmes");
 
-  if (absoluteAdmin || hasAccess) {
-    const programmes = await fetchAllProgrammes(organisation!._id.toString());
-
-    if (!programmes) {
-      throwError("Error fetching programme", 500);
-    }
-
+  if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + programmes.length },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([programmes, organisation, role, account])
-      }
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    res.status(201).json(programmes);
-    return;
+    throwError("Unauthorised Action: You do not have access to view programmes - Please contact your admin", 403);
   }
 
-  throwError("Unauthorised Action: You do not have access to view programme - Please contact your admin", 403);
+  const programmes = await fetchAllProgrammes(organisation!._id.toString());
+
+  if (!programmes) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, programmes]) }
+    ]);
+    throwError("Error fetching programme", 500);
+  }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 + programmes.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([programmes, organisation, role, account])
+    }
+  ]);
+  res.status(201).json(programmes);
+  return;
 });
 
 export const getProgrammes = asyncHandler(async (req: Request, res: Response) => {
@@ -107,25 +115,32 @@ export const getProgrammes = asyncHandler(async (req: Request, res: Response) =>
   }
   const hasAccess = checkAccess(account, tabAccess, "View Programmes");
 
-  if (absoluteAdmin || hasAccess) {
-    const result = await fetchProgrammes(query, cursorType as string, parsedLimit, organisation!._id.toString());
-
-    if (!result || !result.programmes) {
-      throwError("Error fetching programmes", 500);
-    }
-
+  if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + result.programmes.length },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([result, organisation, role, account])
-      }
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    res.status(201).json(result);
-    return;
+    throwError("Unauthorised Action: You do not have access to view programmes - Please contact your admin", 403);
   }
 
-  throwError("Unauthorised Action: You do not have access to view programme - Please contact your admin", 403);
+  const result = await fetchProgrammes(query, cursorType as string, parsedLimit, organisation!._id.toString());
+
+  if (!result || !result.programmes) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Error fetching programmes", 500);
+  }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 + result.programmes.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([result, organisation, role, account])
+    }
+  ]);
+  res.status(201).json(result);
 });
 
 // controller to handle role creation
@@ -133,7 +148,7 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { programmeCustomId, programmeName } = body;
+  const { customId, programme } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
@@ -153,11 +168,19 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Programme");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to create programme - Please contact your admin", 403);
   }
 
-  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, programmeCustomId });
+  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, customId }).lean();
   if (programmeExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "A programme with this Custom Id already exist - Either refer to that record or change the programme custom Id",
       409
@@ -167,8 +190,19 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
   const newProgramme = await Programme.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([programmeCustomId, programmeName])
+    searchText: generateSearchText([customId, programme])
   });
+
+  if (!newProgramme) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, newProgramme, programmeExists])
+      }
+    ]);
+    throwError("Error creating programme", 500);
+  }
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
@@ -180,14 +214,14 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
       "Programme Creation",
       "Programme",
       newProgramme?._id,
-      programmeName,
+      programme,
       [
         {
           kind: "N",
           rhs: {
             _id: newProgramme._id,
-            programmeId: newProgramme.programmeCustomId,
-            programmeName
+            programmeId: newProgramme.customId,
+            programme
           }
         }
       ],
@@ -219,7 +253,7 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
 export const updateProgramme = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { programmeCustomId, programmeName } = body;
+  const { customId, programme } = body;
 
   if (!validateProgramme(body)) {
     throwError("Please fill in all required fields", 400);
@@ -245,12 +279,20 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Programme");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to edit programme - Please contact your admin", 403);
   }
 
-  const originalProgramme = await Programme.findOne({ organisationId: orgParsedId, programmeCustomId });
+  const originalProgramme = await Programme.findOne({ organisationId: orgParsedId, customId }).lean();
 
   if (!originalProgramme) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("An error occured whilst getting old programme data, Ensure it has not been deleted", 500);
   }
 
@@ -258,12 +300,19 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
     originalProgramme?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([programmeCustomId, programmeName])
+      searchText: generateSearchText([customId, programme])
     },
     { new: true }
-  );
+  ).lean();
 
   if (!updatedProgramme) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, originalProgramme, updatedProgramme])
+      }
+    ]);
     throwError("Error updating programme", 500);
   }
 
@@ -278,7 +327,7 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
       "Programme Update",
       "Programme",
       updatedProgramme?._id,
-      programmeName,
+      programme,
       difference,
       new Date()
     );
@@ -300,8 +349,8 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
 // controller to handle deleting roles
 export const deleteProgramme = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { programmeCustomId } = req.body;
-  if (!programmeCustomId) {
+  const { _id } = req.body;
+  if (!_id) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
@@ -321,21 +370,24 @@ export const deleteProgramme = asyncHandler(async (req: Request, res: Response) 
     throwError(message, 409);
   }
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Programme");
+
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to delete programme - Please contact your admin", 403);
   }
 
-  const programmeToDelete = await Programme.findOne({
-    organisationId: organisation?._id.toString(),
-    programmeCustomId: programmeCustomId
-  });
-
-  if (!programmeToDelete) {
-    throwError("Error finding programme with provided Custom Id - Please try again", 404);
-  }
-
-  const deletedProgramme = await Programme.findByIdAndDelete(programmeToDelete?._id.toString());
+  const deletedProgramme = await Programme.findByIdAndDelete(_id).lean();
   if (!deletedProgramme) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, deletedProgramme])
+      }
+    ]);
     throwError("Error deleting programme - Please try again", 500);
   }
 
@@ -352,7 +404,7 @@ export const deleteProgramme = asyncHandler(async (req: Request, res: Response) 
       "Programme Delete",
       "Programme",
       deletedProgramme?._id,
-      deletedProgramme?.programmeName,
+      deletedProgramme?.programme,
       [
         {
           kind: "D" as any,
@@ -366,7 +418,7 @@ export const deleteProgramme = asyncHandler(async (req: Request, res: Response) 
   registerBillings(req, [
     {
       field: "databaseOperation",
-      value: 6 + (logActivityAllowed ? 2 : 0)
+      value: 5 + (logActivityAllowed ? 2 : 0)
     },
     {
       field: "databaseStorageAndBackup",
@@ -375,7 +427,7 @@ export const deleteProgramme = asyncHandler(async (req: Request, res: Response) 
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([deletedProgramme, organisation, role, account, programmeToDelete]) +
+        getObjectSize([deletedProgramme, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);

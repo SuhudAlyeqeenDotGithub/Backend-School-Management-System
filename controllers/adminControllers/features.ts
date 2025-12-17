@@ -84,6 +84,10 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
   const hasAccess = checkAccess(account, creatorTabAccess, "Update Features");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to edit roles - Please contact your admin", 403);
   }
 
@@ -125,7 +129,7 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
       }
     },
     { new: true }
-  ).select("organisationId accountName accountEmail accountPhone organisationInitial accountType features");
+  ).select("organisationId name email phone organisationInitial accountType features");
 
   if (!orgAccount) {
     await sendEmailToOwner(
@@ -205,13 +209,13 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
   ]);
 
   await sendEmail(
-    orgAccount!.accountEmail,
+    orgAccount!.email,
     "Feature Purchased",
     `You have successfully added the feature: ${feature?.name} to your account. You will be charged for this feature from the next billing cycle`
   );
   await sendEmailToOwner(
     "Feature Purchased",
-    `The user: ${orgAccount?.accountName} has successfully added the feature: ${feature?.name} to their account. `
+    `The user: ${orgAccount?.name} has successfully added the feature: ${feature?.name} to their account. `
   );
   res.status(201).json(orgAccount);
   return;
@@ -243,6 +247,10 @@ export const removeFeatureAndKeepData = asyncHandler(async (req: Request, res: R
   const hasAccess = checkAccess(account, creatorTabAccess, "Update Features");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to edit roles - Please contact your admin", 403);
   }
 
@@ -277,7 +285,7 @@ export const removeFeatureAndKeepData = asyncHandler(async (req: Request, res: R
       }
     },
     { new: true }
-  ).select("organisationId accountName accountEmail accountPhone organisationInitial accountType features");
+  ).select("organisationId name email phone organisationInitial accountType features");
 
   if (!orgAccount) {
     await sendEmailToOwner(
@@ -288,13 +296,13 @@ export const removeFeatureAndKeepData = asyncHandler(async (req: Request, res: R
   }
 
   await sendEmail(
-    orgAccount!.accountEmail,
+    orgAccount!.email,
     "Feature Removed",
     `You have successfully removed the feature: ${featureToRemove?.name} from your account. You will still be charged for related data stored`
   );
   await sendEmailToOwner(
     "Feature Removed - Remove Keep Data",
-    `The user: ${orgAccount?.accountName} has successfully removed the feature: ${featureToRemove?.name} from their account. But their data will be kept`
+    `The user: ${orgAccount?.name} has successfully removed the feature: ${featureToRemove?.name} from their account. But their data will be kept`
   );
 
   let activityLog;
@@ -362,6 +370,10 @@ export const removeFeatureAndDeleteData = asyncHandler(async (req: Request, res:
   const hasAccess = checkAccess(account, creatorTabAccess, "Update Features");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to edit roles - Please contact your admin", 403);
   }
 
@@ -396,7 +408,7 @@ export const removeFeatureAndDeleteData = asyncHandler(async (req: Request, res:
       }
     },
     { new: true }
-  ).select("organisationId accountName accountEmail accountPhone organisationInitial accountType features");
+  ).select("organisationId name email phone organisationInitial accountType features");
 
   if (!orgAccount) {
     await sendEmailToOwner(
@@ -417,13 +429,13 @@ export const removeFeatureAndDeleteData = asyncHandler(async (req: Request, res:
   }
 
   await sendEmail(
-    orgAccount!.accountEmail,
+    orgAccount!.email,
     "Feature Removed - Data Cleared",
     `You have successfully removed the feature: ${featureToRemove?.name} from your account. All related data has been cleared`
   );
   await sendEmailToOwner(
     "Feature Removed - Remove and Delete Data",
-    `The user: ${orgAccount?.accountName} has successfully removed the feature: ${featureToRemove?.name} from their account. All related data has been cleared`
+    `The user: ${orgAccount?.name} has successfully removed the feature: ${featureToRemove?.name} from their account. All related data has been cleared`
   );
 
   let activityLog;

@@ -5,7 +5,13 @@ import bcrypt from "bcryptjs";
 import { Account, defaultSettings } from "../models/admin/accountModel.ts";
 import { codeMatches, getVerificationCode, sendEmail, validatePhoneNumber } from "../utils/databaseFunctions.ts";
 
-import { throwError, validateEmail, validatePassword, generateSearchText, getObjectSize } from "../utils/pureFuctions.ts";
+import {
+  throwError,
+  validateEmail,
+  validatePassword,
+  generateSearchText,
+  getObjectSize
+} from "../utils/pureFuctions.ts";
 import { Role } from "../models/admin/roleModel.ts";
 import { generateRefreshToken, generateAccessToken } from "../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
@@ -66,12 +72,12 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     throwError("Please enter a valid phone number.", 400);
   }
 
-  const organisationEmailExists = await Account.findOne({ accountEmail: organisationEmail });
+  const organisationEmailExists = await Account.findOne({ email: organisationEmail });
   if (organisationEmailExists) {
     throwError(`Organization already has an account with this email: ${organisationEmail}. Please sign in.`, 409);
   }
 
-  const verificationCodeDoc = await VerificationCode.findOne({ accountEmail: organisationEmail });
+  const verificationCodeDoc = await VerificationCode.findOne({ email: organisationEmail });
   if (!verificationCodeDoc) {
     throwError(
       "No code has been sent to this email in the last 15 minutes. Please - refresh page and resend code",
@@ -99,11 +105,11 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   //   create initial organization account
   const orgAccount = await Account.create({
     accountType: "Organization",
-    accountName: organisationName,
+    name: organisationName,
     organisationInitial,
-    accountEmail: organisationEmail,
-    accountPhone: organisationPhone,
-    accountPassword: hashedPassword,
+    email: organisationEmail,
+    phone: organisationPhone,
+    password: hashedPassword,
     country,
     settings: { ...defaultSettings },
     searchText: generateSearchText([organisationName, organisationEmail, organisationPhone])
@@ -121,16 +127,16 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     "Initial Organization Account Creation",
     "Account",
     orgAccount._id,
-    orgAccount?.accountName ?? undefined,
+    orgAccount?.name ?? undefined,
     [
       {
         kind: "N",
         rhs: {
           _id: orgAccount._id,
           accountType: orgAccount.accountType,
-          accountName: orgAccount.accountName,
-          accountEmail: orgAccount.accountEmail,
-          accountPhone: orgAccount.accountPhone
+          name: orgAccount.name,
+          email: orgAccount.email,
+          phone: orgAccount.phone
         }
       }
     ],
@@ -158,8 +164,8 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   const defaultRole = await Role.create({
     organisationId: orgAccount._id,
     accountId: orgAccount._id,
-    roleName: `Absolute Admin for organization (${organisationName})`,
-    roleDescription: `This is the default role for the organization (${organisationName}), it has all permissions`,
+    name: `Absolute Admin for organization (${organisationName})`,
+    description: `This is the default role for the organization (${organisationName}), it has all permissions`,
     absoluteAdmin: true
   });
 
@@ -175,14 +181,14 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     `Initial Default Role Creation for organization (${organisationName}) - Absolute Admin`,
     "Role",
     defaultRole._id,
-    defaultRole?.roleName ?? undefined,
+    defaultRole?.name ?? undefined,
     [
       {
         kind: "N",
         rhs: {
           _id: defaultRole._id,
-          roleName: defaultRole.roleName,
-          roleDescription: defaultRole.roleDescription,
+          name: defaultRole.name,
+          description: defaultRole.description,
           absoluteAdmin: defaultRole.absoluteAdmin
         }
       }
@@ -207,11 +213,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     orgAccount._id,
     { roleId: defaultRole._id, features: defaultFeatures },
     { new: true }
-  ).populate([
-    { path: "roleId" },
-    { path: "staffId" },
-    { path: "organisationId", select: "organisationId accountName" }
-  ]);
+  ).populate([{ path: "roleId" }, { path: "staffId" }, { path: "organisationId", select: "organisationId name" }]);
 
   if (!updatedOrgAccount) {
     throwError("Failed to update organization account with default role", 500);
@@ -222,17 +224,17 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   const original = {
     _id: orgAccount._id,
     accountType: orgAccount.accountType,
-    accountName: orgAccount.accountName,
-    accountEmail: orgAccount.accountEmail,
-    accountPhone: orgAccount.accountPhone,
+    name: orgAccount.name,
+    email: orgAccount.email,
+    phone: orgAccount.phone,
     roleId: ""
   };
   const updated = {
     _id: updatedOrgAccount?._id,
     accountType: updatedOrgAccount?.accountType,
-    accountName: updatedOrgAccount?.accountName,
-    accountEmail: updatedOrgAccount?.accountEmail,
-    accountPhone: updatedOrgAccount?.accountPhone,
+    name: updatedOrgAccount?.name,
+    email: updatedOrgAccount?.email,
+    phone: updatedOrgAccount?.phone,
     roleId: updatedOrgAccount?.roleId
   };
 
@@ -245,7 +247,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     `Updating organization (${organisationName}) Account with Default Role`,
     "Account",
     updatedOrgAccount?._id,
-    updatedOrgAccount?.accountName ?? undefined,
+    updatedOrgAccount?.name ?? undefined,
     difference,
     new Date()
   );
@@ -286,13 +288,13 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   };
 
   delete reshapedAccount._id;
-  delete reshapedAccount.accountPassword;
+  delete reshapedAccount.password;
 
   await VerificationCode.deleteOne({ verificationCode });
   const emailSent = await sendEmail(
-    orgAccount.accountEmail,
+    orgAccount.email,
     "Welcome to SuSchool Management App - Account Created Successfully",
-    `Hi ${updatedOrgAccount?.accountName}, your account has been created successfully.`,
+    `Hi ${updatedOrgAccount?.name}, your account has been created successfully.`,
     `   <h1 >Welcome!</h1>
     <p>Thank you for creating an account with SuSchool. We are glad to have you.</p>
     <a href="https://suhud-ayodeji-yekini-portfolio.vercel.app/"  style="
@@ -316,7 +318,7 @@ export const getEmailVerificationCode = asyncHandler(async (req: Request, res: R
     throwError("Please provide organisation (admin) email", 400);
   }
 
-  const accountExist = await Account.findOne({ accountEmail: organisationEmail });
+  const accountExist = await Account.findOne({ email: organisationEmail });
   if (accountExist) {
     throwError("Account with this email already exist. Please sign in instead", 400);
   }
@@ -328,7 +330,7 @@ export const getEmailVerificationCode = asyncHandler(async (req: Request, res: R
   }
 
   const verificationCodeDoc = await VerificationCode.create({
-    accountEmail: organisationEmail,
+    email: organisationEmail,
     verificationCode: hashedVerificationCode,
     expiresAt: new Date(Date.now() + 30 * 60 * 1000)
   });
@@ -363,7 +365,7 @@ export const verifyAccount = asyncHandler(async (req: Request, res: Response) =>
     );
   }
 
-  const verificationCodeDoc = await VerificationCode.findOne({ accountEmail: email });
+  const verificationCodeDoc = await VerificationCode.findOne({ email: email });
   if (!verificationCodeDoc) {
     throwError(
       "No code has been sent to this email in the last 15 minutes. Please - refresh page and resend code",
@@ -397,10 +399,10 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
   }
 
   // find the account by email
-  const account = await Account.findOne({ accountEmail: email }).populate([
+  const account = await Account.findOne({ email: email }).populate([
     { path: "roleId" },
     { path: "staffId" },
-    { path: "organisationId", select: "organisationId accountName" }
+    { path: "organisationId", select: "organisationId name features" }
   ]);
   if (!account) {
     throwError(
@@ -409,7 +411,7 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
     );
   }
 
-  const isMatch = await bcrypt.compare(password, account!.accountPassword ?? "");
+  const isMatch = await bcrypt.compare(password, account!.password ?? "");
   if (!isMatch) {
     throwError("Incorrect password for associated account", 401);
   }
@@ -450,7 +452,7 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
   };
 
   delete reshapedAccount._id;
-  delete reshapedAccount.accountPassword;
+  delete reshapedAccount.password;
 
   const activityLog = await logActivity(
     account?.organisationId,
@@ -458,7 +460,7 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
     "User Sign In",
     "Account",
     account?._id,
-    account?.accountName ?? undefined,
+    account?.name ?? undefined,
     [],
     new Date()
   );
@@ -481,22 +483,44 @@ export const fetchAccount = asyncHandler(async (req: Request, res: Response) => 
   const { accountId } = req.userToken;
 
   // find the account by email
+
   const account = await Account.findById(accountId).populate([
     { path: "roleId" },
     { path: "staffId" },
-    { path: "organisationId", select: "organisationId accountName features" }
+    { path: "organisationId", select: "organisationId name features" }
   ]);
 
   if (!account) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize(account)
+      }
+    ]);
     throwError("Error fetching account data", 500);
   }
 
-  if (account?.accountStatus !== "Active") {
+  if (account?.status !== "Active") {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize(account)
+      }
+    ]);
     throwError("You account is not active - Please contact your admin if you need help", 409);
   }
   const roleId = account?.roleId;
   const noRole = roleId === null || roleId === undefined || !roleId;
   if (noRole) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize(account)
+      }
+    ]);
     throwError("Couldn't fetch user role - Please contact your admin", 400);
   }
   const parsedAccount = account?.toObject();
@@ -508,10 +532,10 @@ export const fetchAccount = asyncHandler(async (req: Request, res: Response) => 
   };
 
   delete reshapedAccount._id;
-  delete reshapedAccount.accountPassword;
+  delete reshapedAccount.password;
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 1 },
+    { field: "databaseOperation", value: 4 },
     {
       field: "databaseDataTransfer",
       value: getObjectSize(account)
@@ -579,7 +603,7 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
     throwError("Please provide the associated email", 400);
   }
 
-  const accountExist = await Account.findOne({ accountEmail: email });
+  const accountExist = await Account.findOne({ email: email });
   if (!accountExist) {
     throwError("Unknown Email. Please sign up if you have no existing account", 409);
   }
@@ -597,15 +621,15 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
   }
 
   let deletedCodes = { deletedCount: 0 };
-  const previousCode = await VerificationCode.find({ accountEmail: email });
+  const previousCode = await VerificationCode.find({ email: email });
   if (previousCode.length > 0) {
-    deletedCodes = await VerificationCode.deleteMany({ accountEmail: email });
+    deletedCodes = await VerificationCode.deleteMany({ email: email });
   }
 
   const { verificationCode, hashedVerificationCode } = getVerificationCode();
 
   const resetPasswordDoc = await VerificationCode.create({
-    accountEmail: email,
+    email: email,
     verificationCode: hashedVerificationCode,
     expiresAt: new Date(Date.now() + 10 * 60 * 1000)
   });
@@ -636,7 +660,7 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
   await sendEmail(
     email,
     "Reset Password Verification Code - From Al-Yeqeen School Management App",
-    `Hello ${accountExist?.accountName}, your code is: ${verificationCode}. Please do not share this with anyone and use within 8 minutes`
+    `Hello ${accountExist?.name}, your code is: ${verificationCode}. Please do not share this with anyone and use within 8 minutes`
   );
 
   registerBillings(req, [
@@ -669,7 +693,7 @@ export const resetPasswordVerifyCode = asyncHandler(async (req: Request, res: Re
     );
   }
 
-  const resetPasswordDoc = await VerificationCode.findOne({ accountEmail: email });
+  const resetPasswordDoc = await VerificationCode.findOne({ email: email });
   if (!resetPasswordDoc) {
     throwError("No code has been sent to this email in the last 15 minutes. Please resend code", 409);
   }
@@ -710,12 +734,12 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
     throwError("Passwords does not match", 400);
   }
 
-  const organisationEmailExists = await Account.findOne({ accountEmail: organisationEmail });
+  const organisationEmailExists = await Account.findOne({ email: organisationEmail }).lean();
   if (!organisationEmailExists) {
     throwError(`Organization with email ${organisationEmail} does not exist. Please sign up`, 409);
   }
 
-  const roleExist = await Role.findById(organisationEmailExists?.roleId);
+  const roleExist = await Role.findById(organisationEmailExists?.roleId).lean();
   if (!roleExist) {
     throwError("Could not fetch role associated with account - Please contact your admin", 409);
   }
@@ -733,7 +757,7 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
     );
   }
 
-  const resetPasswordDoc = await VerificationCode.findOne({ accountEmail: organisationEmail });
+  const resetPasswordDoc = await VerificationCode.findOne({ email: organisationEmail }).lean();
   if (!resetPasswordDoc) {
     throwError("Invalid request. Please request a code to reset password", 409);
   }
@@ -757,9 +781,15 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
 
   const updatedAccountPassword = await Account.findByIdAndUpdate(
     organisationEmailExists?._id,
-    { accountPassword: hashedPassword },
+    { password: hashedPassword },
     { new: true }
-  ).populate("roleId");
+  )
+    .populate([
+      { path: "roleId" },
+      { path: "staffId" },
+      { path: "organisationId", select: "organisationId name features" }
+    ])
+    .lean();
 
   if (!updatedAccountPassword) {
     throwError("Failed to change password", 500);
@@ -776,10 +806,10 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
     activityLog = await logActivity(
       updatedAccountPassword?._id,
       updatedAccountPassword?._id,
-      `Changing organisation ${updatedAccountPassword?.accountName} password`,
+      `Changing organisation ${updatedAccountPassword?.name} password`,
       "Account",
       updatedAccountPassword?._id,
-      updatedAccountPassword?.accountName ?? undefined,
+      updatedAccountPassword?.name ?? undefined,
       difference,
       new Date()
     );
@@ -815,7 +845,7 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
 
   const deletedCode = await VerificationCode.deleteOne({ resetCode: hashedResetCode });
 
-  const parsedAccount = updatedAccountPassword?.toObject();
+  const parsedAccount = updatedAccountPassword;
 
   const reshapedAccount = {
     ...parsedAccount,
@@ -824,7 +854,7 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
   };
 
   delete reshapedAccount._id;
-  delete reshapedAccount.accountPassword;
+  delete reshapedAccount.password;
   let activityLog2;
 
   if (logActivityAllowed) {
@@ -834,19 +864,19 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
       "User auto Sign In after password change",
       "Account",
       updatedAccountPassword?._id,
-      updatedAccountPassword?.accountName ?? undefined,
+      updatedAccountPassword?.name ?? undefined,
       [],
       new Date()
     );
   }
 
   await sendEmail(
-    reshapedAccount.accountEmail as string,
+    reshapedAccount.email as string,
     "Password Changed Successfully - From SuSchool Management App",
-    `Hello ${updatedAccountPassword?.accountName}, your password has been changed successfully. If you did not perform this action, please contact support immediately @ suhudalyeqeenapp@gmail.com or alyekeeniy@gmail.com`
+    `Hello ${updatedAccountPassword?.name}, your password has been changed successfully. If you did not perform this action, please contact support immediately @ suhudalyeqeenapp@gmail.com or alyekeeniy@gmail.com`
   );
   registerBillings(req, [
-    { field: "databaseOperation", value: 9 + (logActivityAllowed ? 4 : 0) },
+    { field: "databaseOperation", value: 12 + (logActivityAllowed ? 4 : 0) },
     {
       field: "databaseDataTransfer",
       value:

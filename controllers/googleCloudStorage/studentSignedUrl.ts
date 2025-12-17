@@ -180,7 +180,7 @@ export const deleteStudentImageInBucket = asyncHandler(async (req: Request, res:
     );
   }
 
-  const { roleId, accountStatus } = account as any;
+  const { roleId, status } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);

@@ -58,69 +58,61 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Users");
+  const hasAccess =
+    checkAccess(account, tabAccess, "View Users") &&
+    checkAccess(account, tabAccess, "View Roles") &&
+    checkAccess(account, tabAccess, "View Staff Profiles");
 
-  if (absoluteAdmin || hasAccess) {
-    const result = await fetchUsers(
-      query,
-      cursorType as string,
-      parsedLimit,
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      accountId
-    );
-
-    if (!result || !result.users) {
-      throwError("Error fetching staff profiles", 500);
-    }
-
+  if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + result.users.length },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([result.users, organisation, role, account])
-      }
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-
-    res.status(201).json(result);
-    return;
+    throwError(
+      "Unauthorised Action: You do not have access to view users or one of it's required data (role, staff profiles) - Please contact your admin",
+      403
+    );
   }
 
-  throwError("Unauthorised Action: You do not have access to view users - Please contact your admin", 403);
+  const result = await fetchUsers(
+    query,
+    cursorType as string,
+    parsedLimit,
+    absoluteAdmin ? "Absolute Admin" : "User",
+    organisation!._id.toString(),
+    accountId
+  );
+
+  if (!result || !result.users) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Error fetching staff profiles", 500);
+  }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 + result.users.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([result.users, organisation, role, account])
+    }
+  ]);
+
+  res.status(201).json(result);
 });
 
 // controller to handle role creation
 export const createUser = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { staffId, userName, userEmail, userPassword, userStatus, roleId: userRoleId, uniqueTabAccess } = req.body;
+  const { staffId, name, email, password, status, roleId: userRoleId, uniqueTabAccess } = req.body;
 
-  if (!staffId || !userName || !userEmail || !userPassword || !userRoleId) {
+  if (!staffId || !name || !email || !password || !userRoleId) {
     throwError("Please fill all required fields", 400);
   }
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-
-  const userExists = await Account.findOne({ accountEmail: userEmail, organisationId: organisation?._id });
-  if (userExists) {
-    throwError("Another user within the organisation already uses this email", 409);
-  }
-
-  const staffExists = await Staff.findOne({ _id: staffId, organisationId: account!.organisationId!._id.toString() });
-  if (!staffExists) {
-    throwError(
-      "This staff ID does not exist. Please provide the user staff ID related to their staff record - or create one for them",
-      409
-    );
-  }
-
-  const staffHasActiveContract = await StaffContract.findOne({ staffId, contractStatus: "Active" });
-  if (!staffHasActiveContract) {
-    throwError(
-      "This staff ID does not have an active contract. Ensure they have up to date active contract - or create one for them",
-      409
-    );
-  }
 
   const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
@@ -135,26 +127,56 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
     throwError(message, 409);
   }
   const hasAccess = checkAccess(account, creatorTabAccess, " Create User");
+
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to create users - Please contact your admin", 403);
   }
 
-  const hasedPassword = await bcrypt.hash(userPassword, 10);
+  const userExists = await Account.findOne({ email: email, organisationId: organisation?._id }).lean();
+  if (userExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, userExists]) }
+    ]);
+    throwError("Another user within the organisation already uses this email", 409);
+  }
+
+  const staffHasActiveContract = await StaffContract.findOne({ staffId, status: "Active" }).lean();
+  if (!staffHasActiveContract) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, userExists]) }
+    ]);
+    throwError(
+      "This staff ID does not have an active contract. Ensure they have up to date active contract - or create one for them",
+      409
+    );
+  }
+
+  const hasedPassword = await bcrypt.hash(password, 10);
   const newUser = await Account.create({
     accountType: "User",
     organisationInitial: organisation?.organisationInitial,
     organisationId: organisation?._id,
-    staffId: staffExists?._id,
+    staffId: staffHasActiveContract?.staffId,
     uniqueTabAccess,
-    accountEmail: userEmail,
-    accountName: userName,
-    accountPassword: hasedPassword,
-    accountStatus: userStatus,
+    email,
+    name,
+    password: hasedPassword,
+    status: status,
     roleId: userRoleId,
-    searchText: generateSearchText([staffId, userEmail, userName, userStatus])
+    searchText: generateSearchText([staffId, email, name, status])
   });
 
   if (!newUser) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 7 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, userExists]) }
+    ]);
     throwError("Error creating role", 500);
   }
 
@@ -168,16 +190,16 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
       "User Account Creation",
       "Account",
       newUser?._id,
-      userName,
+      name,
       [
         {
           kind: "N",
           rhs: {
             _id: newUser._id,
-            staffId: staffExists?._id,
-            accountName: userName,
-            accountEmail: userEmail,
-            accountStatus: userStatus,
+            staffId: staffHasActiveContract?.staffId,
+            name,
+            email,
+            status,
             roleId: userRoleId,
             uniqueTabAccess
           }
@@ -196,7 +218,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([newUser, userExists, staffExists, staffHasActiveContract, organisation, role, account]) +
+        getObjectSize([newUser, userExists, staffHasActiveContract, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -213,30 +235,30 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   let updatedDoc: any = {};
 
   for (const key in body) {
-    if (key === "userPassword") {
+    if (key === "password") {
       if (body[key] !== "unchanged") {
-        updatedDoc["accountPassword"] = await bcrypt.hash(body[key], 10);
+        updatedDoc["password"] = await bcrypt.hash(body[key], 10);
       }
     } else if (key !== "onEditUserIsAbsoluteAdmin") {
       updatedDoc[key] = body[key];
     }
   }
-  const { userName, userEmail, userPassword, userStatus, ...rest } = updatedDoc;
+  const { name, email, password, status, ...rest } = updatedDoc;
 
   updatedDoc = {
     ...rest,
-    accountName: userName,
-    accountEmail: userEmail,
-    accountStatus: userStatus,
+    name,
+    email,
+    status,
     roleId: userRoleId,
-    searchText: generateSearchText([staffId, userEmail, userName, userStatus])
+    searchText: generateSearchText([staffId, email, name, status])
   };
 
   // console.log("originalDoc", body);
   // console.log("updatedDoc", updatedDoc);
   // throwError("test done", 400);
 
-  if (!userName || !userEmail || !userRoleId || !userStatus) {
+  if (!name || !email || !userRoleId || !status) {
     throwError("Please fill all required fields", 400);
   }
 
@@ -244,28 +266,6 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
-
-  const userExists = await Account.findOne({ accountEmail: userEmail });
-  if (userExists && userExists?.organisationId.toString() !== userTokenOrgId) {
-    throwError("This email is already in use - Please provide a different email", 409);
-  }
-
-  if (!staffId && !onEditUserIsAbsoluteAdmin) {
-    throwError("Please provide staff ID", 400);
-  }
-
-  if (onEditUserIsAbsoluteAdmin && userStatus !== "Active") {
-    throwError("Disallowed: Default Absolute Admin status cannot be changed - Locked", 403);
-  }
-
-  if (onEditUserIsAbsoluteAdmin && userRoleId !== organisation?.roleId?._id.toString()) {
-    throwError("Disallowed: Another role cannot be assigned to the Default Absolute Admin", 403);
-  }
-
-  const staffExists = await Staff.findOne({ _id: staffId, organisationId: account!.organisationId!._id.toString() });
-  if (!staffExists && !onEditUserIsAbsoluteAdmin) {
-    throwError("Please provide the user staff ID related to their staff record - or create one for them", 409);
-  }
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -279,15 +279,67 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit User");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to edit users - Please contact your admin", 403);
   }
 
-  const originalUser = await Account.findById(
-    userId,
-    "_id accountName accountEmail roleId staffId accountPassword accountStatus"
-  );
+  if (!staffId && !onEditUserIsAbsoluteAdmin) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Please provide staff ID", 400);
+  }
+
+  if (onEditUserIsAbsoluteAdmin && status !== "Active") {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Disallowed: Default Absolute Admin status cannot be changed - Locked", 403);
+  }
+
+  if (onEditUserIsAbsoluteAdmin && userRoleId !== organisation?.roleId?._id.toString()) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Disallowed: Another role cannot be assigned to the Default Absolute Admin", 403);
+  }
+  const userExists = await Account.findOne({ email: email, organisationId: userTokenOrgId }).lean();
+  if (userId !== userExists?._id.toString() && userExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("This email is already in use within the same organisation - Please provide a different email", 409);
+  }
+
+  const staffHasActiveContract = await StaffContract.findOne({ staffId }).lean();
+  if (!staffHasActiveContract) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, userExists]) }
+    ]);
+    throwError(
+      "No contract found for this staff ID. Ensure they have up to date active contract - or create one for them",
+      409
+    );
+  }
+
+  const originalUser = await Account.findById(userId, "_id name email roleId staffId status").lean();
 
   if (!originalUser) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, userExists, staffHasActiveContract])
+      }
+    ]);
     throwError("An error occured whilst getting old user data - Please ensure the user still exists", 500);
   }
 
@@ -297,28 +349,35 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
       $set: updatedDoc
     },
     { new: true }
-  );
+  ).lean();
 
   if (!updatedUser) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 8 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, userExists, staffHasActiveContract, originalUser])
+      }
+    ]);
     throwError("Error updating user", 500);
   }
 
   const original = {
     _id: originalUser?._id,
-    staffId: staffExists?._id,
-    accountName: userName,
-    accountEmail: userEmail,
-    accountStatus: userStatus,
+    staffId: staffHasActiveContract?.staffId,
+    name: name,
+    email: email,
+    status: status,
     roleId: userRoleId,
     uniqueTabAccess: originalUser?.uniqueTabAccess
   };
 
   const updated = {
     _id: updatedUser?._id,
-    staffId: staffExists?._id,
-    accountName: userName,
-    accountEmail: userEmail,
-    accountStatus: userStatus,
+    staffId: staffHasActiveContract?.staffId,
+    name: name,
+    email: email,
+    status: status,
     roleId: userRoleId,
     uniqueTabAccess: updatedUser?.uniqueTabAccess
   };
@@ -334,18 +393,18 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
       "User Account Update",
       "Account",
       updatedUser?._id,
-      updatedUser?.accountName ?? "",
+      updatedUser?.name ?? "",
       difference,
       new Date()
     );
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 8 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([updatedUser, staffExists, organisation, role, account, originalUser]) +
+        getObjectSize([updatedUser, staffHasActiveContract, organisation, role, account, originalUser]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -356,9 +415,9 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
 // controller to handle deleting roles
 export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { accountIdToDelete, accountType, staffId, userName, userEmail, userStatus, roleId } = req.body;
+  const { _id, accountType, staffId, name, email, status, roleId } = req.body;
 
-  if (!accountIdToDelete) {
+  if (!_id) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
@@ -393,12 +452,20 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete User");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to delete roles - Please contact your admin", 403);
   }
 
-  const deletedUser = await Account.findByIdAndDelete(accountIdToDelete);
+  const deletedUser = await Account.findByIdAndDelete(_id).lean();
 
   if (!deletedUser) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Error deleting user account - Please try again", 500);
   }
 
@@ -414,17 +481,17 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
       accountId,
       "User Account Deletion",
       "Account",
-      accountIdToDelete,
-      userName,
+      _id,
+      name,
       [
         {
           kind: "D",
           lhs: {
-            _id: accountIdToDelete,
+            _id,
             staffId,
-            accountName: userName,
-            accountEmail: userEmail,
-            accountStatus: userStatus,
+            name: name,
+            email: email,
+            status: status,
             roleId
           }
         }
@@ -510,7 +577,7 @@ export const updateOrgSettings = asyncHandler(async (req: Request, res: Response
       "Organisation Account Setting Update",
       "Account",
       updatedAccount?._id,
-      updatedAccount?.accountName ?? "",
+      updatedAccount?.name ?? "",
       diff(organisationSettings?.settings, updatedAccount?.settings),
       new Date()
     );

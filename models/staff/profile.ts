@@ -1,48 +1,48 @@
+import { Programme } from "models/curriculum/programme";
 import mongoose from "mongoose";
 const { Schema, model } = mongoose;
 
 const staffSchema = new Schema(
   {
     organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
-    staffCustomId: { type: String, unique: true },
-    staffFullName: { type: String, required: true },
-    staffDateOfBirth: { type: String, required: true },
-    staffGender: { type: String, required: true },
-    staffPhone: { type: String, required: true },
-    staffEmail: { type: String, unique: true, required: true, index: true },
-    staffAddress: { type: String, required: true },
-    staffPostCode: { type: String },
-    staffImageUrl: { type: String },
+    customId: { type: String, unique: true },
+    fullName: { type: String, required: true },
+    dateOfBirth: { type: String, required: true },
+    gender: { type: String, required: true },
+    phone: { type: String, required: true },
+    email: { type: String, unique: true, required: true, index: true },
+    address: { type: String, required: true },
+    postCode: { type: String },
+    imageUrl: { type: String },
     imageLocalDestination: { type: String },
-    staffMaritalStatus: { type: String, required: true },
-    staffStartDate: { type: String, required: true },
-    staffEndDate: { type: String },
-    staffNationality: { type: String, required: true },
-    staffAllergies: { type: String },
-    staffNextOfKinName: { type: String, required: true },
-    staffNextOfKinRelationship: { type: String, required: true },
-    staffNextOfKinPhone: { type: String, required: true },
-    staffNextOfKinEmail: { type: String, required: true },
+    maritalStatus: { type: String, required: true },
+    startDate: { type: String, required: true },
+    endDate: { type: String },
+    nationality: { type: String, required: true },
+    allergies: { type: String },
+    nextOfKinName: { type: String, required: true },
+    nextOfKinRelationship: { type: String, required: true },
+    nextOfKinPhone: { type: String, required: true },
+    nextOfKinEmail: { type: String, required: true },
     searchText: { type: String, required: true },
     skills: { type: [String] },
-    identification: {
-      type: [
-        { _id: String, identificationType: String, identificationValue: String, issueDate: Date, expiryDate: Date }
-      ]
+    identifications: {
+      type: [{ _id: String, identificationType: String, value: String, issueDate: Date, expiryDate: Date }]
     },
-    staffQualification: {
+    qualifications: {
       type: [
         {
           _id: String,
-          qualificationName: String,
-          schoolName: String,
+          name: String,
+          programme: String,
+          school: String,
           grade: String,
           startDate: String,
           endDate: String
         }
       ]
     },
-    workExperience: {
+    workExperiences: {
       type: [
         {
           _id: String,
@@ -58,6 +58,6 @@ const staffSchema = new Schema(
   { timestamps: true }
 );
 
-staffSchema.index({ organisationId: 1, staffCustomId: 1 }, { unique: true });
+staffSchema.index({ organisationId: 1, customId: 1 }, { unique: true });
 
 export const Staff = model("Staff", staffSchema);

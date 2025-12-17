@@ -4,8 +4,8 @@ const { Schema, model } = mongoose;
 const stageSchema = new Schema(
   {
     organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
-    customId: { type: String, unique: true },
-    name: { type: String, required: true },
+    customId: { type: String },
+    stage: { type: String, required: true },
     description: { type: String },
     searchText: { type: String, required: true },
     duration: { type: String }

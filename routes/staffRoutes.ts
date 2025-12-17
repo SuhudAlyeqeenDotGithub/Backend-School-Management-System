@@ -24,15 +24,15 @@ import {
 } from "../controllers/googleCloudStorage/staffSignedURL";
 
 // end point for staff / profile
-router.get("/staff/profile", getStaffProfiles);
-router.get("/staff/allprofile", getAllStaffProfiles);
+router.get("/staff/profiles", getStaffProfiles);
+router.get("/staff/all-profiles", getAllStaffProfiles);
 router.post("/staff/profile", createStaffProfile);
 router.put("/staff/profile", updateStaffProfile);
 router.delete("/staff/profile", deleteStaffProfile);
 
 // end point for staff / contracts
-router.get("/staff/contract", getStaffContracts);
-router.get("/staff/allcontract", getAllStaffContracts);
+router.get("/staff/contracts", getStaffContracts);
+router.get("/staff/all-contracts", getAllStaffContracts);
 router.post("/staff/contract", createStaffContract);
 router.put("/staff/contract", updateStaffContract);
 router.delete("/staff/contract", deleteStaffContract);

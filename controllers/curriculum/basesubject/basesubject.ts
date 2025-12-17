@@ -16,7 +16,7 @@ import { registerBillings } from "../../../utils/billingFunctions.ts";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
 
 const validateBaseSubject = (baseSubjectDataParam: any) => {
-  const { description, ...copyLocalData } = baseSubjectDataParam;
+  const { description, startDate, endDate, ...copyLocalData } = baseSubjectDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -45,28 +45,31 @@ export const getAllBaseSubjects = asyncHandler(async (req: Request, res: Respons
     throwError(message, 409);
   }
   const hasAccess = checkAccess(account, tabAccess, "View Base Subjects");
-
-  if (absoluteAdmin || hasAccess) {
-    const baseSubjects = await fetchAllBaseSubjects(organisation!._id.toString());
-
-    if (!baseSubjects) {
-      throwError("Error fetching base subject profiles", 500);
-    }
+  if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + baseSubjects.length },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([baseSubjects, organisation, role, account])
-      }
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    res.status(201).json(baseSubjects);
-    return;
+    throwError("Unauthorised Action: You do not have access to view base subjects - Please contact your admin", 403);
   }
 
-  throwError(
-    "Unauthorised Action: You do not have access to view base subject profile - Please contact your admin",
-    403
-  );
+  const baseSubjects = await fetchAllBaseSubjects(organisation!._id.toString());
+
+  if (!baseSubjects) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Error fetching base subject profiles", 500);
+  }
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 + baseSubjects.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([baseSubjects, organisation, role, account])
+    }
+  ]);
+  res.status(201).json(baseSubjects);
 });
 
 export const getBaseSubjects = asyncHandler(async (req: Request, res: Response) => {
@@ -110,28 +113,32 @@ export const getBaseSubjects = asyncHandler(async (req: Request, res: Response) 
   }
   const hasAccess = checkAccess(account, tabAccess, "View Base Subjects");
 
-  if (absoluteAdmin || hasAccess) {
-    const result = await fetchBaseSubjects(query, cursorType as string, parsedLimit, organisation!._id.toString());
-
-    if (!result || !result.baseSubjects) {
-      throwError("Error fetching base subjects", 500);
-    }
-
+  if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + result.baseSubjects.length },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([result, organisation, role, account])
-      }
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    res.status(201).json(result);
-    return;
+    throwError("Unauthorised Action: You do not have access to view base subjects - Please contact your admin", 403);
   }
 
-  throwError(
-    "Unauthorised Action: You do not have access to view base subject profile - Please contact your admin",
-    403
-  );
+  const result = await fetchBaseSubjects(query, cursorType as string, parsedLimit, organisation!._id.toString());
+
+  if (!result || !result.baseSubjects) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Error fetching base subjects", 500);
+  }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 + result.baseSubjects.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([result, organisation, role, account])
+    }
+  ]);
+  res.status(201).json(result);
 });
 
 // controller to handle role creation
@@ -139,7 +146,7 @@ export const createBaseSubject = asyncHandler(async (req: Request, res: Response
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { baseSubjectCustomId, baseSubjectName } = body;
+  const { customId, baseSubject } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
@@ -159,11 +166,19 @@ export const createBaseSubject = asyncHandler(async (req: Request, res: Response
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Base Subject");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to create base subject - Please contact your admin", 403);
   }
 
-  const baseSubjectExists = await BaseSubject.findOne({ organisationId: orgParsedId, baseSubjectCustomId });
+  const baseSubjectExists = await BaseSubject.findOne({ organisationId: orgParsedId, customId }).lean();
   if (baseSubjectExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "A baseSubject with this Custom Id already exist - Either refer to that record or change the baseSubject custom Id",
       409
@@ -173,8 +188,16 @@ export const createBaseSubject = asyncHandler(async (req: Request, res: Response
   const newBaseSubject = await BaseSubject.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([baseSubjectCustomId, baseSubjectName])
+    searchText: generateSearchText([customId, baseSubject])
   });
+
+  if (!newBaseSubject) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, baseSubjectExists]) }
+    ]);
+    throwError("Error creating base subject", 500);
+  }
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
@@ -186,14 +209,14 @@ export const createBaseSubject = asyncHandler(async (req: Request, res: Response
       "BaseSubject Creation",
       "BaseSubject",
       newBaseSubject?._id,
-      baseSubjectName,
+      baseSubject,
       [
         {
           kind: "N",
           rhs: {
             _id: newBaseSubject._id,
-            baseSubjectId: newBaseSubject.baseSubjectCustomId,
-            baseSubjectName
+            baseSubjectId: newBaseSubject.customId,
+            baseSubject
           }
         }
       ],
@@ -210,7 +233,7 @@ export const createBaseSubject = asyncHandler(async (req: Request, res: Response
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([newBaseSubject, organisation, role, account]) +
+        getObjectSize([newBaseSubject, organisation, role, account, baseSubjectExists]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -222,7 +245,7 @@ export const createBaseSubject = asyncHandler(async (req: Request, res: Response
 export const updateBaseSubject = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { baseSubjectCustomId, baseSubjectName } = body;
+  const { customId, baseSubject } = body;
 
   if (!validateBaseSubject(body)) {
     throwError("Please fill in all required fields", 400);
@@ -248,12 +271,20 @@ export const updateBaseSubject = asyncHandler(async (req: Request, res: Response
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Base Subject");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to edit base subject - Please contact your admin", 403);
   }
 
-  const originalBaseSubject = await BaseSubject.findOne({ organisationId: orgParsedId, baseSubjectCustomId });
+  const originalBaseSubject = await BaseSubject.findOne({ organisationId: orgParsedId, customId }).lean();
 
   if (!originalBaseSubject) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("An error occured whilst getting old base subject data, Ensure it has not been deleted", 500);
   }
 
@@ -261,12 +292,16 @@ export const updateBaseSubject = asyncHandler(async (req: Request, res: Response
     originalBaseSubject?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([baseSubjectCustomId, baseSubjectName])
+      searchText: generateSearchText([customId, baseSubject])
     },
     { new: true }
-  );
+  ).lean();
 
   if (!updatedBaseSubject) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalBaseSubject]) }
+    ]);
     throwError("Error updating base subject", 500);
   }
 
@@ -281,7 +316,7 @@ export const updateBaseSubject = asyncHandler(async (req: Request, res: Response
       "Base Subject Update",
       "BaseSubject",
       updatedBaseSubject?._id,
-      baseSubjectName,
+      baseSubject,
       difference,
       new Date()
     );
@@ -303,14 +338,14 @@ export const updateBaseSubject = asyncHandler(async (req: Request, res: Response
 // controller to handle deleting roles
 export const deleteBaseSubject = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { baseSubjectCustomId } = req.body;
-  if (!baseSubjectCustomId) {
+  const { _id } = req.body;
+  if (!_id) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
 
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
@@ -324,24 +359,24 @@ export const deleteBaseSubject = asyncHandler(async (req: Request, res: Response
     throwError(message, 409);
   }
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Base Subject");
+
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "Unauthorised Action: You do not have access to delete base subject profile - Please contact your admin",
       403
     );
   }
 
-  const baseSubjectToDelete = await BaseSubject.findOne({
-    organisationId: organisation?._id.toString(),
-    baseSubjectCustomId: baseSubjectCustomId
-  });
-
-  if (!baseSubjectToDelete) {
-    throwError("Error finding base subject with provided Custom Id - Please try again", 404);
-  }
-
-  const deletedBaseSubject = await BaseSubject.findByIdAndDelete(baseSubjectToDelete?._id.toString());
+  const deletedBaseSubject = await BaseSubject.findByIdAndDelete(_id).lean();
   if (!deletedBaseSubject) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, _id]) }
+    ]);
     throwError("Error deleting base subject - Please try again", 500);
   }
 
@@ -358,7 +393,7 @@ export const deleteBaseSubject = asyncHandler(async (req: Request, res: Response
       "BasesSubject Delete",
       "BaseSubject",
       deletedBaseSubject?._id,
-      deletedBaseSubject?.baseSubjectName,
+      deletedBaseSubject?.baseSubject,
       [
         {
           kind: "D" as any,
@@ -372,7 +407,7 @@ export const deleteBaseSubject = asyncHandler(async (req: Request, res: Response
   registerBillings(req, [
     {
       field: "databaseOperation",
-      value: 6 + (logActivityAllowed ? 2 : 0)
+      value: 5 + (logActivityAllowed ? 2 : 0)
     },
     {
       field: "databaseStorageAndBackup",
@@ -381,7 +416,7 @@ export const deleteBaseSubject = asyncHandler(async (req: Request, res: Response
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([deletedBaseSubject, organisation, role, account, baseSubjectToDelete]) +
+        getObjectSize([deletedBaseSubject, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);

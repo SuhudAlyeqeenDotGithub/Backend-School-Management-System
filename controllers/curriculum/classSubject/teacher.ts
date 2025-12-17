@@ -1,21 +1,22 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  fetchTopics,
+  fetchClassSubjectTeachers,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllTopics
+  fetchAllClassSubjectTeachers
 } from "../../../utils/databaseFunctions.ts";
 import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
-import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
-import { Topic } from "../../../models/curriculum/topic";
+import { StaffContract } from "../../../models/staff/contracts.ts";
+import { ClassSubjectTeacher } from "../../../models/curriculum/classSubject.ts";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
+import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
 
-const validateTopic = (topicDataParam: any) => {
-  const { description, resources, learningObjectives, ...copyLocalData } = topicDataParam;
+const validateClassSubjectTeacher = (subjectTeacherDataParam: any) => {
+  const { managedUntil, ...copyLocalData } = subjectTeacherDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -27,7 +28,7 @@ const validateTopic = (topicDataParam: any) => {
   return true;
 };
 
-export const getAllTopics = asyncHandler(async (req: Request, res: Response) => {
+export const getAllClassSubjectTeachers = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
@@ -43,35 +44,36 @@ export const getAllTopics = asyncHandler(async (req: Request, res: Response) => 
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Topics");
+  const hasAccess = checkAccess(account, tabAccess, "View Class Subject Teachers");
+
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to view topic - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to delete class subject - Please contact your admin", 403);
   }
-  const topicProfiles = await fetchAllTopics(organisation!._id.toString());
+  const result = await fetchAllClassSubjectTeachers(organisation!._id.toString());
 
-  if (!topicProfiles) {
+  if (!result) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 },
+      { field: "databaseOperation", value: 4 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Error fetching topic", 500);
+    throwError("Error fetching subject teachers", 500);
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 3 + topicProfiles.length },
+    { field: "databaseOperation", value: 3 + result.length },
     {
       field: "databaseDataTransfer",
-      value: getObjectSize([topicProfiles, organisation, role, account])
+      value: getObjectSize([result, organisation, role, account])
     }
   ]);
-  res.status(201).json(topicProfiles);
+  res.status(201).json(result);
 });
 
-export const getTopics = asyncHandler(async (req: Request, res: Response) => {
+export const getClassSubjectTeachers = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
@@ -98,7 +100,7 @@ export const getTopics = asyncHandler(async (req: Request, res: Response) => {
     }
   }
 
-  const { roleId } = account as any;
+  const { roleId, staffId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId;
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -110,23 +112,30 @@ export const getTopics = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Topics");
+  const hasAccess = checkAccess(account, tabAccess, "View Class Subject Teachers");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to view topic - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to delete class subject - Please contact your admin", 403);
   }
-  const result = await fetchTopics(query, cursorType as string, parsedLimit, organisation!._id.toString());
+  const result = await fetchClassSubjectTeachers(
+    query,
+    cursorType as string,
+    parsedLimit,
+    absoluteAdmin ? "Absolute Admin" : "User",
+    organisation!._id.toString(),
+    staffId
+  );
 
-  if (!result || !result.topics) {
-    throwError("Error fetching topics", 500);
+  if (!result || !result.classSubjectTeachers) {
+    throwError("Error fetching subject teachers", 500);
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 3 + result.topics.length },
+    { field: "databaseOperation", value: 3 + result.classSubjectTeachers.length },
     {
       field: "databaseDataTransfer",
       value: getObjectSize([result, organisation, role, account])
@@ -136,15 +145,16 @@ export const getTopics = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // controller to handle role creation
-export const createTopic = asyncHandler(async (req: Request, res: Response) => {
+export const createClassSubjectTeacher = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { customId, topic } = body;
+  const { classSubjectId, staffId, teacherFullName, status } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
+
   const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
@@ -157,40 +167,63 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Create Topic");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create ClassSubject Teacher");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to create topic - Please contact your admin", 403);
-  }
-
-  const topicExists = await Topic.findOne({ organisationId: orgParsedId, customId }).lean();
-  if (topicExists) {
-    registerBillings(req, [
-      { field: "databaseOperation", value: 4 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, topicExists]) }
-    ]);
     throwError(
-      "A topic with this Custom Id already exist - Either refer to that record or change the topic custom Id",
-      409
+      "Unauthorised Action: You do not have access to create subject teacher - Please contact your admin",
+      403
     );
   }
 
-  const newTopic = await Topic.create({
+  const staffHasContract = await StaffContract.findOne(staffId).lean();
+  if (!staffHasContract) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("The staff has no contract with this organisation - Please create one for them", 409);
+  }
+
+  let subjectAlreadyManaged;
+  if (status === "Active") {
+    subjectAlreadyManaged = await ClassSubjectTeacher.findOne({
+      organisationId: orgParsedId,
+      classSubjectId,
+      staffId,
+      status: "Active"
+    }).lean();
+    if (subjectAlreadyManaged) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 5 },
+        {
+          field: "databaseDataTransfer",
+          value: getObjectSize([organisation, role, account, subjectAlreadyManaged, staffHasContract])
+        }
+      ]);
+      throwError(
+        "The staff is already an active teacher of this subject - Please assign another staff or deactivate their current management, or set this current one to inactive",
+        409
+      );
+    }
+  }
+
+  const newClassSubjectTeacher = await ClassSubjectTeacher.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([customId, topic])
+    searchText: generateSearchText([classSubjectId, staffId, teacherFullName])
   });
 
-  if (!newTopic) {
+  if (!newClassSubjectTeacher) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 6 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, topicExists]) }
+      { field: "databaseOperation", value: 7 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, staffHasContract]) }
     ]);
-    throwError("Error creating topic - Please try again", 500);
+    throwError("Error creating subject teacher", 500);
   }
 
   let activityLog;
@@ -200,34 +233,34 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Topic Creation",
-      "Topic",
-      newTopic?._id,
-      topic,
+      "Class Subject Teacher Creation",
+      "ClassSubjectTeacher",
+      newClassSubjectTeacher?._id,
+      teacherFullName,
       [
         {
           kind: "N",
-          rhs: {
-            _id: newTopic._id,
-            topicId: newTopic.customId,
-            topic
-          }
+          rhs: newClassSubjectTeacher
         }
       ],
       new Date()
     );
   }
-
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseOperation",
+      value: 7 + (logActivityAllowed ? 2 : 0) + (status === "Active" ? 1 : 0)
+    },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newTopic) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: (getObjectSize(newClassSubjectTeacher) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
     },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([newTopic, organisation, role, account]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+        getObjectSize([newClassSubjectTeacher, staffHasContract, organisation, role, account]) +
+        (status === "Active" ? getObjectSize(subjectAlreadyManaged) : 0) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
 
@@ -235,20 +268,17 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // controller to handle role update
-export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
+export const updateClassSubjectTeacher = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { customId, topic } = body;
+  const { classSubjectId, staffId, teacherFullName, status } = body;
 
-  if (!validateTopic(body)) {
+  if (!validateClassSubjectTeacher(body)) {
     throwError("Please fill in all required fields", 400);
   }
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-  // confirm organisation
-  const orgParsedId = account!.organisationId!.toString();
-
   const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
 
@@ -261,55 +291,58 @@ export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Topic");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit ClassSubject Teacher");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to edit topic - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to edit subject teacher - Please contact your admin", 403);
   }
 
-  const originalTopic = await Topic.findOne({ organisationId: orgParsedId, customId }).lean();
+  const originalClassSubjectTeacher = await ClassSubjectTeacher.findOne({ _id: body._id }).lean();
 
-  if (!originalTopic) {
+  if (!originalClassSubjectTeacher) {
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalTopic]) }
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("An error occured whilst getting old topic data, Ensure it has not been deleted", 500);
+    throwError("An error occured whilst getting old subject teacher data, Ensure it has not been deleted", 500);
   }
 
-  const updatedTopic = await Topic.findByIdAndUpdate(
-    originalTopic?._id.toString(),
+  const updatedClassSubjectTeacher = await ClassSubjectTeacher.findByIdAndUpdate(
+    originalClassSubjectTeacher?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([customId, topic])
+      searchText: generateSearchText([classSubjectId, staffId, teacherFullName])
     },
     { new: true }
   ).lean();
 
-  if (!updatedTopic) {
+  if (!updatedClassSubjectTeacher) {
     registerBillings(req, [
       { field: "databaseOperation", value: 6 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalTopic]) }
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, originalClassSubjectTeacher])
+      }
     ]);
-    throwError("Error updating topic", 500);
+    throwError("Error updating subject", 500);
   }
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    const difference = diff(originalTopic, updatedTopic);
+    const difference = diff(originalClassSubjectTeacher, updatedClassSubjectTeacher);
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Topic Update",
-      "Topic",
-      updatedTopic?._id,
-      topic,
+      "Class Subject Teacher Update",
+      "ClassSubjectTeacher",
+      updatedClassSubjectTeacher?._id,
+      teacherFullName,
       difference,
       new Date()
     );
@@ -320,7 +353,7 @@ export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([updatedTopic, organisation, role, account, originalTopic]) +
+        getObjectSize([updatedClassSubjectTeacher, organisation, role, account, originalClassSubjectTeacher]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -329,7 +362,7 @@ export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // controller to handle deleting roles
-export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
+export const deleteClassSubjectTeacher = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { _id } = req.body;
   if (!_id) {
@@ -351,27 +384,30 @@ export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Topic");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete ClassSubject Teacher");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to delete topic - Please contact your admin", 403);
+    throwError(
+      "Unauthorised Action: You do not have access to delete subject teacher - Please contact your admin",
+      403
+    );
   }
 
-  const deletedTopic = await Topic.findByIdAndDelete(_id).lean();
-  if (!deletedTopic) {
+  const deletedClassSubjectTeacher = await ClassSubjectTeacher.findByIdAndDelete(_id).lean();
+  if (!deletedClassSubjectTeacher) {
     registerBillings(req, [
       { field: "databaseOperation", value: 5 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Error deleting topic - Please try again", 500);
+    throwError("Error deleting subject teacher - Please try again", 500);
   }
 
-  const emitRoom = deletedTopic?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "topics", deletedTopic, "delete");
+  const emitRoom = deletedClassSubjectTeacher?.organisationId?.toString() ?? "";
+  emitToOrganisation(emitRoom, "subjectteachers", deletedClassSubjectTeacher, "delete");
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
@@ -380,14 +416,14 @@ export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Topic Delete",
-      "Topic",
-      deletedTopic?._id,
-      deletedTopic?.topic,
+      "ClassSubject Teacher Deletion",
+      "ClassSubjectTeacher",
+      deletedClassSubjectTeacher?._id,
+      deletedClassSubjectTeacher?.teacherFullName,
       [
         {
           kind: "D" as any,
-          lhs: deletedTopic
+          lhs: deletedClassSubjectTeacher
         }
       ],
       new Date()
@@ -401,12 +437,14 @@ export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedTopic) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value:
+        toNegative(getObjectSize(deletedClassSubjectTeacher) * 2) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
     },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([deletedTopic, organisation, role, account]) +
+        getObjectSize([deletedClassSubjectTeacher, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);

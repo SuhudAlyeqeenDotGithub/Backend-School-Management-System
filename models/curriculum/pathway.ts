@@ -1,30 +1,28 @@
 import mongoose from "mongoose";
 const { Schema, model } = mongoose;
 
-const programmeSchema = new Schema(
+const pathwaySchema = new Schema(
   {
     organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
     customId: { type: String, unique: true },
-    programme: { type: String, required: true },
-    stageId: { type: mongoose.Schema.Types.ObjectId, ref: "Stage" },
+    pathway: { type: String, required: true },
+    programmeId: { type: mongoose.Schema.Types.ObjectId, ref: "Programme", required: true },
     description: { type: String },
     startDate: { type: String },
     endDate: { type: String },
     status: { type: String, required: true, enum: ["Offering", "Not Offering"] },
-    searchText: { type: String, required: true },
-    duration: { type: String }
+    searchText: { type: String, required: true }
   },
   { timestamps: true }
 );
 
-programmeSchema.index({ organisationId: 1, customId: 1 }, { unique: true });
+pathwaySchema.index({ organisationId: 1, customId: 1 }, { unique: true });
+export const Pathway = model("Pathway", pathwaySchema);
 
-export const Programme = model("Programme", programmeSchema);
-
-const programmeManagerSchema = new Schema(
+const pathwayManagerSchema = new Schema(
   {
     organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
-    programmeId: { type: mongoose.Schema.Types.ObjectId, ref: "Programme", required: true },
+    pathwayId: { type: mongoose.Schema.Types.ObjectId, ref: "Pathway", required: true },
     staffId: { type: mongoose.Schema.Types.ObjectId, ref: "Staff", required: true },
     managerFullName: { type: String, required: true },
     managedFrom: { type: String, required: true },
@@ -35,6 +33,7 @@ const programmeManagerSchema = new Schema(
   { timestamps: true }
 );
 
-programmeManagerSchema.index({ organisationId: 1, programmeId: 1, staffId: 1, status: 1 }, { unique: true });
-
-export const ProgrammeManager = model("ProgrammeManager", programmeManagerSchema);
+pathwayManagerSchema.index({ organisationId: 1, pathwayId: 1, staffId: 1, status: 1 }, { unique: true });
+// pathwayManagerSchema.index({ organisationId: 1, pathwayId: 1, customStaffId: 1 });
+// pathwayManagerSchema.index({ organisationId: 1, staffId: 1, status: 1 });
+export const PathwayManager = model("PathwayManager", pathwayManagerSchema);

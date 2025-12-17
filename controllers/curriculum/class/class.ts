@@ -1,22 +1,24 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  fetchTopics,
+  fetchClasses,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllTopics
+  fetchAllClasses
 } from "../../../utils/databaseFunctions.ts";
 import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
-import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
-import { Topic } from "../../../models/curriculum/topic";
+
+import { Class } from "../../../models/curriculum/class.ts";
+import { Pathway } from "../../../models/curriculum/pathway.ts";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
+import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
+import { Programme } from "../../../models/curriculum/programme.ts";
 
-const validateTopic = (topicDataParam: any) => {
-  const { description, resources, learningObjectives, ...copyLocalData } = topicDataParam;
-
+const validateClass = (classDataParam: any) => {
+  const { description, pathwayId, ...copyLocalData } = classDataParam;
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
       throwError(`Missing Data: Please fill in the ${key} input`, 400);
@@ -27,7 +29,7 @@ const validateTopic = (topicDataParam: any) => {
   return true;
 };
 
-export const getAllTopics = asyncHandler(async (req: Request, res: Response) => {
+export const getAllClasses = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
@@ -43,35 +45,33 @@ export const getAllTopics = asyncHandler(async (req: Request, res: Response) => 
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Topics");
-  if (!absoluteAdmin && !hasAccess) {
-    registerBillings(req, [
-      { field: "databaseOperation", value: 3 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
-    ]);
-    throwError("Unauthorised Action: You do not have access to view topic - Please contact your admin", 403);
-  }
-  const topicProfiles = await fetchAllTopics(organisation!._id.toString());
+  const hasAccess = checkAccess(account, tabAccess, "View Classes");
 
-  if (!topicProfiles) {
-    registerBillings(req, [
-      { field: "databaseOperation", value: 3 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
-    ]);
-    throwError("Error fetching topic", 500);
-  }
+  if (absoluteAdmin || hasAccess) {
+    const classs = await fetchAllClasses(organisation!._id.toString());
 
-  registerBillings(req, [
-    { field: "databaseOperation", value: 3 + topicProfiles.length },
-    {
-      field: "databaseDataTransfer",
-      value: getObjectSize([topicProfiles, organisation, role, account])
+    if (!classs) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 4 },
+        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      ]);
+      throwError("Error fetching classs", 500);
     }
-  ]);
-  res.status(201).json(topicProfiles);
+    res.status(201).json(classs);
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 + classs.length },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([classs, organisation, role, account])
+      }
+    ]);
+    return;
+  }
+
+  throwError("Unauthorised Action: You do not have access to view class - Please contact your admin", 403);
 });
 
-export const getTopics = asyncHandler(async (req: Request, res: Response) => {
+export const getClasses = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
@@ -110,23 +110,28 @@ export const getTopics = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Topics");
+  const hasAccess = checkAccess(account, tabAccess, "View Classes");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to view topic - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to view classes - Please contact your admin", 403);
   }
-  const result = await fetchTopics(query, cursorType as string, parsedLimit, organisation!._id.toString());
 
-  if (!result || !result.topics) {
-    throwError("Error fetching topics", 500);
+  const result = await fetchClasses(query, cursorType as string, parsedLimit, organisation!._id.toString());
+
+  if (!result || !result.classs) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Error fetching classs", 500);
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 3 + result.topics.length },
+    { field: "databaseOperation", value: 3 + result.classs.length },
     {
       field: "databaseDataTransfer",
       value: getObjectSize([result, organisation, role, account])
@@ -136,11 +141,11 @@ export const getTopics = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // controller to handle role creation
-export const createTopic = asyncHandler(async (req: Request, res: Response) => {
+export const createClass = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { customId, topic } = body;
+  const { classCustomId, className, pathwayId, classFullTitle, programmeId } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
@@ -157,40 +162,67 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Create Topic");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create Class");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to create topic - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to create class - Please contact your admin", 403);
   }
 
-  const topicExists = await Topic.findOne({ organisationId: orgParsedId, customId }).lean();
-  if (topicExists) {
+  const classExists = await Class.findOne({ organisationId: orgParsedId, classCustomId }).lean();
+  if (classExists) {
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, topicExists]) }
+      { field: "databaseDataTransfer", value: getObjectSize([classExists, organisation, role, account]) }
     ]);
     throwError(
-      "A topic with this Custom Id already exist - Either refer to that record or change the topic custom Id",
+      "A class with this Custom Id already exist - Either refer to that record or change the class custom Id",
       409
     );
   }
 
-  const newTopic = await Topic.create({
-    ...body,
-    organisationId: orgParsedId,
-    searchText: generateSearchText([customId, topic])
-  });
+  const pathwayExists = await Pathway.findOne({ organisationId: orgParsedId, pathwayId }).lean();
+  if (!pathwayExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, classExists]) }
+    ]);
+    throwError(
+      "No pathway with the provided Custom Id exist - Please create the pathway or change the pathway custom Id",
+      409
+    );
+  }
 
-  if (!newTopic) {
+  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, programmeId }).lean();
+  if (!programmeExists) {
     registerBillings(req, [
       { field: "databaseOperation", value: 6 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, topicExists]) }
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, pathwayExists, classExists]) }
     ]);
-    throwError("Error creating topic - Please try again", 500);
+    throwError(
+      "No programme with the provided Custom Id exist - Please create the programme or change the programme custom Id",
+      409
+    );
+  }
+
+  const newClass = await Class.create({
+    ...body,
+    organisationId: orgParsedId,
+    searchText: generateSearchText([classCustomId, classFullTitle])
+  });
+
+  if (!newClass) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 8 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([newClass, classExists, pathwayExists, programmeExists, organisation, role, account])
+      }
+    ]);
+    throwError("Error creating class", 500);
   }
 
   let activityLog;
@@ -200,18 +232,14 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Topic Creation",
-      "Topic",
-      newTopic?._id,
-      topic,
+      "Class Creation",
+      "Class",
+      newClass?._id,
+      className,
       [
         {
           kind: "N",
-          rhs: {
-            _id: newTopic._id,
-            topicId: newTopic.customId,
-            topic
-          }
+          rhs: newClass
         }
       ],
       new Date()
@@ -219,15 +247,16 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 8 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newTopic) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: (getObjectSize(newClass) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
     },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([newTopic, organisation, role, account]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+        getObjectSize([newClass, classExists, pathwayExists, organisation, role, account, programmeExists]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
 
@@ -235,12 +264,12 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // controller to handle role update
-export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
+export const updateClass = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { customId, topic } = body;
+  const { className, customId, programmeId, classFullTitle } = body;
 
-  if (!validateTopic(body)) {
+  if (!validateClass(body)) {
     throwError("Please fill in all required fields", 400);
   }
 
@@ -261,66 +290,81 @@ export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Topic");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Class");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to edit topic - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to edit class - Please contact your admin", 403);
   }
 
-  const originalTopic = await Topic.findOne({ organisationId: orgParsedId, customId }).lean();
+  const originalClass = await Class.findOne({ organisationId: orgParsedId, customId }).lean();
 
-  if (!originalTopic) {
+  if (!originalClass) {
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalTopic]) }
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("An error occured whilst getting old topic data, Ensure it has not been deleted", 500);
+    throwError("An error occured whilst getting old class data, Ensure it has not been deleted", 500);
   }
 
-  const updatedTopic = await Topic.findByIdAndUpdate(
-    originalTopic?._id.toString(),
+  const programmeExists = await Pathway.findOne({ organisationId: orgParsedId, programmeId }).lean();
+  if (!programmeExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalClass]) }
+    ]);
+    throwError(
+      "No programme with the provided Custom Id exist - Please create the programme or change the programme custom Id",
+      409
+    );
+  }
+
+  const updatedClass = await Class.findByIdAndUpdate(
+    originalClass?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([customId, topic])
+      searchText: generateSearchText([customId, classFullTitle])
     },
     { new: true }
   ).lean();
 
-  if (!updatedTopic) {
+  if (!updatedClass) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 6 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalTopic]) }
+      { field: "databaseOperation", value: 7 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, programmeExists, originalClass])
+      }
     ]);
-    throwError("Error updating topic", 500);
+    throwError("Error updating class", 500);
   }
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    const difference = diff(originalTopic, updatedTopic);
+    const difference = diff(originalClass, updatedClass);
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Topic Update",
-      "Topic",
-      updatedTopic?._id,
-      topic,
+      "Class Update",
+      "Class",
+      updatedClass?._id,
+      className,
       difference,
       new Date()
     );
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([updatedTopic, organisation, role, account, originalTopic]) +
+        getObjectSize([updatedClass, programmeExists, organisation, role, account, originalClass]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -329,7 +373,7 @@ export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // controller to handle deleting roles
-export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
+export const deleteClass = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { _id } = req.body;
   if (!_id) {
@@ -351,27 +395,27 @@ export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Topic");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Class");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to delete topic - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to delete class - Please contact your admin", 403);
   }
 
-  const deletedTopic = await Topic.findByIdAndDelete(_id).lean();
-  if (!deletedTopic) {
+  const deletedClass = await Class.findByIdAndDelete(_id).lean();
+  if (!deletedClass) {
     registerBillings(req, [
       { field: "databaseOperation", value: 5 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Error deleting topic - Please try again", 500);
+    throwError("Error deleting class - Please try again", 500);
   }
 
-  const emitRoom = deletedTopic?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "topics", deletedTopic, "delete");
+  const emitRoom = deletedClass?.organisationId?.toString() ?? "";
+  emitToOrganisation(emitRoom, "classs", deletedClass, "delete");
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
@@ -380,14 +424,14 @@ export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Topic Delete",
-      "Topic",
-      deletedTopic?._id,
-      deletedTopic?.topic,
+      "Class Delete",
+      "Class",
+      deletedClass?._id,
+      deletedClass?.className,
       [
         {
           kind: "D" as any,
-          lhs: deletedTopic
+          lhs: deletedClass
         }
       ],
       new Date()
@@ -401,12 +445,12 @@ export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedTopic) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedClass) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
     },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([deletedTopic, organisation, role, account]) +
+        getObjectSize([deletedClass, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);

@@ -42,6 +42,10 @@ export const getRoles = asyncHandler(async (req: Request, res: Response) => {
     );
 
     if (!roles) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 3 },
+        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      ]);
       throwError("Error fetching roles", 500);
     }
 
@@ -63,9 +67,9 @@ export const getRoles = asyncHandler(async (req: Request, res: Response) => {
 // controller to handle role creation
 export const createRole = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { roleName, roleDescription, tabAccess } = req.body;
+  const { name, description, tabAccess } = req.body;
 
-  if (!roleName) {
+  if (!name) {
     throwError("Please provide the role name", 400);
   }
 
@@ -87,18 +91,26 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Role");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to create roles - Please contact your admin", 403);
   }
 
   const newRole = await Role.create({
     organisationId: account?.organisationId,
     accountId: account?._id,
-    roleName,
-    roleDescription,
+    name,
+    description,
     tabAccess
   });
 
   if (!newRole) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Error creating role", 500);
   }
 
@@ -112,14 +124,14 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
       "Role Creation",
       "Role",
       newRole?._id,
-      roleName,
+      name,
       [
         {
           kind: "N",
           rhs: {
             _id: newRole._id,
-            roleName: newRole.roleName,
-            roleDescription: newRole.roleDescription,
+            name: newRole.name,
+            description: newRole.description,
             absoluteAdmin: newRole.absoluteAdmin
           }
         }
@@ -148,9 +160,9 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
 // controller to handle role update
 export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { roleId, roleName, roleDescription, tabAccess } = req.body;
+  const { roleId, name, description, tabAccess } = req.body;
 
-  if (!roleName) {
+  if (!name) {
     throwError("Please provide the role name", 400);
   }
 
@@ -172,26 +184,40 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Role");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to edit roles - Please contact your admin", 403);
   }
 
-  const originalRole = await Role.findById(roleId, " roleId roleName roleDescription tabAccess");
+  const originalRole = await Role.findById(roleId, " roleId name description tabAccess").lean();
 
   if (!originalRole) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("An error occured whilst getting old role data - it may have been deleted", 500);
   }
 
   const updatedRole = await Role.findByIdAndUpdate(
     roleId,
     {
-      roleName,
-      roleDescription,
+      name,
+      description,
       tabAccess
     },
     { new: true }
-  ).populate("accountId");
+  )
+    .populate("accountId")
+    .lean();
 
   if (!updatedRole) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalRole]) }
+    ]);
     throwError("Error updating role", 500);
   }
 
@@ -206,7 +232,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
       "Role Update",
       "Role",
       updatedRole?._id,
-      roleName,
+      name,
       difference,
       new Date()
     );
@@ -228,9 +254,9 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
 // controller to handle deleting roles
 export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { roleIdToDelete, roleName, absoluteAdmin: roleAbsoluteAdmin } = req.body;
+  const { _id, name, absoluteAdmin: roleAbsoluteAdmin } = req.body;
 
-  if (!roleIdToDelete) {
+  if (!_id) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
@@ -260,18 +286,20 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Role");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to delete roles - Please contact your admin", 403);
   }
 
-  const originalRole = await Role.findById(roleIdToDelete, " roleId roleName roleDescription tabAccess");
-
-  if (!originalRole) {
-    throwError("An error occured whilst getting old role data - it may have been deleted", 500);
-  }
-
-  const deletedRole = await Role.findByIdAndDelete(roleIdToDelete);
+  const deletedRole = await Role.findByIdAndDelete(_id).lean();
 
   if (!deletedRole) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Error deleting role - Please try again", 500);
   }
 
@@ -288,16 +316,16 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
       "Role Delete",
       "Role",
       deletedRole?._id,
-      roleName,
+      name,
       [
         {
           kind: "D",
           lhs: {
-            _id: originalRole?._id,
-            roleName: originalRole?.roleName,
-            roleDescription: originalRole?.roleDescription,
-            absoluteAdmin: originalRole?.absoluteAdmin,
-            tabAccess: originalRole?.tabAccess
+            _id: deletedRole?._id,
+            name: deletedRole?.name,
+            description: deletedRole?.description,
+            absoluteAdmin: deletedRole?.absoluteAdmin,
+            tabAccess: deletedRole?.tabAccess
           }
         }
       ],
@@ -308,7 +336,7 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   registerBillings(req, [
     {
       field: "databaseOperation",
-      value: 6 + (logActivityAllowed ? 2 : 0)
+      value: 5 + (logActivityAllowed ? 2 : 0)
     },
     {
       field: "databaseStorageAndBackup",
@@ -317,7 +345,7 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([deletedRole, organisation, role, account, originalRole]) +
+        getObjectSize([deletedRole, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);

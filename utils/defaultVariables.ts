@@ -84,31 +84,41 @@ export const defaultTabAccess = [
     ]
   },
   {
-    tab: "Course",
+    tab: "Pathway",
     group: "Curriculum",
     actions: [
-      { action: "Create Course", permission: true },
-      { action: "View Courses", permission: true },
-      { action: "Edit Course", permission: true },
-      { action: "Delete Course", permission: true },
-      { action: "Create Course Manager", permission: true },
-      { action: "View Course Managers", permission: true },
-      { action: "Edit Course Manager", permission: true },
-      { action: "Delete Course Manager", permission: true }
+      { action: "Create Pathway", permission: true },
+      { action: "View Pathways", permission: true },
+      { action: "Edit Pathway", permission: true },
+      { action: "Delete Pathway", permission: true },
+      { action: "Create Pathway Manager", permission: true },
+      { action: "View Pathway Managers", permission: true },
+      { action: "Edit Pathway Manager", permission: true },
+      { action: "Delete Pathway Manager", permission: true }
     ]
   },
   {
-    tab: "Level",
+    tab: "Qualification",
     group: "Curriculum",
     actions: [
-      { action: "Create Level", permission: true },
-      { action: "View Levels", permission: true },
-      { action: "Edit Level", permission: true },
-      { action: "Delete Level", permission: true },
-      { action: "Create Level Manager", permission: true },
-      { action: "View Level Managers", permission: true },
-      { action: "Edit Level Manager", permission: true },
-      { action: "Delete Level Manager", permission: true }
+      { action: "Create Qualification", permission: true },
+      { action: "View Qualifications", permission: true },
+      { action: "Edit Qualification", permission: true },
+      { action: "Delete Qualification", permission: true }
+    ]
+  },
+  {
+    tab: "Class",
+    group: "Curriculum",
+    actions: [
+      { action: "Create Class", permission: true },
+      { action: "View Classes", permission: true },
+      { action: "Edit Class", permission: true },
+      { action: "Delete Class", permission: true },
+      { action: "Create Class Tutor", permission: true },
+      { action: "View Class Tutors", permission: true },
+      { action: "Edit Class Tutor", permission: true },
+      { action: "Delete Class Tutor", permission: true }
     ]
   },
   {
@@ -123,14 +133,14 @@ export const defaultTabAccess = [
       { action: "View Base Subject Managers", permission: true },
       { action: "Edit Base Subject Manager", permission: true },
       { action: "Delete Base Subject Manager", permission: true },
-      { action: "Create Subject", permission: true },
-      { action: "View Subjects", permission: true },
-      { action: "Edit Subject", permission: true },
-      { action: "Delete Subject", permission: true },
-      { action: "Create Subject Teacher", permission: true },
-      { action: "View Subject Teachers", permission: true },
-      { action: "Edit Subject Teacher", permission: true },
-      { action: "Delete Subject Teacher", permission: true }
+      { action: "Create Class Subject", permission: true },
+      { action: "View Class Subjects", permission: true },
+      { action: "Edit Class Subject", permission: true },
+      { action: "Delete Class Subject", permission: true },
+      { action: "Create Class Subject Teacher", permission: true },
+      { action: "View Class Subject Teachers", permission: true },
+      { action: "Edit Class Subject Teacher", permission: true },
+      { action: "Delete Class Subject Teacher", permission: true }
     ]
   },
   {
@@ -155,6 +165,10 @@ export const defaultTabAccess = [
       { action: "View Syllabuses", permission: true },
       { action: "Edit Syllabus", permission: true },
       { action: "Delete Syllabus", permission: true },
+      { action: "Create Scheme of Work", permission: true },
+      { action: "View Scheme of Works", permission: true },
+      { action: "Edit Scheme of Work", permission: true },
+      { action: "Delete Scheme of Work", permission: true },
       { action: "Create Topic", permission: true },
       { action: "View Topics", permission: true },
       { action: "Edit Topic", permission: true },
@@ -262,47 +276,47 @@ export const defaultTabAccess = [
     group: "Student",
     actions: [
       { action: "View Student Day Attendances (Admin Access)", permission: true },
-      { action: "View Student Day Attendances (For Level | Course Managers)", permission: true },
+      { action: "View Student Day Attendances (For Class | Pathway Managers)", permission: true },
 
       { action: "Create Student Day Attendance (Admin Access)", permission: true },
-      { action: "Create Student Day Attendance (For Level | Course Managers)", permission: true },
+      { action: "Create Student Day Attendance (For Class | Pathway Managers)", permission: true },
 
       { action: "Edit Student Day Attendance (Admin Access)", permission: true },
-      { action: "Edit Student Day Attendance (For Level | Course Managers)", permission: true },
+      { action: "Edit Student Day Attendance (For Class | Pathway Managers)", permission: true },
 
       { action: "Delete Student Day Attendance (Admin Access)", permission: true },
-      { action: "Delete Student Day Attendance (For Level | Course Managers)", permission: true },
+      { action: "Delete Student Day Attendance (For Class | Pathway Managers)", permission: true },
 
       { action: "View Student Event Attendances (Admin Access)", permission: true },
-      { action: "View Student Event Attendances (For Level | Course Managers)", permission: true },
+      { action: "View Student Event Attendances (For Class | Pathway Managers)", permission: true },
 
       { action: "Create Student Event Attendance (Admin Access)", permission: true },
-      { action: "Create Student Event Attendance (For Level | Course Managers)", permission: true },
+      { action: "Create Student Event Attendance (For Class | Pathway Managers)", permission: true },
 
       { action: "Edit Student Event Attendance (Admin Access)", permission: true },
-      { action: "Edit Student Event Attendance (For Level | Course Managers)", permission: true },
+      { action: "Edit Student Event Attendance (For Class | Pathway Managers)", permission: true },
 
       { action: "Delete Student Event Attendance (Admin Access)", permission: true },
-      { action: "Delete Student Event Attendance (For Level | Course Managers)", permission: true },
+      { action: "Delete Student Event Attendance (For Class | Pathway Managers)", permission: true },
 
       { action: "View Student Subject Attendances (Admin Access)", permission: true },
       {
-        action: "View Student Subject Attendances (For Level | Course Managers | Subject Teachers)",
+        action: "View Student Subject Attendances (For Class | Pathway Managers | Subject Teachers)",
         permission: true
       },
 
       { action: "Create Student Subject Attendance (Admin Access)", permission: true },
       {
-        action: "Create Student Subject Attendance (For Level | Course Managers | Subject Teachers)",
+        action: "Create Student Subject Attendance (For Class | Pathway Managers | Subject Teachers)",
         permission: true
       },
 
       { action: "Edit Student Subject Attendance (Admin Access)", permission: true },
-      { action: "Edit Student Subject Attendance (For Level | Course Managers | Subject Teachers)", permission: true },
+      { action: "Edit Student Subject Attendance (For Class | Pathway Managers | Subject Teachers)", permission: true },
 
       { action: "Delete Student Subject Attendance (Admin Access)", permission: true },
       {
-        action: "Delete Student Subject Attendance (For Level | Course Managers | Subject Teachers)",
+        action: "Delete Student Subject Attendance (For Class | Pathway Managers | Subject Teachers)",
         permission: true
       }
     ]

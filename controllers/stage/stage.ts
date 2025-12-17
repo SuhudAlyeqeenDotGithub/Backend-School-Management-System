@@ -13,7 +13,7 @@ import { Stage } from "../../models/curriculum/stage";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 
 const validateStage = (stageDataParam: any) => {
-  const { description, stageDuration, ...copyLocalData } = stageDataParam;
+  const { description, duration, ...copyLocalData } = stageDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -76,7 +76,7 @@ export const createStage = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { customId, name } = body;
+  const { customId, stage } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
@@ -97,6 +97,10 @@ export const createStage = asyncHandler(async (req: Request, res: Response) => {
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Stage");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to create stage - Please contact your admin", 403);
   }
 
@@ -118,7 +122,7 @@ export const createStage = asyncHandler(async (req: Request, res: Response) => {
   const newStage = await Stage.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([customId, name])
+    searchText: generateSearchText([customId, stage])
   });
 
   if (!newStage) {
@@ -139,15 +143,11 @@ export const createStage = asyncHandler(async (req: Request, res: Response) => {
       "Stage Creation",
       "Stage",
       newStage?._id,
-      name,
+      stage,
       [
         {
           kind: "N",
-          rhs: {
-            _id: newStage._id,
-            stageId: newStage.customId,
-            name: newStage.name
-          }
+          rhs: newStage
         }
       ],
       new Date()
@@ -178,7 +178,7 @@ export const createStage = asyncHandler(async (req: Request, res: Response) => {
 export const updateStage = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { customId, name } = body;
+  const { customId, stage } = body;
 
   if (!validateStage(body)) {
     throwError("Please fill in all required fields", 400);
@@ -225,7 +225,7 @@ export const updateStage = asyncHandler(async (req: Request, res: Response) => {
     originalStage?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([customId, name])
+      searchText: generateSearchText([customId, stage])
     },
     { new: true }
   );
@@ -249,7 +249,7 @@ export const updateStage = asyncHandler(async (req: Request, res: Response) => {
       "Stage Update",
       "Stage",
       updatedStage?._id,
-      name,
+      stage,
       difference,
       new Date()
     );
@@ -271,8 +271,8 @@ export const updateStage = asyncHandler(async (req: Request, res: Response) => {
 // controller to handle deleting roles
 export const deleteStage = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { customId } = req.body;
-  if (!customId) {
+  const { _id } = req.body;
+  if (!_id) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
@@ -300,24 +300,11 @@ export const deleteStage = asyncHandler(async (req: Request, res: Response) => {
     throwError("Unauthorised Action: You do not have access to delete stage - Please contact your admin", 403);
   }
 
-  const stageToDelete = await Stage.findOne({
-    organisationId: organisation?._id.toString(),
-    customId: customId
-  });
-
-  if (!stageToDelete) {
-    registerBillings(req, [
-      { field: "databaseOperation", value: 4 },
-      { field: "databaseDataTransfer", value: getObjectSize([stageToDelete, organisation, role, account]) }
-    ]);
-    throwError("Error finding stage with provided Custom Id - Please try again", 404);
-  }
-
-  const deletedStage = await Stage.findByIdAndDelete(stageToDelete?._id.toString());
+  const deletedStage = await Stage.findByIdAndDelete(_id);
   if (!deletedStage) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 6 },
-      { field: "databaseDataTransfer", value: getObjectSize([stageToDelete, organisation, role, account]) }
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
     throwError("Error deleting stage - Please try again", 500);
   }
@@ -335,7 +322,7 @@ export const deleteStage = asyncHandler(async (req: Request, res: Response) => {
       "Stage Delete",
       "Stage",
       deletedStage?._id,
-      deletedStage?.name,
+      deletedStage?.stage,
       [
         {
           kind: "D" as any,
@@ -349,7 +336,7 @@ export const deleteStage = asyncHandler(async (req: Request, res: Response) => {
   registerBillings(req, [
     {
       field: "databaseOperation",
-      value: 6 + (logActivityAllowed ? 2 : 0)
+      value: 5 + (logActivityAllowed ? 2 : 0)
     },
     {
       field: "databaseStorageAndBackup",
@@ -358,7 +345,7 @@ export const deleteStage = asyncHandler(async (req: Request, res: Response) => {
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([deletedStage, organisation, role, account, stageToDelete]) +
+        getObjectSize([deletedStage, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);

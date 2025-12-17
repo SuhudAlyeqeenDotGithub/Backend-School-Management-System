@@ -1,21 +1,19 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  fetchTopics,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
-  confirmUserOrgRole,
-  fetchAllTopics
+  confirmUserOrgRole
 } from "../../../utils/databaseFunctions.ts";
 import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
-import { Topic } from "../../../models/curriculum/topic";
+import { Stage } from "../../../models/curriculum/stage.ts";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
 
-const validateTopic = (topicDataParam: any) => {
-  const { description, resources, learningObjectives, ...copyLocalData } = topicDataParam;
+const validateStage = (stageDataParam: any) => {
+  const { description, duration, ...copyLocalData } = stageDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -27,7 +25,7 @@ const validateTopic = (topicDataParam: any) => {
   return true;
 };
 
-export const getAllTopics = asyncHandler(async (req: Request, res: Response) => {
+export const getAllStages = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
@@ -43,104 +41,42 @@ export const getAllTopics = asyncHandler(async (req: Request, res: Response) => 
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Topics");
-  if (!absoluteAdmin && !hasAccess) {
-    registerBillings(req, [
-      { field: "databaseOperation", value: 3 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
-    ]);
-    throwError("Unauthorised Action: You do not have access to view topic - Please contact your admin", 403);
-  }
-  const topicProfiles = await fetchAllTopics(organisation!._id.toString());
-
-  if (!topicProfiles) {
-    registerBillings(req, [
-      { field: "databaseOperation", value: 3 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
-    ]);
-    throwError("Error fetching topic", 500);
-  }
-
-  registerBillings(req, [
-    { field: "databaseOperation", value: 3 + topicProfiles.length },
-    {
-      field: "databaseDataTransfer",
-      value: getObjectSize([topicProfiles, organisation, role, account])
-    }
-  ]);
-  res.status(201).json(topicProfiles);
-});
-
-export const getTopics = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId, organisationId: userTokenOrgId } = req.userToken;
-  const { account, role, organisation } = await confirmUserOrgRole(accountId);
-
-  const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
-
-  const parsedLimit = parseInt(limit as string);
-
-  const query: any = { organisationId: userTokenOrgId };
-  if (search) {
-    query.searchText = { $regex: search, $options: "i" };
-  }
-
-  for (const key in filters) {
-    if (filters[key] !== "all") {
-      query[key] = filters[key];
-    }
-  }
-
-  if (cursorType) {
-    if (nextCursor && cursorType === "next") {
-      query._id = { $lt: nextCursor };
-    } else if (prevCursor && cursorType === "prev") {
-      query._id = { $gt: prevCursor };
-    }
-  }
-
-  const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
-
-  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
-
-  if (!checkPassed) {
-    registerBillings(req, [
-      { field: "databaseOperation", value: 3 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
-    ]);
-    throwError(message, 409);
-  }
-  const hasAccess = checkAccess(account, tabAccess, "View Topics");
+  const hasAccess = checkAccess(account, tabAccess, "View Stages");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to view topic - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to view stages - Please contact your admin", 403);
   }
-  const result = await fetchTopics(query, cursorType as string, parsedLimit, organisation!._id.toString());
 
-  if (!result || !result.topics) {
-    throwError("Error fetching topics", 500);
+  const stages = await Stage.find({ organisationId: organisation!._id.toString() }).lean();
+
+  if (!stages) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, stages]) }
+    ]);
+    throwError("Error fetching stages", 500);
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 3 + result.topics.length },
+    { field: "databaseOperation", value: 3 + stages.length },
     {
       field: "databaseDataTransfer",
-      value: getObjectSize([result, organisation, role, account])
+      value: getObjectSize([stages, organisation, role, account])
     }
   ]);
-  res.status(201).json(result);
+  res.status(201).json(stages);
 });
 
 // controller to handle role creation
-export const createTopic = asyncHandler(async (req: Request, res: Response) => {
+export const createStage = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { customId, topic } = body;
+  const { customId, stageName } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
@@ -157,40 +93,40 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Create Topic");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create Stage");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to create topic - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to create stage - Please contact your admin", 403);
   }
 
-  const topicExists = await Topic.findOne({ organisationId: orgParsedId, customId }).lean();
-  if (topicExists) {
+  const stageExists = await Stage.findOne({ organisationId: orgParsedId, customId }).lean();
+  if (stageExists) {
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, topicExists]) }
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
     throwError(
-      "A topic with this Custom Id already exist - Either refer to that record or change the topic custom Id",
+      "A stage with this Custom Id already exist - Either refer to that record or change the stage custom Id",
       409
     );
   }
 
-  const newTopic = await Topic.create({
+  const newStage = await Stage.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([customId, topic])
+    searchText: generateSearchText([customId, stageName])
   });
 
-  if (!newTopic) {
+  if (!newStage) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 6 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, topicExists]) }
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Error creating topic - Please try again", 500);
+    throwError("Error creating stage", 500);
   }
 
   let activityLog;
@@ -200,17 +136,17 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Topic Creation",
-      "Topic",
-      newTopic?._id,
-      topic,
+      "Stage Creation",
+      "Stage",
+      newStage?._id,
+      stageName,
       [
         {
           kind: "N",
           rhs: {
-            _id: newTopic._id,
-            topicId: newTopic.customId,
-            topic
+            _id: newStage._id,
+            stageId: newStage.customId,
+            stageName
           }
         }
       ],
@@ -219,15 +155,19 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    {
+      field: "databaseOperation",
+      value: 6 + (logActivityAllowed ? 2 : 0)
+    },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newTopic) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: (getObjectSize(newStage) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
     },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([newTopic, organisation, role, account]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+        getObjectSize([newStage, stageExists, organisation, role, account]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
 
@@ -235,12 +175,12 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // controller to handle role update
-export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
+export const updateStage = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { customId, topic } = body;
+  const { customId, stageName } = body;
 
-  if (!validateTopic(body)) {
+  if (!validateStage(body)) {
     throwError("Please fill in all required fields", 400);
   }
 
@@ -261,55 +201,55 @@ export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Topic");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Stage");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to edit topic - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to edit stage - Please contact your admin", 403);
   }
 
-  const originalTopic = await Topic.findOne({ organisationId: orgParsedId, customId }).lean();
+  const originalStage = await Stage.findOne({ organisationId: orgParsedId, customId }).lean();
 
-  if (!originalTopic) {
+  if (!originalStage) {
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalTopic]) }
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("An error occured whilst getting old topic data, Ensure it has not been deleted", 500);
+    throwError("An error occured whilst getting old stage data, Ensure it has not been deleted", 500);
   }
 
-  const updatedTopic = await Topic.findByIdAndUpdate(
-    originalTopic?._id.toString(),
+  const updatedStage = await Stage.findByIdAndUpdate(
+    originalStage?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([customId, topic])
+      searchText: generateSearchText([customId, stageName])
     },
     { new: true }
   ).lean();
 
-  if (!updatedTopic) {
+  if (!updatedStage) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 6 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalTopic]) }
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Error updating topic", 500);
+    throwError("Error updating stage", 500);
   }
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    const difference = diff(originalTopic, updatedTopic);
+    const difference = diff(originalStage, updatedStage);
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Topic Update",
-      "Topic",
-      updatedTopic?._id,
-      topic,
+      "Stage Update",
+      "Stage",
+      updatedStage?._id,
+      stageName,
       difference,
       new Date()
     );
@@ -320,7 +260,7 @@ export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([updatedTopic, organisation, role, account, originalTopic]) +
+        getObjectSize([updatedStage, organisation, role, account, originalStage]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -329,7 +269,7 @@ export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // controller to handle deleting roles
-export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
+export const deleteStage = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { _id } = req.body;
   if (!_id) {
@@ -351,27 +291,26 @@ export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Topic");
-
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Stage");
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to delete topic - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to delete stage - Please contact your admin", 403);
   }
 
-  const deletedTopic = await Topic.findByIdAndDelete(_id).lean();
-  if (!deletedTopic) {
+  const deletedStage = await Stage.findByIdAndDelete(_id).lean();
+  if (!deletedStage) {
     registerBillings(req, [
       { field: "databaseOperation", value: 5 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Error deleting topic - Please try again", 500);
+    throwError("Error deleting stage - Please try again", 500);
   }
 
-  const emitRoom = deletedTopic?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "topics", deletedTopic, "delete");
+  const emitRoom = deletedStage?.organisationId?.toString() ?? "";
+  emitToOrganisation(emitRoom, "stages", deletedStage, "delete");
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
@@ -380,14 +319,14 @@ export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Topic Delete",
-      "Topic",
-      deletedTopic?._id,
-      deletedTopic?.topic,
+      "Stage Delete",
+      "Stage",
+      deletedStage?._id,
+      deletedStage?.stage,
       [
         {
           kind: "D" as any,
-          lhs: deletedTopic
+          lhs: deletedStage
         }
       ],
       new Date()
@@ -401,12 +340,12 @@ export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedTopic) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedStage) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
     },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([deletedTopic, organisation, role, account]) +
+        getObjectSize([deletedStage, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);

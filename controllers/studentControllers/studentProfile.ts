@@ -214,6 +214,10 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Student Profile");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to create student - Please contact your admin", 403);
   }
 
@@ -327,6 +331,10 @@ export const updateStudentProfile = asyncHandler(async (req: Request, res: Respo
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Student Profile");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Unauthorised Action: You do not have access to edit student - Please contact your admin", 403);
   }
 
@@ -419,7 +427,12 @@ export const deleteStudentProfile = asyncHandler(async (req: Request, res: Respo
     throwError(message, 409);
   }
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Student Profile");
+
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "Unauthorised Action: You do not have access to delete student profile - Please contact your admin",
       403

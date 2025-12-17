@@ -15,11 +15,11 @@ import {
   StudentSubjectAttendanceTemplate
 } from "../../models/student/subjectAttendance.ts";
 import { AcademicYear } from "../../models/timeline/academicYear.ts";
-import { Course, CourseManager } from "../../models/curriculum/course.ts";
-import { Level, LevelManager } from "../../models/curriculum/level.ts";
+import { Pathway, PathwayManager } from "../../models/curriculum/pathway.ts";
+import { Class, ClassTutor } from "../../models/curriculum/class.ts";
 import { StudentEnrollment } from "../../models/student/enrollment.ts";
 import { Staff } from "../../models/staff/profile.ts";
-import { Subject, SubjectTeacher } from "../../models/curriculum/subject.ts";
+import { ClassSubject, ClassSubjectTeacher } from "../../models/curriculum/classSubject.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 
 const validateStudentSubjectAttendance = (studentDataParam: any) => {
@@ -70,7 +70,7 @@ export const fetchSubjectAttendanceStore = asyncHandler(async (req: Request, res
   const hasManagerAccess = checkAccess(
     account,
     tabAccess,
-    "View Student Subject Attendances (For Level | Course Managers | Subject Teachers)"
+    "View Student Subject Attendances (For Class | Pathway Managers | Subject Teachers)"
   );
 
   if (absoluteAdmin || hasAdminAccess || hasManagerAccess) {
@@ -105,21 +105,21 @@ export const getEnrolledSubjectAttendanceStudents = asyncHandler(async (req: Req
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const {
     academicYearId,
-    courseId,
-    levelId,
-    subjectId,
+    pathwayId,
+    classId,
+    classSubjectId,
     subjectTeacherCustomStaffId,
-    courseManagerCustomStaffId,
-    levelManagerCustomStaffId
+    pathwayManagerCustomStaffId,
+    classManagerCustomStaffId
   } = req.body;
 
   // validate input
-  if (!academicYearId || !courseId || !levelId || !subjectId) {
-    throwError("Please fill in all required fields - Academic Year, Course, Level and Subject", 400);
+  if (!academicYearId || !pathwayId || !classId || !classSubjectId) {
+    throwError("Please fill in all required fields - Academic Year, Pathway, Class and Subject", 400);
   }
 
-  if (!subjectTeacherCustomStaffId && !courseManagerCustomStaffId && !levelManagerCustomStaffId) {
-    throwError("Please fill in all required fields - Subject Teacher, Course Manager or Level Manager", 400);
+  if (!subjectTeacherCustomStaffId && !pathwayManagerCustomStaffId && !classManagerCustomStaffId) {
+    throwError("Please fill in all required fields - Subject Teacher, Pathway Manager or Class Tutor", 400);
   }
 
   // confirm user
@@ -151,35 +151,35 @@ export const getEnrolledSubjectAttendanceStudents = asyncHandler(async (req: Req
     throwError("Unauthorised Action: We could not find your staff details", 403);
   }
 
-  const staffIsActiveCourseManager = await CourseManager.findOne({
+  const staffIsActivePathwayManager = await PathwayManager.findOne({
     organisationId: userTokenOrgId,
-    courseId,
-    courseManagerCustomStaffId: isStaff?.staffCustomId,
+    pathwayId,
+    pathwayManagerCustomStaffId: isStaff?.customId,
     status: "Active"
   });
-  const staffIsActiveLevelManager = await LevelManager.findOne({
+  const staffIsActiveClassTutor = await ClassTutor.findOne({
     organisationId: userTokenOrgId,
-    levelId,
-    levelManagerCustomStaffId: isStaff?.staffCustomId,
+    classId,
+    classTutorCustomStaffId: isStaff?.customId,
     status: "Active"
   });
 
-  const staffIsActiveSubjectTeacher = await SubjectTeacher.findOne({
+  const staffIsActiveSubjectTeacher = await ClassSubjectTeacher.findOne({
     organisationId: userTokenOrgId,
-    subjectId,
-    subjectManagerCustomStaffId: isStaff?.staffCustomId,
+    classSubjectId,
+    subjectManagerCustomStaffId: isStaff?.customId,
     status: "Active"
   });
 
   if (
     !absoluteAdmin &&
     !hasAdminAccess &&
-    !staffIsActiveCourseManager &&
-    !staffIsActiveLevelManager &&
+    !staffIsActivePathwayManager &&
+    !staffIsActiveClassTutor &&
     !staffIsActiveSubjectTeacher
   ) {
     throwError(
-      "Unauthorised Action: You do not have access to create student subject attendance for this course / level / subject or any other course / level / subject - Please contact your admin",
+      "Unauthorised Action: You do not have access to create student subject attendance for this pathway / class / subject or any other pathway / class / subject - Please contact your admin",
       403
     );
   }
@@ -187,15 +187,15 @@ export const getEnrolledSubjectAttendanceStudents = asyncHandler(async (req: Req
   if (
     absoluteAdmin ||
     hasAdminAccess ||
-    staffIsActiveCourseManager ||
-    staffIsActiveLevelManager ||
+    staffIsActivePathwayManager ||
+    staffIsActiveClassTutor ||
     staffIsActiveSubjectTeacher
   ) {
     const result = await StudentEnrollment.find(
       {
         organisationId: userTokenOrgId,
-        courseId,
-        levelId,
+        pathwayId,
+        classId,
         academicYearId
       },
       "_id studentId studentCustomId studentFullName"
@@ -211,8 +211,8 @@ export const getEnrolledSubjectAttendanceStudents = asyncHandler(async (req: Req
         field: "databaseDataTransfer",
         value: getObjectSize([
           result,
-          courseManagerCustomStaffId,
-          levelManagerCustomStaffId,
+          pathwayManagerCustomStaffId,
+          classManagerCustomStaffId,
           subjectTeacherCustomStaffId,
           organisation,
           role,
@@ -280,42 +280,42 @@ export const getStudentSubjectAttendances = asyncHandler(async (req: Request, re
   const hasAdminAccess = checkAccess(account, tabAccess, "View Student Subject Attendances (Admin Access)");
 
   if (!absoluteAdmin && !hasAdminAccess) {
-    const courseManagementDocs = await CourseManager.find({
+    const pathwayManagementDocs = await PathwayManager.find({
       organisationId: userTokenOrgId,
-      courseManagerStaffId: staffId,
+      pathwayManagerStaffId: staffId,
       status: "Active"
     });
-    const levelManagementDocs = await LevelManager.find({
+    const classManagementDocs = await ClassTutor.find({
       organisationId: userTokenOrgId,
-      levelManagerStaffId: staffId,
+      classManagerStaffId: staffId,
       status: "Active"
     });
 
-    const subjectManagementDocs = await SubjectTeacher.find({
+    const subjectManagementDocs = await ClassSubjectTeacher.find({
       organisationId: userTokenOrgId,
       subjectTeacherStaffId: staffId,
       status: "Active"
     });
 
-    let coursesManaged: any = [];
-    if (courseManagementDocs && courseManagementDocs.length > 0) {
-      coursesManaged = courseManagementDocs.map((doc) => doc.courseId);
+    let pathwaysManaged: any = [];
+    if (pathwayManagementDocs && pathwayManagementDocs.length > 0) {
+      pathwaysManaged = pathwayManagementDocs.map((doc) => doc.pathwayId);
     }
 
-    let levelsManaged: any = [];
-    if (levelManagementDocs && levelManagementDocs.length > 0) {
-      levelsManaged = levelManagementDocs.map((doc) => doc.levelId);
+    let classsManaged: any = [];
+    if (classManagementDocs && classManagementDocs.length > 0) {
+      classsManaged = classManagementDocs.map((doc: any) => doc.classId);
     }
 
     let subjectsManaged: any = [];
     if (subjectManagementDocs && subjectManagementDocs.length > 0) {
-      subjectsManaged = subjectManagementDocs.map((doc) => doc.subjectId);
+      subjectsManaged = subjectManagementDocs.map((doc) => doc.classSubjectId);
     }
 
     query["$or"] = [
-      { courseId: { $in: coursesManaged } },
-      { levelId: { $in: levelsManaged } },
-      { subjectId: { $in: subjectsManaged } }
+      { pathwayId: { $in: pathwaysManaged } },
+      { classId: { $in: classsManaged } },
+      { classSubjectId: { $in: subjectsManaged } }
     ];
   }
 
@@ -340,21 +340,21 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
     attendanceCustomId,
     academicYearId,
     academicYear,
-    courseId,
+    pathwayId,
     attendanceStatus,
     attendanceDate,
-    courseCustomId,
-    courseFullTitle,
-    courseManagerStaffId,
-    courseManagerCustomStaffId,
-    courseManagerFullName,
-    levelManagerStaffId,
-    levelManagerCustomStaffId,
-    levelManagerFullName,
-    levelId,
-    levelCustomId,
-    level,
-    subjectId,
+    pathwayCustomId,
+    pathwayFullTitle,
+    pathwayManagerStaffId,
+    pathwayManagerCustomStaffId,
+    pathwayManagerFullName,
+    classManagerStaffId,
+    classManagerCustomStaffId,
+    classManagerFullName,
+    classId,
+    classCustomId,
+    className,
+    classSubjectId,
     subjectCustomId,
     subjectFullTitle,
     subjectTeacherCustomStaffId,
@@ -401,11 +401,11 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
   const hasManagerAccess = checkAccess(
     account,
     creatorTabAccess,
-    "Create Student Subject Attendance (For Level | Course Managers | Subject Teachers)"
+    "Create Student Subject Attendance (For Class | Pathway Managers | Subject Teachers)"
   );
   if (!absoluteAdmin && !hasAdminAccess && !hasManagerAccess) {
     throwError(
-      "Unauthorised Action: You do not have access to create student subject attendance for this course / level / subject or any other course / level / subject - Please contact your admin",
+      "Unauthorised Action: You do not have access to create student subject attendance for this pathway / class / subject or any other pathway / class / subject - Please contact your admin",
       403
     );
   }
@@ -429,23 +429,23 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
     );
   }
 
-  const courseExists = await Course.findOne({ organisationId: orgParsedId, courseCustomId });
-  if (!courseExists) {
+  const pathwayExists = await Pathway.findOne({ organisationId: orgParsedId, pathwayCustomId });
+  if (!pathwayExists) {
     throwError(
-      "This course does not exist in this organisation - Ensure it has been created or has not been deleted",
+      "This pathway does not exist in this organisation - Ensure it has been created or has not been deleted",
       409
     );
   }
 
-  const levelExists = await Level.findOne({ organisationId: orgParsedId, levelCustomId });
-  if (!levelExists) {
+  const classExists = await Class.findOne({ organisationId: orgParsedId, classCustomId });
+  if (!classExists) {
     throwError(
-      "This level does not exist in this organisation - Ensure it has been created or has not been deleted",
+      "This class does not exist in this organisation - Ensure it has been created or has not been deleted",
       409
     );
   }
 
-  const subjectExists = await Subject.findOne({ organisationId: orgParsedId, subjectCustomId });
+  const subjectExists = await ClassSubject.findOne({ organisationId: orgParsedId, subjectCustomId });
   if (!subjectExists) {
     throwError(
       "This subject does not exist in this organisation - Ensure it has been created or has not been deleted",
@@ -453,33 +453,33 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
     );
   }
 
-  const courseManagerExists = await CourseManager.findOne({
+  const pathwayManagerExists = await PathwayManager.findOne({
     organisationId: orgParsedId,
-    courseId,
-    courseManagerCustomStaffId
+    pathwayId,
+    pathwayManagerCustomStaffId
   });
-  if (!courseManagerExists) {
+  if (!pathwayManagerExists) {
     throwError(
-      "This course manager does not have a management record related to this course- Ensure you have created one for them",
+      "This pathway manager does not have a management record related to this pathway- Ensure you have created one for them",
       409
     );
   }
 
-  const levelManagerExists = await LevelManager.findOne({
+  const classManagerExists = await ClassTutor.findOne({
     organisationId: orgParsedId,
-    levelId,
-    levelManagerCustomStaffId
+    classId,
+    classManagerCustomStaffId
   });
-  if (!levelManagerExists) {
+  if (!classManagerExists) {
     throwError(
-      "This level manager does not have a management record related to this level- Ensure you have created one for them",
+      "This class manager does not have a management record related to this class- Ensure you have created one for them",
       409
     );
   }
 
-  const subjectTeacherExists = await SubjectTeacher.findOne({
+  const subjectTeacherExists = await ClassSubjectTeacher.findOne({
     organisationId: orgParsedId,
-    subjectId,
+    classSubjectId,
     subjectTeacherCustomStaffId
   });
   if (!subjectTeacherExists) {
@@ -494,23 +494,23 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
     organisationId: orgParsedId,
     searchText: generateSearchText([
       attendanceCustomId,
-      courseFullTitle,
-      level,
-      courseId,
-      levelId,
-      courseCustomId,
-      levelCustomId,
+      pathwayFullTitle,
+      className,
+      pathwayId,
+      classId,
+      pathwayCustomId,
+      classCustomId,
       attendanceStatus,
       academicYear,
       academicYearId,
       attendanceDate,
-      courseManagerStaffId,
-      courseManagerCustomStaffId,
-      courseManagerFullName,
-      levelManagerStaffId,
-      levelManagerCustomStaffId,
-      levelManagerFullName,
-      subjectId,
+      pathwayManagerStaffId,
+      pathwayManagerCustomStaffId,
+      pathwayManagerFullName,
+      classManagerStaffId,
+      classManagerCustomStaffId,
+      classManagerFullName,
+      classSubjectId,
       subjectCustomId,
       subjectFullTitle,
       subjectTeacherCustomStaffId,
@@ -532,7 +532,7 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
       "Student Attendance Creation",
       "StudentSubjectAttendanceTemplate",
       attendance?._id,
-      `${attendanceDate} - ${attendanceCustomId} - ${courseFullTitle} - ${level} - ${subjectFullTitle}`,
+      `${attendanceDate} - ${attendanceCustomId} - ${pathwayFullTitle} - ${className} - ${subjectFullTitle}`,
       [
         {
           kind: "N",
@@ -554,11 +554,11 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
       attendanceId: attendance?._id,
       academicYearId,
       academicYear,
-      courseId,
-      courseFullTitle,
-      levelId,
-      level,
-      subjectId,
+      pathwayId,
+      pathwayFullTitle,
+      classId,
+      className,
+      classSubjectId,
       subjectFullTitle,
       attendanceDate,
       studentId: studentSubjectAttendance.studentId,
@@ -588,10 +588,10 @@ export const createStudentSubjectAttendance = asyncHandler(async (req: Request, 
           mappedAttendances,
           attendance,
           attendanceExists,
-          levelManagerExists,
-          courseManagerExists,
-          levelExists,
-          courseExists,
+          classManagerExists,
+          pathwayManagerExists,
+          classExists,
+          pathwayExists,
           academicYearExists,
           subjectExists,
           subjectTeacherExists,
@@ -612,21 +612,21 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
     attendanceCustomId,
     academicYearId,
     academicYear,
-    courseId,
+    pathwayId,
     attendanceStatus,
     attendanceDate,
-    courseCustomId,
-    courseFullTitle,
-    courseManagerStaffId,
-    courseManagerCustomStaffId,
-    courseManagerFullName,
-    levelManagerStaffId,
-    levelManagerCustomStaffId,
-    levelManagerFullName,
-    levelId,
-    levelCustomId,
-    level,
-    subjectId,
+    pathwayCustomId,
+    pathwayFullTitle,
+    pathwayManagerStaffId,
+    pathwayManagerCustomStaffId,
+    pathwayManagerFullName,
+    classManagerStaffId,
+    classManagerCustomStaffId,
+    classManagerFullName,
+    classId,
+    classCustomId,
+    className,
+    classSubjectId,
     subjectCustomId,
     subjectFullTitle,
     subjectTeacherCustomStaffId,
@@ -666,11 +666,11 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
   const hasManagerAccess = checkAccess(
     account,
     creatorTabAccess,
-    "Create Student Subject Attendance (For Level | Course Managers | Subject Teachers)"
+    "Create Student Subject Attendance (For Class | Pathway Managers | Subject Teachers)"
   );
   if (!absoluteAdmin && !hasAdminAccess && !hasManagerAccess) {
     throwError(
-      "Unauthorised Action: You do not have access to create student subject attendance for this course / level or any other course / level - Please contact your admin",
+      "Unauthorised Action: You do not have access to create student subject attendance for this pathway / class or any other pathway / class - Please contact your admin",
       403
     );
   }
@@ -695,23 +695,23 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
     );
   }
 
-  const courseExists = await Course.findOne({ organisationId: orgParsedId, courseCustomId });
-  if (!courseExists) {
+  const pathwayExists = await Pathway.findOne({ organisationId: orgParsedId, pathwayCustomId });
+  if (!pathwayExists) {
     throwError(
-      "No course with the provided Custom Id exist - Please create the course or change the course custom Id",
+      "No pathway with the provided Custom Id exist - Please create the pathway or change the pathway custom Id",
       409
     );
   }
 
-  const levelExists = await Level.findOne({ organisationId: orgParsedId, levelCustomId });
-  if (!levelExists) {
+  const classExists = await Class.findOne({ organisationId: orgParsedId, classCustomId });
+  if (!classExists) {
     throwError(
-      "No level with the provided Custom Id exist - Please create the level or change the level custom Id",
+      "No class with the provided Custom Id exist - Please create the class or change the class custom Id",
       409
     );
   }
 
-  const subjectExists = await Subject.findOne({ organisationId: orgParsedId, subjectCustomId });
+  const subjectExists = await ClassSubject.findOne({ organisationId: orgParsedId, subjectCustomId });
   if (!subjectExists) {
     throwError(
       "This subject does not exist in this organisation - Ensure it has been created or has not been deleted",
@@ -719,33 +719,33 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
     );
   }
 
-  const courseManagerExists = await CourseManager.findOne({
+  const pathwayManagerExists = await PathwayManager.findOne({
     organisationId: orgParsedId,
-    courseId,
-    courseManagerCustomStaffId
+    pathwayId,
+    pathwayManagerCustomStaffId
   });
-  if (!courseManagerExists) {
+  if (!pathwayManagerExists) {
     throwError(
-      "This course manager does not have a management record related to this course- Ensure you have created one for them",
+      "This pathway manager does not have a management record related to this pathway- Ensure you have created one for them",
       409
     );
   }
 
-  const levelManagerExists = await LevelManager.findOne({
+  const classManagerExists = await ClassTutor.findOne({
     organisationId: orgParsedId,
-    levelId,
-    levelManagerCustomStaffId
+    classId,
+    classManagerCustomStaffId
   });
-  if (!levelManagerExists) {
+  if (!classManagerExists) {
     throwError(
-      "This level manager does not have a management record related to this level- Ensure you have created one for them",
+      "This class manager does not have a management record related to this class- Ensure you have created one for them",
       409
     );
   }
 
-  const subjectTeacherExists = await SubjectTeacher.findOne({
+  const subjectTeacherExists = await ClassSubjectTeacher.findOne({
     organisationId: orgParsedId,
-    subjectId,
+    classSubjectId,
     subjectTeacherCustomStaffId
   });
   if (!subjectTeacherExists) {
@@ -761,23 +761,23 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
       ...rest,
       searchText: generateSearchText([
         attendanceCustomId,
-        courseFullTitle,
-        level,
-        courseId,
-        levelId,
-        courseCustomId,
-        levelCustomId,
+        pathwayFullTitle,
+        className,
+        pathwayId,
+        classId,
+        pathwayCustomId,
+        classCustomId,
         attendanceStatus,
         academicYear,
         academicYearId,
         attendanceDate,
-        courseManagerStaffId,
-        courseManagerCustomStaffId,
-        courseManagerFullName,
-        levelManagerStaffId,
-        levelManagerCustomStaffId,
-        levelManagerFullName,
-        subjectId,
+        pathwayManagerStaffId,
+        pathwayManagerCustomStaffId,
+        pathwayManagerFullName,
+        classManagerStaffId,
+        classManagerCustomStaffId,
+        classManagerFullName,
+        classSubjectId,
         subjectCustomId,
         subjectFullTitle,
         subjectTeacherCustomStaffId,
@@ -802,7 +802,7 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
       "Student Attendance Update",
       "StudentSubjectAttendanceTemplate",
       updatedStudentSubjectAttendance?._id,
-      `${attendanceDate} - ${attendanceCustomId} - ${courseFullTitle} - ${level}`,
+      `${attendanceDate} - ${attendanceCustomId} - ${pathwayFullTitle} - ${className}`,
       difference,
       new Date()
     );
@@ -822,11 +822,11 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
             attendanceId: attendanceExists?._id.toString(),
             academicYearId,
             academicYear,
-            courseId,
-            courseFullTitle,
-            levelId,
-            level,
-            subjectId,
+            pathwayId,
+            pathwayFullTitle,
+            classId,
+            className,
+            classSubjectId,
             subjectFullTitle,
             attendanceDate,
             studentId: studentSubjectAttendance.studentId,
@@ -870,10 +870,10 @@ export const updateStudentSubjectAttendance = asyncHandler(async (req: Request, 
           mappedAttendances,
           updatedStudentSubjectAttendance,
           attendanceExists,
-          levelManagerExists,
-          courseManagerExists,
-          levelExists,
-          courseExists,
+          classManagerExists,
+          pathwayManagerExists,
+          classExists,
+          pathwayExists,
           academicYearExists,
           subjectExists,
           subjectTeacherExists,
@@ -920,7 +920,7 @@ export const deleteStudentSubjectAttendance = asyncHandler(async (req: Request, 
   const hasManagerAccess = checkAccess(
     account,
     creatorTabAccess,
-    "Create Student Subject Attendance (For Level | Course Managers | Subject Teachers)"
+    "Create Student Subject Attendance (For Class | Pathway Managers | Subject Teachers)"
   );
   if (!absoluteAdmin && !hasAdminAccess && !hasManagerAccess) {
     throwError(

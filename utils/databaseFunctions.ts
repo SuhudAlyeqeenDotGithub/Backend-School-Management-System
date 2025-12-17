@@ -13,12 +13,12 @@ import { customAlphabet } from "nanoid";
 import parsePhoneNumberFromString from "libphonenumber-js";
 import { Student } from "../models/student/studentProfile.ts";
 import { Programme, ProgrammeManager } from "../models/curriculum/programme.ts";
-import { Course, CourseManager } from "../models/curriculum/course.ts";
-import { Level, LevelManager } from "../models/curriculum/level.ts";
+import { Pathway, PathwayManager } from "../models/curriculum/pathway.ts";
+import { Class, ClassTutor } from "../models/curriculum/class.ts";
 import { BaseSubject, BaseSubjectManager } from "../models/curriculum/basesubject.ts";
 import { Topic } from "../models/curriculum/topic.ts";
 import { Syllabus } from "../models/curriculum/syllabus.ts";
-import { Subject, SubjectTeacher } from "../models/curriculum/subject.ts";
+import { ClassSubject, ClassSubjectTeacher } from "../models/curriculum/classSubject.ts";
 import { StudentEnrollment } from "../models/student/enrollment.ts";
 import { StudentDayAttendanceTemplate } from "../models/student/dayattendance.ts";
 import { StudentSubjectAttendanceTemplate } from "../models/student/subjectAttendance.ts";
@@ -138,14 +138,14 @@ export const getGoogleCloudFileSize = async (file: any) => {
 };
 
 export const checkOrgAndUserActiveness = (organisationDoc: any, userDoc: any) => {
-  if (organisationDoc.accountStatus !== "Active") {
+  if (organisationDoc.status !== "Active") {
     return {
       message: "Your organisation is not active - Please contact your admin if you need help",
       checkPassed: false
     };
   }
 
-  if (userDoc.accountStatus !== "Active") {
+  if (userDoc.status !== "Active") {
     return { message: "You account is not active - Please contact your admin if you need help", checkPassed: false };
   }
 
@@ -234,7 +234,9 @@ export const logActivity = async (
 
 // function to confirm account existence
 export const confirmAccount = async (accountId: string) => {
-  const account = await Account.findById(accountId).populate([{ path: "roleId" }, { path: "staffId" }]);
+  const account = await Account.findById(accountId)
+    .populate([{ path: "roleId" }, { path: "staffId" }])
+    .lean();
   if (!account) {
     throwError("This account does not exist", 401);
   }
@@ -244,7 +246,7 @@ export const confirmAccount = async (accountId: string) => {
 
 // function to confirm role existece
 export const confirmRole = async (roleId: string) => {
-  const role = await Role.findById(roleId).populate("accountId");
+  const role = await Role.findById(roleId).populate("accountId").lean();
 
   if (!role) {
     throwError("This role does not exist", 401);
@@ -255,15 +257,16 @@ export const confirmRole = async (roleId: string) => {
 
 export const fetchRoles = async (asWho: string, orgId: string, selfId: string) => {
   if (asWho === "Absolute Admin") {
-    const roles = await Role.find({ organisationId: orgId }).populate("accountId");
+    const roles = await Role.find({ organisationId: orgId }).populate("accountId").sort({ _id: -1 }).lean();
     if (!roles) {
       throwError("Error fetching roles", 500);
     }
     return roles;
   } else {
-    const roles = await Role.find({ organisationId: orgId, absoluteAdmin: false, _id: { $ne: selfId } }).populate(
-      "accountId"
-    );
+    const roles = await Role.find({ organisationId: orgId, absoluteAdmin: false, _id: { $ne: selfId } })
+      .sort({ _id: -1 })
+      .populate("accountId")
+      .lean();
     if (!roles) {
       throwError("Error fetching roles", 500);
     }
@@ -284,20 +287,22 @@ export const fetchUsers = async (
   if (asWho === "Absolute Admin") {
     users = await Account.find(
       { ...query, organisationId: orgId },
-      "_id organisationId staffId roleId uniqueTabAccess features searchText accountStatus accountEmail accountName createdAt updatedAt"
+      "_id organisationId staffId roleId uniqueTabAccess features searchText status email name createdAt updatedAt"
     )
       .sort({ _id: -1 })
       .limit(limit + 1)
-      .populate([{ path: "staffId" }, { path: "roleId" }]);
+      .populate([{ path: "staffId" }, { path: "roleId" }])
+      .lean();
     totalCount = await Account.countDocuments({ ...query, organisationId: orgId });
   } else {
     users = await Account.find(
       { ...query, organisationId: orgId, staffId: { $ne: selfId } },
-      "_id organisationId staffId roleId uniqueTabAccess features searchText accountStatus accountEmail accountName createdAt updatedAt"
+      "_id organisationId staffId roleId uniqueTabAccess features searchText status email name createdAt updatedAt"
     )
       .sort({ _id: -1 })
       .limit(limit + 1)
-      .populate([{ path: "staffId" }, { path: "roleId" }]);
+      .populate([{ path: "staffId" }, { path: "roleId" }])
+      .lean();
     totalCount = await Account.countDocuments({ ...query, organisationId: orgId, staffId: { $ne: selfId } });
   }
 
@@ -325,7 +330,8 @@ export const fetchActivityLogs = async (query: any, cursorType: string, limit: n
   const activityLogs = await ActivityLog.find({ ...query, organisationId: orgId })
     .sort({ _id: -1 })
     .limit(limit + 1)
-    .populate([{ path: "accountId", populate: [{ path: "staffId" }, { path: "roleId" }] }, { path: "recordId" }]);
+    .populate([{ path: "accountId", populate: [{ path: "staffId" }, { path: "roleId" }] }, { path: "recordId" }])
+    .lean();
   const totalCount = await ActivityLog.countDocuments({ ...query, organisationId: orgId });
 
   if (!activityLogs) {
@@ -364,8 +370,9 @@ export const fetchBillings = async (
       .limit(limit + 1)
       .populate({
         path: "organisationId",
-        select: "organisationId accountName accountEmail accountPhone organisationInitial accountType"
-      });
+        select: "organisationId name email phone organisationInitial accountType"
+      })
+      .lean();
     totalCount = await Billing.countDocuments({ ...query });
   } else {
     billings = await Billing.find({ ...query, organisationId: orgId })
@@ -373,8 +380,9 @@ export const fetchBillings = async (
       .limit(limit + 1)
       .populate({
         path: "organisationId",
-        select: "organisationId accountName accountEmail accountPhone organisationInitial accountType"
-      });
+        select: "organisationId name email phone organisationInitial accountType"
+      })
+      .lean();
     totalCount = await Billing.countDocuments({ ...query, organisationId: orgId });
   }
 
@@ -401,9 +409,11 @@ export const fetchBillings = async (
 export const fetchAllStaffProfiles = async (asWho: string, orgId: string, selfId: string) => {
   let staffProfiles;
   if (asWho === "Absolute Admin") {
-    staffProfiles = await Staff.find({ organisationId: orgId }).sort({ _id: -1 });
+    staffProfiles = await Staff.find({ organisationId: orgId }).sort({ _id: -1 }).lean();
   } else {
-    staffProfiles = await Staff.find({ organisationId: orgId, staffCustomId: { $ne: selfId } }).sort({ _id: -1 });
+    staffProfiles = await Staff.find({ organisationId: orgId, customId: { $ne: selfId } })
+      .sort({ _id: -1 })
+      .lean();
   }
 
   if (!staffProfiles) {
@@ -426,13 +436,15 @@ export const fetchStaffProfiles = async (
   if (asWho === "Absolute Admin") {
     staffProfiles = await Staff.find({ ...query, organisationId: orgId })
       .sort({ _id: -1 })
-      .limit(limit + 1);
+      .limit(limit + 1)
+      .lean();
     totalCount = await Staff.countDocuments({ ...query, organisationId: orgId });
   } else {
-    staffProfiles = await Staff.find({ ...query, organisationId: orgId, staffCustomId: { $ne: selfId } })
+    staffProfiles = await Staff.find({ ...query, organisationId: orgId, customId: { $ne: selfId } })
       .sort({ _id: -1 })
-      .limit(limit + 1);
-    totalCount = await Staff.countDocuments({ ...query, organisationId: orgId, staffCustomId: { $ne: selfId } });
+      .limit(limit + 1)
+      .lean();
+    totalCount = await Staff.countDocuments({ ...query, organisationId: orgId, customId: { $ne: selfId } });
   }
 
   if (!staffProfiles) {
@@ -458,9 +470,11 @@ export const fetchStaffProfiles = async (
 export const fetchAllStudentProfiles = async (asWho: string, orgId: string, selfId: string) => {
   let studentProfiles;
   if (asWho === "Absolute Admin") {
-    studentProfiles = await Student.find({ organisationId: orgId }).sort({ _id: -1 });
+    studentProfiles = await Student.find({ organisationId: orgId }).sort({ _id: -1 }).lean();
   } else {
-    studentProfiles = await Student.find({ organisationId: orgId, studentCustomId: { $ne: selfId } }).sort({ _id: -1 });
+    studentProfiles = await Student.find({ organisationId: orgId, studentCustomId: { $ne: selfId } })
+      .sort({ _id: -1 })
+      .lean();
   }
 
   if (!studentProfiles) {
@@ -483,12 +497,14 @@ export const fetchStudentProfiles = async (
   if (asWho === "Absolute Admin") {
     studentProfiles = await Student.find({ ...query, organisationId: orgId })
       .sort({ _id: -1 })
-      .limit(limit + 1);
+      .limit(limit + 1)
+      .lean();
     totalCount = await Student.countDocuments({ ...query, organisationId: orgId });
   } else {
     studentProfiles = await Student.find({ ...query, organisationId: orgId, studentCustomId: { $ne: selfId } })
       .sort({ _id: -1 })
-      .limit(limit + 1);
+      .limit(limit + 1)
+      .lean();
     totalCount = await Student.countDocuments({ ...query, organisationId: orgId, studentCustomId: { $ne: selfId } });
   }
 
@@ -513,7 +529,7 @@ export const fetchStudentProfiles = async (
 };
 
 export const fetchAllProgrammes = async (orgId: string) => {
-  const programmes = await Programme.find({ organisationId: orgId });
+  const programmes = await Programme.find({ organisationId: orgId }).lean();
 
   if (!programmes) {
     throwError("Error fetching programmes", 500);
@@ -525,7 +541,8 @@ export const fetchAllProgrammes = async (orgId: string) => {
 export const fetchProgrammes = async (query: any, cursorType: string, limit: number, orgId: string) => {
   const programmes = await Programme.find({ ...query, organisationId: orgId })
     .sort({ _id: -1 })
-    .limit(limit + 1);
+    .limit(limit + 1)
+    .lean();
   const totalCount = await Programme.countDocuments({ ...query, organisationId: orgId });
 
   if (!programmes) {
@@ -561,7 +578,8 @@ export const fetchProgrammeManagers = async (
   if (asWho === "Absolute Admin") {
     programmeManagers = await ProgrammeManager.find({ ...query, organisationId: orgId })
       .sort({ _id: -1 })
-      .limit(limit + 1);
+      .limit(limit + 1)
+      .lean();
     totalCount = await ProgrammeManager.countDocuments({ ...query, organisationId: orgId });
   } else {
     programmeManagers = await ProgrammeManager.find({
@@ -570,7 +588,8 @@ export const fetchProgrammeManagers = async (
       programmeManagerStaffId: { $ne: selfId }
     })
       .sort({ _id: -1 })
-      .limit(limit + 1);
+      .limit(limit + 1)
+      .lean();
     totalCount = await ProgrammeManager.countDocuments({
       ...query,
       organisationId: orgId,
@@ -598,43 +617,44 @@ export const fetchProgrammeManagers = async (
   };
 };
 
-export const fetchAllCourses = async (orgId: string) => {
-  const courses = await Course.find({ organisationId: orgId }).sort({ _id: -1 });
+export const fetchAllPathways = async (orgId: string) => {
+  const pathways = await Pathway.find({ organisationId: orgId }).sort({ _id: -1 }).lean();
 
-  if (!courses) {
+  if (!pathways) {
     throwError("Error fetching student profiles", 500);
   }
 
-  return courses;
+  return pathways;
 };
 
-export const fetchCourses = async (query: any, cursorType: string, limit: number, orgId: string) => {
-  const courses = await Course.find({ ...query, organisationId: orgId })
+export const fetchPathways = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const pathways = await Pathway.find({ ...query, organisationId: orgId })
     .sort({ _id: -1 })
-    .limit(limit + 1);
-  const totalCount = await Course.countDocuments({ ...query, organisationId: orgId });
+    .limit(limit + 1)
+    .lean();
+  const totalCount = await Pathway.countDocuments({ ...query, organisationId: orgId });
 
-  if (!courses) {
-    throwError("Error fetching courses", 500);
+  if (!pathways) {
+    throwError("Error fetching pathways", 500);
   }
-  const hasNext = courses.length > limit || cursorType === "prev";
+  const hasNext = pathways.length > limit || cursorType === "prev";
 
-  if (courses.length > limit) {
-    courses.pop();
+  if (pathways.length > limit) {
+    pathways.pop();
   }
-  const chunkCount = courses.length;
+  const chunkCount = pathways.length;
 
   return {
-    courses,
+    pathways,
     totalCount,
     chunkCount,
-    nextCursor: courses[courses.length - 1]?._id,
-    prevCursor: courses[0]?._id,
+    nextCursor: pathways[pathways.length - 1]?._id,
+    prevCursor: pathways[0]?._id,
     hasNext
   };
 };
 
-export const fetchCourseManagers = async (
+export const fetchPathwayManagers = async (
   query: any,
   cursorType: string,
   limit: number,
@@ -642,85 +662,88 @@ export const fetchCourseManagers = async (
   orgId: string,
   selfId: string
 ) => {
-  let courseManagers;
+  let pathwayManagers;
   let totalCount;
   if (asWho === "Absolute Admin") {
-    courseManagers = await CourseManager.find({ ...query, organisationId: orgId })
+    pathwayManagers = await PathwayManager.find({ ...query, organisationId: orgId })
       .sort({ _id: -1 })
-      .limit(limit + 1);
-    totalCount = await CourseManager.countDocuments({ ...query, organisationId: orgId });
+      .limit(limit + 1)
+      .lean();
+    totalCount = await PathwayManager.countDocuments({ ...query, organisationId: orgId });
   } else {
-    courseManagers = await CourseManager.find({
+    pathwayManagers = await PathwayManager.find({
       ...query,
       organisationId: orgId,
-      courseManagerStaffId: { $ne: selfId }
+      pathwayManagerStaffId: { $ne: selfId }
     })
       .sort({ _id: -1 })
-      .limit(limit + 1);
-    totalCount = await CourseManager.countDocuments({
+      .limit(limit + 1)
+      .lean();
+    totalCount = await PathwayManager.countDocuments({
       ...query,
       organisationId: orgId,
-      courseManagerStaffId: { $ne: selfId }
+      pathwayManagerStaffId: { $ne: selfId }
     });
   }
 
-  if (!courseManagers) {
-    throwError("Error fetching course managers", 500);
+  if (!pathwayManagers) {
+    throwError("Error fetching pathway managers", 500);
   }
-  const hasNext = courseManagers.length > limit || cursorType === "prev";
+  const hasNext = pathwayManagers.length > limit || cursorType === "prev";
 
-  if (courseManagers.length > limit) {
-    courseManagers.pop();
+  if (pathwayManagers.length > limit) {
+    pathwayManagers.pop();
   }
-  const chunkCount = courseManagers.length;
+  const chunkCount = pathwayManagers.length;
 
   return {
-    courseManagers,
+    pathwayManagers,
     totalCount,
     chunkCount,
-    nextCursor: courseManagers[courseManagers.length - 1]?._id,
-    prevCursor: courseManagers[0]?._id,
+    nextCursor: pathwayManagers[pathwayManagers.length - 1]?._id,
+    prevCursor: pathwayManagers[0]?._id,
     hasNext
   };
 };
 
-export const fetchAllLevels = async (orgId: string) => {
-  const levels = await Level.find({ organisationId: orgId }).sort({ _id: -1 });
+export const fetchAllClasses = async (orgId: string) => {
+  const classs = await Class.find({ organisationId: orgId }).sort({ _id: -1 }).lean();
 
-  if (!levels) {
-    throwError("Error fetching levels", 500);
+  if (!classs) {
+    throwError("Error fetching classs", 500);
   }
 
-  return levels;
+  return classs;
 };
 
-export const fetchLevels = async (query: any, cursorType: string, limit: number, orgId: string) => {
-  const levels = await Level.find({ ...query, organisationId: orgId })
+export const fetchClasses = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const classs = await Class.find({ ...query, organisationId: orgId })
     .sort({ _id: -1 })
-    .limit(limit + 1);
-  const totalCount = await Level.countDocuments({ ...query, organisationId: orgId });
+    .limit(limit + 1)
+    .lean();
+  const totalCount = await Class.countDocuments({ ...query, organisationId: orgId });
 
-  if (!levels) {
-    throwError("Error fetching levels", 500);
+  if (!classs) {
+    throwError("Error fetching classs", 500);
   }
-  const hasNext = levels.length > limit || cursorType === "prev";
+  const hasNext = classs.length > limit || cursorType === "prev";
 
-  if (levels.length > limit) {
-    levels.pop();
+  if (classs.length > limit) {
+    classs.pop();
   }
-  const chunkCount = levels.length;
+  const chunkCount = classs.length;
 
   return {
-    levels,
+    classs,
     totalCount,
     chunkCount,
-    nextCursor: levels[levels.length - 1]?._id,
-    prevCursor: levels[0]?._id,
+    nextCursor: classs[classs.length - 1]?._id,
+    prevCursor: classs[0]?._id,
     hasNext
   };
 };
 
-export const fetchLevelManagers = async (
+export const fetchClassTutors = async (
   query: any,
   cursorType: string,
   limit: number,
@@ -728,83 +751,75 @@ export const fetchLevelManagers = async (
   orgId: string,
   selfId: string
 ) => {
-  let levelManagers;
+  let classTutors;
   let totalCount;
   if (asWho === "Absolute Admin") {
-    levelManagers = await LevelManager.find({ ...query, organisationId: orgId })
+    classTutors = await ClassTutor.find({ ...query, organisationId: orgId })
       .sort({ _id: -1 })
-      .limit(limit + 1);
-    totalCount = await LevelManager.countDocuments({ ...query, organisationId: orgId });
+      .limit(limit + 1)
+      .lean();
+    totalCount = await ClassTutor.countDocuments({ ...query, organisationId: orgId });
   } else {
-    levelManagers = await LevelManager.find({
+    classTutors = await ClassTutor.find({
       ...query,
       organisationId: orgId,
-      levelManagerStaffId: { $ne: selfId }
+      classTutorStaffId: { $ne: selfId }
     })
       .sort({ _id: -1 })
-      .limit(limit + 1);
-    totalCount = await LevelManager.countDocuments({
+      .limit(limit + 1)
+      .lean();
+    totalCount = await ClassTutor.countDocuments({
       ...query,
       organisationId: orgId,
-      levelManagerStaffId: { $ne: selfId }
+      classTutorStaffId: { $ne: selfId }
     });
   }
 
-  if (!levelManagers) {
-    throwError("Error fetching level managers", 500);
+  if (!classTutors) {
+    throwError("Error fetching class managers", 500);
   }
-  const hasNext = levelManagers.length > limit || cursorType === "prev";
+  const hasNext = classTutors.length > limit || cursorType === "prev";
 
-  if (levelManagers.length > limit) {
-    levelManagers.pop();
+  if (classTutors.length > limit) {
+    classTutors.pop();
   }
-  const chunkCount = levelManagers.length;
+  const chunkCount = classTutors.length;
 
   return {
-    levelManagers,
+    classTutors,
     totalCount,
     chunkCount,
-    nextCursor: levelManagers[levelManagers.length - 1]?._id,
-    prevCursor: levelManagers[0]?._id,
+    nextCursor: classTutors[classTutors.length - 1]?._id,
+    prevCursor: classTutors[0]?._id,
     hasNext
   };
 };
 
-export const fetchAllLevelManagers = async (orgId: string) => {
-  const levelManagers = await LevelManager.find({ organisationId: orgId });
+export const fetchAllClassTutors = async (orgId: string) => {
+  const classTutors = await ClassTutor.find({ organisationId: orgId }).lean();
 
-  if (!levelManagers) {
-    throwError("Error fetching level managers", 500);
+  if (!classTutors) {
+    throwError("Error fetching class managers", 500);
   }
 
-  return levelManagers;
+  return classTutors;
 };
 
-export const fetchAllCourseManagers = async (orgId: string) => {
-  const courseManagers = await CourseManager.find({ organisationId: orgId });
+export const fetchAllPathwayManagers = async (orgId: string) => {
+  const pathwayManagers = await PathwayManager.find({ organisationId: orgId }).lean();
 
-  if (!courseManagers) {
-    throwError("Error fetching course managers", 500);
+  if (!pathwayManagers) {
+    throwError("Error fetching pathway managers", 500);
   }
 
-  return courseManagers;
-};
-
-export const fetchAllSubjectTeachers = async (orgId: string) => {
-  const subjectTeachers = await SubjectTeacher.find({ organisationId: orgId });
-
-  if (!subjectTeachers) {
-    throwError("Error fetching course teachers", 500);
-  }
-
-  return subjectTeachers;
+  return pathwayManagers;
 };
 
 export const fetchAllBaseSubjects = async (orgId: string) => {
-  const baseSubjects = await BaseSubject.find({ organisationId: orgId }).sort({ _id: -1 });
+  const baseSubjects = await BaseSubject.find({ organisationId: orgId }).lean();
 
   if (!baseSubjects) {
-    throwError("Error fetching baseSubjects", 500);
+    throwError("Error fetching base subjects", 500);
   }
 
   return baseSubjects;
@@ -813,11 +828,12 @@ export const fetchAllBaseSubjects = async (orgId: string) => {
 export const fetchBaseSubjects = async (query: any, cursorType: string, limit: number, orgId: string) => {
   const baseSubjects = await BaseSubject.find({ ...query, organisationId: orgId })
     .sort({ _id: -1 })
-    .limit(limit + 1);
+    .limit(limit + 1)
+    .lean();
   const totalCount = await BaseSubject.countDocuments({ ...query, organisationId: orgId });
 
   if (!baseSubjects) {
-    throwError("Error fetching baseSubjects", 500);
+    throwError("Error fetching base subjects", 500);
   }
   const hasNext = baseSubjects.length > limit || cursorType === "prev";
 
@@ -849,7 +865,8 @@ export const fetchBaseSubjectManagers = async (
   if (asWho === "Absolute Admin") {
     baseSubjectManagers = await BaseSubjectManager.find({ ...query, organisationId: orgId })
       .sort({ _id: -1 })
-      .limit(limit + 1);
+      .limit(limit + 1)
+      .lean();
     totalCount = await BaseSubjectManager.countDocuments({ ...query, organisationId: orgId });
   } else {
     baseSubjectManagers = await BaseSubjectManager.find({
@@ -858,7 +875,8 @@ export const fetchBaseSubjectManagers = async (
       baseSubjectManagerStaffId: { $ne: selfId }
     })
       .sort({ _id: -1 })
-      .limit(limit + 1);
+      .limit(limit + 1)
+      .lean();
     totalCount = await BaseSubjectManager.countDocuments({
       ...query,
       organisationId: orgId,
@@ -867,7 +885,7 @@ export const fetchBaseSubjectManagers = async (
   }
 
   if (!baseSubjectManagers) {
-    throwError("Error fetching baseSubject managers", 500);
+    throwError("Error fetching base subject managers", 500);
   }
   const hasNext = baseSubjectManagers.length > limit || cursorType === "prev";
 
@@ -887,7 +905,7 @@ export const fetchBaseSubjectManagers = async (
 };
 
 export const fetchAllTopics = async (orgId: string) => {
-  const topics = await Topic.find({ organisationId: orgId }).sort({ _id: -1 });
+  const topics = await Topic.find({ organisationId: orgId }).lean();
 
   if (!topics) {
     throwError("Error fetching topics", 500);
@@ -899,7 +917,8 @@ export const fetchAllTopics = async (orgId: string) => {
 export const fetchTopics = async (query: any, cursorType: string, limit: number, orgId: string) => {
   const topics = await Topic.find({ ...query, organisationId: orgId })
     .sort({ _id: -1 })
-    .limit(limit + 1);
+    .limit(limit + 1)
+    .lean();
   const totalCount = await Topic.countDocuments({ ...query, organisationId: orgId });
 
   if (!topics) {
@@ -922,43 +941,54 @@ export const fetchTopics = async (query: any, cursorType: string, limit: number,
   };
 };
 
-export const fetchAllSubjects = async (orgId: string) => {
-  const subjects = await Subject.find({ organisationId: orgId }).sort({ _id: -1 });
+export const fetchAllClassSubjects = async (orgId: string) => {
+  const subjects = await ClassSubject.find({ organisationId: orgId }).lean();
 
   if (!subjects) {
-    throwError("Error fetching subjects", 500);
+    throwError("Error fetching class subjects", 500);
   }
 
   return subjects;
 };
 
-export const fetchSubjects = async (query: any, cursorType: string, limit: number, orgId: string) => {
-  const subjects = await Subject.find({ ...query, organisationId: orgId })
+export const fetchClassSubjects = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const classSubjects = await ClassSubject.find({ ...query, organisationId: orgId })
     .sort({ _id: -1 })
-    .limit(limit + 1);
-  const totalCount = await Subject.countDocuments({ ...query, organisationId: orgId });
+    .limit(limit + 1)
+    .lean();
+  const totalCount = await ClassSubject.countDocuments({ ...query, organisationId: orgId });
 
-  if (!subjects) {
-    throwError("Error fetching subjects", 500);
+  if (!classSubjects) {
+    throwError("Error fetching class subjects", 500);
   }
-  const hasNext = subjects.length > limit || cursorType === "prev";
+  const hasNext = classSubjects.length > limit || cursorType === "prev";
 
-  if (subjects.length > limit) {
-    subjects.pop();
+  if (classSubjects.length > limit) {
+    classSubjects.pop();
   }
-  const chunkCount = subjects.length;
+  const chunkCount = classSubjects.length;
 
   return {
-    subjects,
+    classSubjects,
     totalCount,
     chunkCount,
-    nextCursor: subjects[subjects.length - 1]?._id,
-    prevCursor: subjects[0]?._id,
+    nextCursor: classSubjects[classSubjects.length - 1]?._id,
+    prevCursor: classSubjects[0]?._id,
     hasNext
   };
 };
 
-export const fetchSubjectTeachers = async (
+export const fetchAllClassSubjectTeachers = async (orgId: string) => {
+  const subjectTeachers = await ClassSubjectTeacher.find({ organisationId: orgId }).lean();
+
+  if (!subjectTeachers) {
+    throwError("Error fetching class subject teachers", 500);
+  }
+
+  return subjectTeachers;
+};
+
+export const fetchClassSubjectTeachers = async (
   query: any,
   cursorType: string,
   limit: number,
@@ -966,44 +996,46 @@ export const fetchSubjectTeachers = async (
   orgId: string,
   selfId: string
 ) => {
-  let subjectTeachers;
+  let classSubjectTeachers;
   let totalCount;
   if (asWho === "Absolute Admin") {
-    subjectTeachers = await SubjectTeacher.find({ ...query, organisationId: orgId })
+    classSubjectTeachers = await ClassSubjectTeacher.find({ ...query, organisationId: orgId })
       .sort({ _id: -1 })
-      .limit(limit + 1);
-    totalCount = await SubjectTeacher.countDocuments({ ...query, organisationId: orgId });
+      .limit(limit + 1)
+      .lean();
+    totalCount = await ClassSubjectTeacher.countDocuments({ ...query, organisationId: orgId });
   } else {
-    subjectTeachers = await SubjectTeacher.find({
+    classSubjectTeachers = await ClassSubjectTeacher.find({
       ...query,
       organisationId: orgId,
-      subjectTeacherStaffId: { $ne: selfId }
+      classSubjectTeacherStaffId: { $ne: selfId }
     })
       .sort({ _id: -1 })
-      .limit(limit + 1);
-    totalCount = await SubjectTeacher.countDocuments({
+      .limit(limit + 1)
+      .lean();
+    totalCount = await ClassSubjectTeacher.countDocuments({
       ...query,
       organisationId: orgId,
-      subjectTeacherStaffId: { $ne: selfId }
+      classSubjectTeacherStaffId: { $ne: selfId }
     });
   }
 
-  if (!subjectTeachers) {
-    throwError("Error fetching level managers", 500);
+  if (!classSubjectTeachers) {
+    throwError("Error fetching class managers", 500);
   }
-  const hasNext = subjectTeachers.length > limit || cursorType === "prev";
+  const hasNext = classSubjectTeachers.length > limit || cursorType === "prev";
 
-  if (subjectTeachers.length > limit) {
-    subjectTeachers.pop();
+  if (classSubjectTeachers.length > limit) {
+    classSubjectTeachers.pop();
   }
-  const chunkCount = subjectTeachers.length;
+  const chunkCount = classSubjectTeachers.length;
 
   return {
-    subjectTeachers,
+    classSubjectTeachers,
     totalCount,
     chunkCount,
-    nextCursor: subjectTeachers[subjectTeachers.length - 1]?._id,
-    prevCursor: subjectTeachers[0]?._id,
+    nextCursor: classSubjectTeachers[classSubjectTeachers.length - 1]?._id,
+    prevCursor: classSubjectTeachers[0]?._id,
     hasNext
   };
 };
@@ -1020,7 +1052,8 @@ export const fetchAllSyllabuses = async (orgId: string) => {
 export const fetchSyllabuses = async (query: any, cursorType: string, limit: number, orgId: string) => {
   const syllabuses = await Syllabus.find({ ...query, organisationId: orgId })
     .sort({ _id: -1 })
-    .limit(limit + 1);
+    .limit(limit + 1)
+    .lean();
   const totalCount = await Syllabus.countDocuments({ ...query, organisationId: orgId });
 
   if (!syllabuses) {
@@ -1056,20 +1089,22 @@ export const fetchStaffContracts = async (
   if (asWho === "Absolute Admin") {
     staffContracts = await StaffContract.find({ ...query, organisationId: orgId })
       .sort({ _id: -1 })
-      .limit(limit + 1);
+      .limit(limit + 1)
+      .lean();
     totalCount = await StaffContract.countDocuments({ ...query, organisationId: orgId });
   } else {
     staffContracts = await StaffContract.find({
       ...query,
       organisationId: orgId,
-      staffCustomId: { $ne: selfId }
+      staffId: { $ne: selfId }
     })
       .sort({ _id: -1 })
-      .limit(limit + 1);
+      .limit(limit + 1)
+      .lean();
     totalCount = await StaffContract.countDocuments({
       ...query,
       organisationId: orgId,
-      staffCustomId: { $ne: selfId }
+      staffId: { $ne: selfId }
     });
   }
 
@@ -1097,13 +1132,10 @@ export const fetchStaffContracts = async (
 export const fetchAllStaffContracts = async (asWho: string, orgId: string, selfId: string) => {
   let staffContracts;
   if (asWho === "Absolute Admin") {
-    staffContracts = await StaffContract.find({ organisationId: orgId }).sort({ _id: -1 });
+    staffContracts = await StaffContract.find({ organisationId: orgId }).lean();
   } else {
-    staffContracts = await StaffContract.find({ organisationId: orgId, staffCustomId: { $ne: selfId } }).sort({
-      _id: -1
-    });
+    staffContracts = await StaffContract.find({ organisationId: orgId, staffId: { $ne: selfId } }).lean();
   }
-  ``;
   if (!staffContracts) {
     throwError("Error fetching staff contracts", 500);
   }
@@ -1117,7 +1149,8 @@ export const fetchStudentEnrollments = async (query: any, cursorType: string, li
     organisationId: orgId
   })
     .sort({ _id: -1 })
-    .limit(limit + 1);
+    .limit(limit + 1)
+    .lean();
   const totalCount = await StudentEnrollment.countDocuments({
     ...query,
     organisationId: orgId
@@ -1151,7 +1184,8 @@ export const fetchStudentDayAttendances = async (query: any, cursorType: string,
   })
     .populate("studentDayAttendances")
     .sort({ _id: -1 })
-    .limit(limit + 1);
+    .limit(limit + 1)
+    .lean();
   const totalCount = await StudentDayAttendanceTemplate.countDocuments({
     ...query,
     organisationId: orgId
@@ -1185,7 +1219,8 @@ export const fetchStudentSubjectAttendances = async (query: any, cursorType: str
   })
     .populate("studentSubjectAttendances")
     .sort({ _id: -1 })
-    .limit(limit + 1);
+    .limit(limit + 1)
+    .lean();
   const totalCount = await StudentSubjectAttendanceTemplate.countDocuments({
     ...query,
     organisationId: orgId
@@ -1212,9 +1247,7 @@ export const fetchStudentSubjectAttendances = async (query: any, cursorType: str
   };
 };
 export const fetchAllStudentEnrollments = async (orgId: string) => {
-  const studentEnrollments = await StudentEnrollment.find({ organisationId: orgId }).sort({
-    _id: -1
-  });
+  const studentEnrollments = await StudentEnrollment.find({ organisationId: orgId }).lean();
   if (!studentEnrollments) {
     throwError("Error fetching student enrollments", 500);
   }
@@ -1223,7 +1256,7 @@ export const fetchAllStudentEnrollments = async (orgId: string) => {
 };
 
 export const fetchAcademicYears = async (orgId: string) => {
-  const academicYears = await AcademicYear.find({ organisationId: orgId }).sort({ _id: -1 }).populate("periods");
+  const academicYears = await AcademicYear.find({ organisationId: orgId }).sort({ _id: -1 }).populate("periods").lean();
   if (!academicYears) {
     throwError("Error fetching academic years", 500);
   }

@@ -14,8 +14,8 @@ import { diff } from "deep-diff";
 import { Student } from "../../models/student/studentProfile.ts";
 import { StudentEnrollment } from "../../models/student/enrollment.ts";
 import { AcademicYear } from "../../models/timeline/academicYear.ts";
-import { Course } from "../../models/curriculum/course.ts";
-import { Level } from "../../models/curriculum/level.ts";
+import { Pathway } from "../../models/curriculum/pathway.ts";
+import { Class } from "../../models/curriculum/class.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 
 const validateStudentEnrollment = (studentDataParam: any) => {
@@ -168,12 +168,12 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
     studentFullName,
     enrollmentType,
     enrollmentStatus,
-    courseId,
-    courseCustomId,
-    courseFullTitle,
-    levelId,
-    levelCustomId,
-    level
+    pathwayId,
+    pathwayCustomId,
+    pathwayFullTitle,
+    classId,
+    classCustomId,
+    className
   } = req.body;
 
   if (!validateStudentEnrollment({ ...req.body })) {
@@ -209,6 +209,10 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Student Enrollment");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "Unauthorised Action: You do not have access to create student enrollment - Please contact your admin",
       403
@@ -236,18 +240,18 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
     );
   }
 
-  const courseExists = await Course.findOne({ organisationId: orgParsedId, courseCustomId });
-  if (!courseExists) {
+  const pathwayExists = await Pathway.findOne({ organisationId: orgParsedId, pathwayCustomId });
+  if (!pathwayExists) {
     throwError(
-      "No course with the provided Custom Id exist - Please create the course or change the course custom Id",
+      "No pathway with the provided Custom Id exist - Please create the pathway or change the pathway custom Id",
       409
     );
   }
 
-  const levelExists = await Level.findOne({ organisationId: orgParsedId, levelCustomId });
-  if (!levelExists) {
+  const classExists = await Class.findOne({ organisationId: orgParsedId, classCustomId });
+  if (!classExists) {
     throwError(
-      "No level with the provided Custom Id exist - Please create the level or change the level custom Id",
+      "No class with the provided Custom Id exist - Please create the class or change the class custom Id",
       409
     );
   }
@@ -262,12 +266,12 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
       studentCustomId,
       enrollmentCustomId,
       studentFullName,
-      courseId,
-      courseCustomId,
-      courseFullTitle,
-      levelId,
-      levelCustomId,
-      level,
+      pathwayId,
+      pathwayCustomId,
+      pathwayFullTitle,
+      classId,
+      classCustomId,
+      className,
       enrollmentStatus,
       enrollmentType
     ])
@@ -312,8 +316,8 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
           academicYearExists,
           studentExists,
           enrollementExists,
-          courseExists,
-          levelExists,
+          pathwayExists,
+          classExists,
           organisation,
           role,
           account
@@ -336,12 +340,15 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
     studentFullName,
     enrollmentType,
     enrollmentStatus,
-    courseId,
-    courseCustomId,
-    courseFullTitle,
-    levelId,
-    levelCustomId,
-    level
+    pathwayId,
+    pathwayCustomId,
+    pathwayFullTitle,
+    classId,
+    classCustomId,
+    className,
+    enrollmentExpiresOn,
+    notes,
+    allowances
   } = req.body;
 
   if (!validateStudentEnrollment({ ...req.body })) {
@@ -376,6 +383,10 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Student Enrollment");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "Unauthorised Action: You do not have access to edit student enrollment - Please contact your admin",
       403
@@ -402,18 +413,18 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
     );
   }
 
-  const courseExists = await Course.findOne({ organisationId: orgParsedId, courseCustomId });
-  if (!courseExists) {
+  const pathwayExists = await Pathway.findOne({ organisationId: orgParsedId, pathwayCustomId });
+  if (!pathwayExists) {
     throwError(
-      "No course with the provided Custom Id exist - Please create the course or change the course custom Id",
+      "No pathway with the provided Custom Id exist - Please create the pathway or change the pathway custom Id",
       409
     );
   }
 
-  const levelExists = await Level.findOne({ organisationId: orgParsedId, levelCustomId });
-  if (!levelExists) {
+  const classExists = await Class.findOne({ organisationId: orgParsedId, classCustomId });
+  if (!classExists) {
     throwError(
-      "No level with the provided Custom Id exist - Please create the level or change the level custom Id",
+      "No class with the provided Custom Id exist - Please create the class or change the class custom Id",
       409
     );
   }
@@ -429,12 +440,12 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
         studentCustomId,
         enrollmentCustomId,
         studentFullName,
-        courseId,
-        courseCustomId,
-        courseFullTitle,
-        levelId,
-        levelCustomId,
-        level,
+        pathwayId,
+        pathwayCustomId,
+        pathwayFullTitle,
+        classId,
+        classCustomId,
+        className,
         enrollmentStatus,
         enrollmentType
       ])
@@ -471,8 +482,8 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
         getObjectSize([
           updatedStudentEnrollment,
           academicYearExists,
-          courseExists,
-          levelExists,
+          pathwayExists,
+          classExists,
           organisation,
           role,
           account,
@@ -517,6 +528,10 @@ export const deleteStudentEnrollment = asyncHandler(async (req: Request, res: Re
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Student Enrollment");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "Unauthorised Action: You do not have access to delete student enrollment - Please contact your admin",
       403

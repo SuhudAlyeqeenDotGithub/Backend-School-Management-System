@@ -15,7 +15,7 @@ import { registerBillings } from "../../../utils/billingFunctions.ts";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
 
 const validateBaseSubjectManager = (baseSubjectManagerDataParam: any) => {
-  const { managedUntil, _id, ...copyLocalData } = baseSubjectManagerDataParam;
+  const { managedUntil, ...copyLocalData } = baseSubjectManagerDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -68,32 +68,42 @@ export const getBaseSubjectManagers = asyncHandler(async (req: Request, res: Res
   }
   const hasAccess = checkAccess(account, tabAccess, "View Base Subject Managers");
 
-  if (absoluteAdmin || hasAccess) {
-    const result = await fetchBaseSubjectManagers(
-      query,
-      cursorType as string,
-      parsedLimit,
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      staffId
-    );
-
-    if (!result || !result.baseSubjectManagers) {
-      throwError("Error fetching base subject manager s", 500);
-    }
-
+  if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + result.baseSubjectManagers.length },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([result, organisation, role, account])
-      }
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    res.status(201).json(result);
-    return;
+    throwError(
+      "Unauthorised Action: You do not have access to view base subject managers - Please contact your admin",
+      403
+    );
   }
 
-  throwError("Unauthorised Action: You do not have access to view base subject - Please contact your admin", 403);
+  const result = await fetchBaseSubjectManagers(
+    query,
+    cursorType as string,
+    parsedLimit,
+    absoluteAdmin ? "Absolute Admin" : "User",
+    organisation!._id.toString(),
+    staffId
+  );
+
+  if (!result || !result.baseSubjectManagers) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Error fetching base subject managers", 500);
+  }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 + result.baseSubjectManagers.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([result, organisation, role, account])
+    }
+  ]);
+  res.status(201).json(result);
 });
 
 // controller to handle role creation
@@ -101,41 +111,11 @@ export const createBaseSubjectManager = asyncHandler(async (req: Request, res: R
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const {
-    baseSubjectCustomId,
-    status,
-    baseSubjectId,
-    baseSubjectName,
-    baseSubjectManagerCustomStaffId,
-    baseSubjectManagerFullName
-  } = body;
+  const { status, baseSubjectId, staffId, managerFullName } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
-
-  const staffHasContract = await StaffContract.findOne({
-    organisationId: orgParsedId,
-    staffCustomId: baseSubjectManagerCustomStaffId
-  });
-  if (!staffHasContract) {
-    throwError("The staff has no contract with this organisation - Please create one for them", 409);
-  }
-
-  if (status === "Active") {
-    const baseSubjectAlreadyManaged = await BaseSubjectManager.findOne({
-      organisationId: orgParsedId,
-      baseSubjectId,
-      baseSubjectManagerCustomStaffId,
-      status: "Active"
-    });
-    if (baseSubjectAlreadyManaged) {
-      throwError(
-        "The staff is already an active manager of this base subject - Please assign another staff or deactivate their current management, or set this current one to inactive",
-        409
-      );
-    }
-  }
 
   const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
@@ -152,22 +132,62 @@ export const createBaseSubjectManager = asyncHandler(async (req: Request, res: R
   const hasAccess = checkAccess(account, creatorTabAccess, "Create Base Subject Manager");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "Unauthorised Action: You do not have access to create base subject manager  - Please contact your admin",
       403
     );
   }
 
+  const staffHasContract = await StaffContract.findOne({
+    staffId
+  }).lean();
+  if (!staffHasContract) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("The staff has no contract with this organisation - Please create one for them", 409);
+  }
+
+  if (status === "Active") {
+    const baseSubjectAlreadyManaged = await BaseSubjectManager.findOne({
+      organisationId: orgParsedId,
+      baseSubjectId,
+      staffId,
+      status: "Active"
+    }).lean();
+    if (baseSubjectAlreadyManaged) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 5 },
+        {
+          field: "databaseDataTransfer",
+          value: getObjectSize([organisation, role, account, baseSubjectAlreadyManaged, staffHasContract])
+        }
+      ]);
+      throwError(
+        "The staff is already an active manager of this base subject - Please assign another staff or deactivate their current management, or set this current one to inactive",
+        409
+      );
+    }
+  }
+
   const newBaseSubjectManager = await BaseSubjectManager.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([
-      baseSubjectCustomId,
-      baseSubjectName,
-      baseSubjectManagerCustomStaffId,
-      baseSubjectManagerFullName
-    ])
+    searchText: generateSearchText([baseSubjectId, staffId, managerFullName])
   });
+
+  if (!newBaseSubjectManager) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 7 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Error creating base subject manager", 500);
+  }
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
@@ -179,7 +199,7 @@ export const createBaseSubjectManager = asyncHandler(async (req: Request, res: R
       "Base Subject Manager Creation",
       "BaseSubjectManager",
       newBaseSubjectManager?._id,
-      baseSubjectManagerFullName,
+      managerFullName,
       [
         {
           kind: "N",
@@ -211,7 +231,7 @@ export const createBaseSubjectManager = asyncHandler(async (req: Request, res: R
 export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { baseSubjectCustomId, baseSubjectName, baseSubjectManagerCustomStaffId, baseSubjectManagerFullName } = body;
+  const { baseSubjectId, staffId, managerFullName } = body;
 
   if (!validateBaseSubjectManager(body)) {
     throwError("Please fill in all required fields", 400);
@@ -237,15 +257,23 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
   const hasAccess = checkAccess(account, creatorTabAccess, "Edit Base Subject Manager");
 
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
-      "Unauthorised Action: You do not have access to edit base subject manager  - Please contact your admin",
+      "Unauthorised Action: You do not have access to edit base subject manager - Please contact your admin",
       403
     );
   }
 
-  const originalBaseSubjectManager = await BaseSubjectManager.findOne({ _id: body._id });
+  const originalBaseSubjectManager = await BaseSubjectManager.findOne({ _id: body._id }).lean();
 
   if (!originalBaseSubjectManager) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("An error occured whilst getting old base subject manager  data, Ensure it has not been deleted", 500);
   }
 
@@ -253,17 +281,16 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
     originalBaseSubjectManager?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([
-        baseSubjectCustomId,
-        baseSubjectName,
-        baseSubjectManagerCustomStaffId,
-        baseSubjectManagerFullName
-      ])
+      searchText: generateSearchText([baseSubjectId, staffId, managerFullName])
     },
     { new: true }
-  );
+  ).lean();
 
   if (!updatedBaseSubjectManager) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalBaseSubjectManager]) }
+    ]);
     throwError("Error updating base subject", 500);
   }
 
@@ -278,7 +305,7 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
       "Base Subject Manager Update",
       "BaseSubjectManager",
       updatedBaseSubjectManager?._id,
-      baseSubjectName,
+      managerFullName,
       difference,
       new Date()
     );
@@ -300,14 +327,14 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
 // controller to handle deleting roles
 export const deleteBaseSubjectManager = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { baseSubjectManagerId } = req.body;
-  if (!baseSubjectManagerId) {
+  const { _id } = req.body;
+  if (!_id) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId: creatorRoleId, accountStatus } = account as any;
+  const { roleId: creatorRoleId } = account as any;
 
   const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
 
@@ -321,25 +348,24 @@ export const deleteBaseSubjectManager = asyncHandler(async (req: Request, res: R
     throwError(message, 409);
   }
   const hasAccess = checkAccess(account, creatorTabAccess, "Delete Base Subject Manager");
+
   if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "Unauthorised Action: You do not have access to delete base subject manager  - Please contact your admin",
       403
     );
   }
 
-  const baseSubjectManagerToDelete = await BaseSubjectManager.findOne({
-    _id: baseSubjectManagerId
-  });
-
-  if (!baseSubjectManagerToDelete) {
-    throwError("Error finding base subject manager with provided Custom Id - Please try again", 404);
-  }
-
-  const deletedBaseSubjectManager = await BaseSubjectManager.findByIdAndDelete(
-    baseSubjectManagerToDelete?._id.toString()
-  );
+  const deletedBaseSubjectManager = await BaseSubjectManager.findByIdAndDelete(_id).lean();
   if (!deletedBaseSubjectManager) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Error deleting base subject manager - Please try again", 500);
   }
 
@@ -356,7 +382,7 @@ export const deleteBaseSubjectManager = asyncHandler(async (req: Request, res: R
       "Base Subject Manager Deletion",
       "BaseSubjectManager",
       deletedBaseSubjectManager?._id,
-      deletedBaseSubjectManager?.baseSubjectManagerFullName,
+      deletedBaseSubjectManager?.managerFullName,
       [
         {
           kind: "D" as any,
@@ -370,7 +396,7 @@ export const deleteBaseSubjectManager = asyncHandler(async (req: Request, res: R
   registerBillings(req, [
     {
       field: "databaseOperation",
-      value: 6 + (logActivityAllowed ? 2 : 0)
+      value: 5 + (logActivityAllowed ? 2 : 0)
     },
     {
       field: "databaseStorageAndBackup",
@@ -380,7 +406,7 @@ export const deleteBaseSubjectManager = asyncHandler(async (req: Request, res: R
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([deletedBaseSubjectManager, organisation, role, account, baseSubjectManagerToDelete]) +
+        getObjectSize([deletedBaseSubjectManager, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
