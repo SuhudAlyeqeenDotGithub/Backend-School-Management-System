@@ -16,7 +16,7 @@ import {
   getOrganisations,
   chargeLastBills,
   upgradeToPremium,
-  cancleSubscription,
+  cancelSubscription,
   inititalizeTransaction,
   getOrganisation
 } from "../controllers/adminControllers/billing";
@@ -47,8 +47,8 @@ router.put("/admin/users", checkSubscription, updateUser);
 router.delete("/admin/users", checkSubscription, deleteUser);
 
 // admin activity logs endpoints
-router.get("/admin/activitylogs", checkSubscription, getActivityLogs);
-router.get("/admin/lastactivitylog", checkSubscription, getLastActivityLog);
+router.get("/admin/activity-logs", checkSubscription, getActivityLogs);
+router.get("/admin/last-activity-log", checkSubscription, getLastActivityLog);
 
 // admin setting endopoints
 router.post("/admin/settings", checkSubscription, updateOrgSettings);
@@ -56,8 +56,8 @@ router.post("/admin/settings", checkSubscription, updateOrgSettings);
 // admin billing endpoints
 router.get("/admin/billings", getBillings);
 router.get("/admin/billing/subscription", getSubscription);
-router.post("/admin/billing/subscription/topremium", upgradeToPremium);
-router.post("/admin/billing/subscription/cancel", cancleSubscription);
+router.post("/admin/billing/subscription/toPremium", upgradeToPremium);
+router.post("/admin/billing/subscription/cancel", cancelSubscription);
 
 // owner prepare bills endpoint
 router.post("/admin/billing/preparelastbills", chargeLastBills);

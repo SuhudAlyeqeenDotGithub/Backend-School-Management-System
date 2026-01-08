@@ -1,11 +1,9 @@
 import mongoose from "mongoose";
 const { Schema, model } = mongoose;
-import { getAppProvisionRate, getRenderBaseRate } from "../../utils/envVariableGetters";
 
-import {
-  generateCustomId,
-} from "../../utils/databaseFunctions";
+import { generateCustomId } from "../../utils/databaseFunctions";
 import { generateSearchText, getCurrentMonth, getNextBillingDate } from "../../utils/pureFuctions.ts";
+import { subscribe } from "diagnostics_channel";
 
 export const valueCostType = new mongoose.Schema(
   {
@@ -22,6 +20,7 @@ const billingSchema = new Schema(
       type: String,
       required: true
     },
+    subscriptionType: { type: String, required: true, enum: ["Premium", "Freemium"], default: "Premium" },
     billingMonth: {
       type: String,
       required: true,
@@ -44,7 +43,6 @@ const billingSchema = new Schema(
     paymentStatus: { type: String, required: true, enum: ["Paid", "Unpaid", "Pending", "Failed"], default: "Unpaid" },
     totalCost: {
       type: Number,
-      _id: false,
       required: true,
       default: 0
     },
@@ -58,7 +56,7 @@ const billingSchema = new Schema(
     renderBaseCost: {
       type: Number,
       required: true,
-      default: () => getRenderBaseRate()
+      default: 0
     },
     renderBandwidth: {
       type: valueCostType,
@@ -145,6 +143,7 @@ const billingSchema = new Schema(
         costInDollar: 0
       })
     },
+    transferedFreemiumToOwner: Boolean,
     searchText: {
       type: String,
       required: true,
@@ -154,10 +153,11 @@ const billingSchema = new Schema(
   { timestamps: true }
 );
 
-billingSchema.index({ organisationId: 1, billingMonth: 1 }, { unique: true });
+billingSchema.index({ organisationId: 1, billingMonth: 1, subscriptionType: 1 }, { unique: true });
+billingSchema.index({ organisationId: 1, billingMonth: 1, subscriptionType: 1, billingStatus: 1 });
+billingSchema.index({ billingMonth: 1, subscriptionType: 1, billingStatus: 1 });
+billingSchema.index({ subscriptionType: 1, paymentStatus: 1, billingStatus: 1 });
 billingSchema.index({ organisationId: 1, billingId: 1 }, { unique: true });
-billingSchema.index({ paymentStatus: 1, organisationId: 1 });
-billingSchema.index({ billingStatus: 1, organisationId: 1 });
 
 billingSchema.pre("save", function (next) {
   if (!this.billingId) {

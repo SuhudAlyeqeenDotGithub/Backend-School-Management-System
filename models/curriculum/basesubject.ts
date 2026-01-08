@@ -34,5 +34,6 @@ const baseSubjectManagerSchema = new Schema(
 );
 
 baseSubjectManagerSchema.index({ organisationId: 1, baseSubjectId: 1, staffId: 1, status: 1 }, { unique: true });
+baseSubjectManagerSchema.index({ organisationId: 1, staffId: 1, status: 1 });
 
 export const BaseSubjectManager = model("BaseSubjectManager", baseSubjectManagerSchema);

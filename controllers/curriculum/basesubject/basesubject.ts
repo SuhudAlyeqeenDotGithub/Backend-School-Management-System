@@ -6,7 +6,8 @@ import {
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllBaseSubjects
+  fetchAllBaseSubjects,
+  checkAccesses
 } from "../../../utils/databaseFunctions.ts";
 import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
@@ -14,6 +15,7 @@ import { diff } from "deep-diff";
 import { BaseSubject } from "../../../models/curriculum/basesubject";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
+import { getNeededAccesses } from "../../../utils/defaultVariables.ts";
 
 const validateBaseSubject = (baseSubjectDataParam: any) => {
   const { description, startDate, endDate, ...copyLocalData } = baseSubjectDataParam;
@@ -33,7 +35,7 @@ export const getAllBaseSubjects = asyncHandler(async (req: Request, res: Respons
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -44,7 +46,7 @@ export const getAllBaseSubjects = asyncHandler(async (req: Request, res: Respons
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Base Subjects");
+  const hasAccess = checkAccesses(account, tabAccess, getNeededAccesses("All Base Subjects"));
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
@@ -86,7 +88,7 @@ export const getBaseSubjects = asyncHandler(async (req: Request, res: Response) 
   }
 
   for (const key in filters) {
-    if (filters[key] !== "all") {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
       query[key] = filters[key];
     }
   }
@@ -100,7 +102,7 @@ export const getBaseSubjects = asyncHandler(async (req: Request, res: Response) 
   }
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -152,7 +154,7 @@ export const createBaseSubject = asyncHandler(async (req: Request, res: Response
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -180,7 +182,7 @@ export const createBaseSubject = asyncHandler(async (req: Request, res: Response
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
     throwError(
-      "A baseSubject with this Custom Id already exist - Either refer to that record or change the baseSubject custom Id",
+      "A baseSubject with this Custom Id already exist within the organisation - Either refer to that record or change the baseSubject custom Id",
       409
     );
   }
@@ -257,7 +259,7 @@ export const updateBaseSubject = asyncHandler(async (req: Request, res: Response
   const orgParsedId = account!.organisationId!.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -347,7 +349,7 @@ export const deleteBaseSubject = asyncHandler(async (req: Request, res: Response
 
   const { roleId: creatorRoleId } = account as any;
 
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 

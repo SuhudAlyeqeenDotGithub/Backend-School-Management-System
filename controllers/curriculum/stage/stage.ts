@@ -25,12 +25,12 @@ const validateStage = (stageDataParam: any) => {
   return true;
 };
 
-export const getAllStages = asyncHandler(async (req: Request, res: Response) => {
+export const getStages = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -76,13 +76,13 @@ export const createStage = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { customId, stageName } = body;
+  const { customId, stage } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -110,7 +110,7 @@ export const createStage = asyncHandler(async (req: Request, res: Response) => {
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
     throwError(
-      "A stage with this Custom Id already exist - Either refer to that record or change the stage custom Id",
+      "A stage with this Custom Id already exist within the organisation - Either refer to that record or change the stage custom Id",
       409
     );
   }
@@ -118,7 +118,7 @@ export const createStage = asyncHandler(async (req: Request, res: Response) => {
   const newStage = await Stage.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([customId, stageName])
+    searchText: generateSearchText([customId, stage])
   });
 
   if (!newStage) {
@@ -139,14 +139,14 @@ export const createStage = asyncHandler(async (req: Request, res: Response) => {
       "Stage Creation",
       "Stage",
       newStage?._id,
-      stageName,
+      stage,
       [
         {
           kind: "N",
           rhs: {
             _id: newStage._id,
             stageId: newStage.customId,
-            stageName
+            stage
           }
         }
       ],
@@ -178,7 +178,7 @@ export const createStage = asyncHandler(async (req: Request, res: Response) => {
 export const updateStage = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { customId, stageName } = body;
+  const { customId, stage } = body;
 
   if (!validateStage(body)) {
     throwError("Please fill in all required fields", 400);
@@ -190,7 +190,7 @@ export const updateStage = asyncHandler(async (req: Request, res: Response) => {
   const orgParsedId = account!.organisationId!.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -225,7 +225,7 @@ export const updateStage = asyncHandler(async (req: Request, res: Response) => {
     originalStage?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([customId, stageName])
+      searchText: generateSearchText([customId, stage])
     },
     { new: true }
   ).lean();
@@ -249,7 +249,7 @@ export const updateStage = asyncHandler(async (req: Request, res: Response) => {
       "Stage Update",
       "Stage",
       updatedStage?._id,
-      stageName,
+      stage,
       difference,
       new Date()
     );
@@ -280,7 +280,7 @@ export const deleteStage = asyncHandler(async (req: Request, res: Response) => {
 
   const { roleId: creatorRoleId } = account as any;
 
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 

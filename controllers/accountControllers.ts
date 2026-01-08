@@ -213,7 +213,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
     orgAccount._id,
     { roleId: defaultRole._id, features: defaultFeatures },
     { new: true }
-  ).populate([{ path: "roleId" }, { path: "staffId" }, { path: "organisationId", select: "organisationId name" }]);
+  ).populate([{ path: "roleId" }, { path: "staffId" }, { path: "organisationId", select: "organisationId name _id" }]);
 
   if (!updatedOrgAccount) {
     throwError("Failed to update organization account with default role", 500);
@@ -292,6 +292,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
 
   await VerificationCode.deleteOne({ verificationCode });
   const emailSent = await sendEmail(
+    req,
     orgAccount.email,
     "Welcome to SuSchool Management App - Account Created Successfully",
     `Hi ${updatedOrgAccount?.name}, your account has been created successfully.`,
@@ -341,6 +342,7 @@ export const getEmailVerificationCode = asyncHandler(async (req: Request, res: R
 
   // send token to account email
   await sendEmail(
+    req,
     organisationEmail,
     "Email Verification Code - From Al-Yeqeen School Management App",
     `Hello ${organisationName}, your code is: ${verificationCode}. Please do not share this with anyone and use within 20 minutes`
@@ -402,7 +404,7 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
   const account = await Account.findOne({ email: email }).populate([
     { path: "roleId" },
     { path: "staffId" },
-    { path: "organisationId", select: "organisationId name features" }
+    { path: "organisationId", select: "organisationId name features _id" }
   ]);
   if (!account) {
     throwError(
@@ -416,16 +418,16 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
     throwError("Incorrect password for associated account", 401);
   }
 
-  const roleId = account?.roleId;
-  const noRole = roleId === null || roleId === undefined || !roleId;
-  if (noRole) {
-    throwError("Couldn't fetch user role - Please contact your admin", 400);
+  const inactiveAccount = account?.status !== "Active";
+  if (inactiveAccount) {
+    throwError("Your account is inactive or locked. Please contact your admin", 400);
   }
   // generate tokens
   const tokenPayload = {
     accountId: account?._id,
     organisationId: account?.organisationId?._id
   };
+
   const accessToken = generateAccessToken(tokenPayload);
   const refreshToken = generateRefreshToken(tokenPayload);
 
@@ -511,18 +513,7 @@ export const fetchAccount = asyncHandler(async (req: Request, res: Response) => 
     ]);
     throwError("You account is not active - Please contact your admin if you need help", 409);
   }
-  const roleId = account?.roleId;
-  const noRole = roleId === null || roleId === undefined || !roleId;
-  if (noRole) {
-    registerBillings(req, [
-      { field: "databaseOperation", value: 4 },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize(account)
-      }
-    ]);
-    throwError("Couldn't fetch user role - Please contact your admin", 400);
-  }
+
   const parsedAccount = account?.toObject();
 
   const reshapedAccount = {
@@ -543,6 +534,34 @@ export const fetchAccount = asyncHandler(async (req: Request, res: Response) => 
   ]);
 
   res.status(200).json(reshapedAccount);
+});
+
+export const fetchSpecificAccount = asyncHandler(async (req: Request, res: Response) => {
+  // find the account by email
+  const { specificAccountId } = req.query;
+
+  const account = await Account.findById(specificAccountId, "email name _id");
+
+  if (!account) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 1 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize(account)
+      }
+    ]);
+    throwError("Error fetching account data", 500);
+  }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 1 },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize(account)
+    }
+  ]);
+
+  res.status(200).json(account);
 });
 
 export const signoutAccount = asyncHandler(async (req: Request, res: Response) => {
@@ -658,6 +677,7 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
 
   // send token to account email
   await sendEmail(
+    req,
     email,
     "Reset Password Verification Code - From Al-Yeqeen School Management App",
     `Hello ${accountExist?.name}, your code is: ${verificationCode}. Please do not share this with anyone and use within 8 minutes`
@@ -871,6 +891,7 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
   }
 
   await sendEmail(
+    req,
     reshapedAccount.email as string,
     "Password Changed Successfully - From SuSchool Management App",
     `Hello ${updatedAccountPassword?.name}, your password has been changed successfully. If you did not perform this action, please contact support immediately @ suhudalyeqeenapp@gmail.com or alyekeeniy@gmail.com`

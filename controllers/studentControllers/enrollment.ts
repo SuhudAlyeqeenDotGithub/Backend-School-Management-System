@@ -7,19 +7,33 @@ import {
   confirmUserOrgRole,
   checkOrgAndUserActiveness,
   checkAccess,
-  fetchAllStudentEnrollments
+  fetchAllStudentEnrollments,
+  orgHasRequiredFeature,
+  checkAccesses
 } from "../../utils/databaseFunctions.ts";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../utils/pureFuctions.ts";
 import { diff } from "deep-diff";
 import { Student } from "../../models/student/studentProfile.ts";
 import { StudentEnrollment } from "../../models/student/enrollment.ts";
 import { AcademicYear } from "../../models/timeline/academicYear.ts";
-import { Pathway } from "../../models/curriculum/pathway.ts";
 import { Class } from "../../models/curriculum/class.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
+import { getNeededAccesses } from "../../utils/defaultVariables.ts";
 
 const validateStudentEnrollment = (studentDataParam: any) => {
-  const { enrollmentExpiresOn, notes, allowances, ...copyLocalData } = studentDataParam;
+  const {
+    enrollmentExpiresOn,
+    notes,
+    allowances,
+    completionStatus,
+    awardingBody,
+    qualification,
+    progressionOutcome,
+    pathwayId,
+    studentFullName,
+    pathway,
+    ...copyLocalData
+  } = studentDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -43,7 +57,7 @@ export const getStudentEnrollments = asyncHandler(async (req: Request, res: Resp
   }
 
   for (const key in filters) {
-    if (filters[key] !== "all") {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
       query[key] = filters[key];
     }
   }
@@ -58,10 +72,12 @@ export const getStudentEnrollments = asyncHandler(async (req: Request, res: Resp
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-  const orgHasRequiredFeature = organisation?.features
-    ?.map((feature) => feature.name)
-    .includes("Student Profile & Enrollment");
-  if (!orgHasRequiredFeature) {
+  const featureCheckPassed = orgHasRequiredFeature(organisation, "Student Profile & Enrollment");
+  if (!featureCheckPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
       403
@@ -69,7 +85,7 @@ export const getStudentEnrollments = asyncHandler(async (req: Request, res: Resp
   }
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -107,7 +123,7 @@ export const getStudentEnrollments = asyncHandler(async (req: Request, res: Resp
   }
 
   throwError(
-    "Unauthorised Action: You do not have access to view student enrollments - Please contact your admin",
+    "Unauthorised Action: You do not have access to view student enrollments or one of it's required data (student profiles, programmes, classes, academic years, pathways) - Please contact your admin",
     403
   );
 });
@@ -118,8 +134,20 @@ export const getAllStudentEnrollments = asyncHandler(async (req: Request, res: R
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
+  const featureCheckPassed = orgHasRequiredFeature(organisation, "Student Profile & Enrollment");
+  if (!featureCheckPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError(
+      "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
+      403
+    );
+  }
+
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -130,7 +158,7 @@ export const getAllStudentEnrollments = asyncHandler(async (req: Request, res: R
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Student Enrollments");
+  const hasAccess = checkAccesses(account, tabAccess, getNeededAccesses("All Student Enrollments"));
 
   if (absoluteAdmin || hasAccess) {
     const studentEnrollments = await fetchAllStudentEnrollments(organisation!._id.toString());
@@ -159,22 +187,7 @@ export const getAllStudentEnrollments = asyncHandler(async (req: Request, res: R
 // controller to handle role creation
 export const createStudentEnrollment = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const {
-    academicYearId,
-    academicYear,
-    studentId,
-    studentCustomId,
-    enrollmentCustomId,
-    studentFullName,
-    enrollmentType,
-    enrollmentStatus,
-    pathwayId,
-    pathwayCustomId,
-    pathwayFullTitle,
-    classId,
-    classCustomId,
-    className
-  } = req.body;
+  const { academicYearId, customId, studentId, fullName, pathwayId, classId, programmeId } = req.body;
 
   if (!validateStudentEnrollment({ ...req.body })) {
     throwError("Please fill in all required fields", 400);
@@ -182,10 +195,12 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-  const orgHasRequiredFeature = organisation?.features
-    ?.map((feature) => feature.name)
-    .includes("Student Profile & Enrollment");
-  if (!orgHasRequiredFeature) {
+  const featureCheckPassed = orgHasRequiredFeature(organisation, "Student Profile & Enrollment");
+  if (!featureCheckPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
       403
@@ -195,7 +210,7 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
   const orgParsedId = account!.organisationId!._id.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -219,65 +234,66 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
     );
   }
 
-  const enrollementExists = await StudentEnrollment.findOne({ organisationId: orgParsedId, enrollmentCustomId });
+  const enrollementExists = await StudentEnrollment.findOne({ organisationId: orgParsedId, customId }).lean();
   if (enrollementExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, enrollementExists]) }
+    ]);
     throwError("This enrollment custom ID is already being used. Please use a different enrollment custom ID", 409);
   }
 
-  const studentExists = await Student.findOne({ organisationId: orgParsedId, studentCustomId });
+  const studentExists = await Student.findById(studentId).lean();
   if (!studentExists) {
-    throwError(
-      "This student ID does not exist. Please provide the user student Custom ID related to their student record - or create one for them",
-      409
-    );
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, enrollementExists]) }
+    ]);
+    throwError("This student does not exist. Please select a valid student or create a new student", 409);
   }
 
-  const academicYearExists = await AcademicYear.findOne({ organisationId: orgParsedId, academicYear });
+  const academicYearExists = await AcademicYear.findById(academicYearId).lean();
   if (!academicYearExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, enrollementExists, academicYearExists])
+      }
+    ]);
     throwError(
       "This academic year does not exist in this organisation - Ensure it has been created or has not been deleted",
       409
     );
   }
 
-  const pathwayExists = await Pathway.findOne({ organisationId: orgParsedId, pathwayCustomId });
-  if (!pathwayExists) {
-    throwError(
-      "No pathway with the provided Custom Id exist - Please create the pathway or change the pathway custom Id",
-      409
-    );
-  }
-
-  const classExists = await Class.findOne({ organisationId: orgParsedId, classCustomId });
+  const classExists = await Class.findById(classId).lean();
   if (!classExists) {
-    throwError(
-      "No class with the provided Custom Id exist - Please create the class or change the class custom Id",
-      409
-    );
+    registerBillings(req, [
+      { field: "databaseOperation", value: 7 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, enrollementExists, academicYearExists])
+      }
+    ]);
+    throwError("This class does not exist  - Please create the class or select another class", 409);
   }
 
   const newStudentEnrollment = await StudentEnrollment.create({
     ...req.body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([
-      academicYearId,
-      academicYear,
-      studentId,
-      studentCustomId,
-      enrollmentCustomId,
-      studentFullName,
-      pathwayId,
-      pathwayCustomId,
-      pathwayFullTitle,
-      classId,
-      classCustomId,
-      className,
-      enrollmentStatus,
-      enrollmentType
-    ])
+    pathwayId: pathwayId ? pathwayId : null,
+    searchText: generateSearchText([academicYearId, studentId, pathwayId, programmeId, classId])
   });
 
   if (!newStudentEnrollment) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 9 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, enrollementExists, academicYearExists, classExists])
+      }
+    ]);
     throwError("Error creating student enrollment", 500);
   }
 
@@ -291,7 +307,7 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
       "Student Enrollment Creation",
       "StudentEnrollment",
       newStudentEnrollment?._id,
-      studentFullName + " " + "Enrollment",
+      fullName + " " + "Enrollment",
       [
         {
           kind: "N",
@@ -303,7 +319,7 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 10 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 9 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
       value: (getObjectSize(newStudentEnrollment) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
@@ -316,7 +332,6 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
           academicYearExists,
           studentExists,
           enrollementExists,
-          pathwayExists,
           classExists,
           organisation,
           role,
@@ -331,45 +346,27 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
 // controller to handle role update
 export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const {
-    academicYearId,
-    academicYear,
-    studentId,
-    studentCustomId,
-    enrollmentCustomId,
-    studentFullName,
-    enrollmentType,
-    enrollmentStatus,
-    pathwayId,
-    pathwayCustomId,
-    pathwayFullTitle,
-    classId,
-    classCustomId,
-    className,
-    enrollmentExpiresOn,
-    notes,
-    allowances
-  } = req.body;
+  const { academicYearId, studentId, fullName, classId, pathwayId, programmeId, _id } = req.body;
 
   if (!validateStudentEnrollment({ ...req.body })) {
     throwError("Please fill in all required fields", 400);
   }
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-  const orgHasRequiredFeature = organisation?.features
-    ?.map((feature) => feature.name)
-    .includes("Student Profile & Enrollment");
-  if (!orgHasRequiredFeature) {
+  const featureCheckPassed = orgHasRequiredFeature(organisation, "Student Profile & Enrollment");
+  if (!featureCheckPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
       403
     );
   }
 
-  const orgParsedId = account!.organisationId!._id.toString();
-
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -393,39 +390,42 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
     );
   }
 
-  const originalStudentEnrollment = await StudentEnrollment.findOne({
-    organisationId: orgParsedId,
-    enrollmentCustomId
-  });
-
-  if (!originalStudentEnrollment) {
-    throwError(
-      "An error occured whilst getting old student enrollment data - Please ensure this enrollment exists with the correct Id",
-      500
-    );
-  }
-
-  const academicYearExists = await AcademicYear.findOne({ organisationId: orgParsedId, academicYear });
+  const academicYearExists = await AcademicYear.findById(academicYearId).lean();
   if (!academicYearExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "This academic year does not exist in this organisation - Ensure it has been created or has not been deleted",
       409
     );
   }
 
-  const pathwayExists = await Pathway.findOne({ organisationId: orgParsedId, pathwayCustomId });
-  if (!pathwayExists) {
-    throwError(
-      "No pathway with the provided Custom Id exist - Please create the pathway or change the pathway custom Id",
-      409
-    );
-  }
-
-  const classExists = await Class.findOne({ organisationId: orgParsedId, classCustomId });
+  const classExists = await Class.findById(classId).lean();
   if (!classExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, academicYearExists]) }
+    ]);
     throwError(
       "No class with the provided Custom Id exist - Please create the class or change the class custom Id",
       409
+    );
+  }
+  const originalStudentEnrollment = await StudentEnrollment.findById(_id).lean();
+
+  if (!originalStudentEnrollment) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, academicYearExists, classExists])
+      }
+    ]);
+    throwError(
+      "An error occured whilst getting old student enrollment data - Please ensure this enrollment exists with the correct Id",
+      500
     );
   }
 
@@ -433,27 +433,28 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
     originalStudentEnrollment?._id,
     {
       ...req.body,
-      searchText: generateSearchText([
-        academicYearId,
-        academicYear,
-        studentId,
-        studentCustomId,
-        enrollmentCustomId,
-        studentFullName,
-        pathwayId,
-        pathwayCustomId,
-        pathwayFullTitle,
-        classId,
-        classCustomId,
-        className,
-        enrollmentStatus,
-        enrollmentType
-      ])
+      pathwayId: pathwayId ? pathwayId : null,
+      searchText: generateSearchText([academicYearId, studentId, pathwayId, programmeId, classId])
     },
     { new: true }
-  );
+  ).lean();
 
   if (!updatedStudentEnrollment) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 8 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([
+          updatedStudentEnrollment,
+          academicYearExists,
+          classExists,
+          organisation,
+          role,
+          account,
+          originalStudentEnrollment
+        ])
+      }
+    ]);
     throwError("Error updating student enrollment", 500);
   }
 
@@ -468,21 +469,20 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
       "Student Enrollment Update",
       "StudentEnrollment",
       updatedStudentEnrollment?._id,
-      studentFullName,
+      fullName,
       difference,
       new Date()
     );
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 9 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 8 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
       value:
         getObjectSize([
           updatedStudentEnrollment,
           academicYearExists,
-          pathwayExists,
           classExists,
           organisation,
           role,
@@ -503,10 +503,12 @@ export const deleteStudentEnrollment = asyncHandler(async (req: Request, res: Re
   }
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-  const orgHasRequiredFeature = organisation?.features
-    ?.map((feature) => feature.name)
-    .includes("Student Profile & Enrollment");
-  if (!orgHasRequiredFeature) {
+  const featureCheckPassed = orgHasRequiredFeature(organisation, "Student Profile & Enrollment");
+  if (!featureCheckPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
       403
@@ -514,7 +516,7 @@ export const deleteStudentEnrollment = asyncHandler(async (req: Request, res: Re
   }
 
   const { roleId: creatorRoleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 

@@ -1,39 +1,39 @@
+import { getEmailVerificationCode } from "controllers/accountControllers";
 import mongoose from "mongoose";
 const { Schema, model } = mongoose;
 
 const studentSchema = new Schema(
   {
     organisationId: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
-    studentCustomId: { type: String, unique: true },
-    studentFullName: { type: String, required: true },
-    studentDateOfBirth: { type: String, required: true },
-    studentGender: { type: String, required: true },
-    studentPhone: { type: String, required: true },
-    studentEmail: { type: String, required: true, index: true },
-    studentAddress: { type: String, required: true },
-    studentPostCode: { type: String },
-    studentImageUrl: { type: String },
+    customId: { type: String, unique: true },
+    fullName: { type: String, required: true },
+    dateOfBirth: { type: String, required: true },
+    gender: { type: String, required: true },
+    phone: { type: String, required: true },
+    email: { type: String, index: true },
+    address: { type: String, required: true },
+    postCode: { type: String },
+    imageUrl: { type: String },
     imageLocalDestination: { type: String },
-    studentStartDate: { type: String, required: true },
-    studentEndDate: { type: String },
-    studentNationality: { type: String, required: true },
-    studentAllergies: { type: String },
-    studentNextOfKinName: { type: String, required: true },
-    studentNextOfKinRelationship: { type: String, required: true },
-    studentNextOfKinPhone: { type: String, required: true },
-    studentNextOfKinEmail: { type: String, required: true },
+    startDate: { type: String, required: true },
+    endDate: { type: String },
+    nationality: { type: String, required: true },
+    allergies: { type: String },
+    nextOfKinName: { type: String, required: true },
+    nextOfKinRelationship: { type: String, required: true },
+    nextOfKinPhone: { type: String, required: true },
+    nextOfKinEmail: { type: String, required: true },
     searchText: { type: String, required: true },
-    identification: {
-      type: [
-        { _id: String, identificationType: String, identificationValue: String, issueDate: Date, expiryDate: Date }
-      ]
+    identifications: {
+      type: [{ _id: String, identificationType: String, value: String, issueDate: Date, expiryDate: Date }]
     },
-    studentQualification: {
+    qualifications: {
       type: [
         {
           _id: String,
-          qualificationName: String,
-          schoolName: String,
+          name: String,
+          programme: String,
+          school: String,
           grade: String,
           startDate: String,
           endDate: String
@@ -44,6 +44,7 @@ const studentSchema = new Schema(
   { timestamps: true }
 );
 
-studentSchema.index({ organisationId: 1, studentCustomId: 1 }, { unique: true });
+studentSchema.index({ organisationId: 1, customId: 1 }, { unique: true });
+studentSchema.index({ organisationId: 1, email: 1 });
 
 export const Student = model("Student", studentSchema);

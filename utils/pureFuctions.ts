@@ -13,6 +13,11 @@ export const getLastBillingDate = (now = new Date()) => {
   date.setMonth(date.getMonth() - 1);
   return `5 ${date.toLocaleString("en-GB", { month: "long", year: "numeric" })}`;
 };
+
+export const getLastMonth = (now = new Date()) => {
+  const date = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return date.toLocaleString("en-GB", { month: "long", year: "numeric" });
+};
 export const getNextBillingDate = (now = new Date()) => {
   const date = new Date(now);
   date.setMonth(date.getMonth() + 1);
@@ -38,11 +43,13 @@ export const throwError = (message: string, statusCode: number) => {
 };
 
 export const validatePassword = (password: string) => {
+  if (!password) return false;
   const passwordStrengthRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>~+\-]).{8,}$/;
   return passwordStrengthRegex.test(password.trim());
 };
 
 export const validateEmail = (email: string) => {
+  if (!email) return false;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email.trim());
 };

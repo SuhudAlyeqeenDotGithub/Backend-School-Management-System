@@ -7,7 +7,7 @@ const recordComputeSeconds = async (req: Request, start: [number, number], organ
   const elapsedTime = seconds + 1 + nanoseconds / 1e9;
 
   registerBillings(req, [{ field: "renderComputeSeconds", value: elapsedTime }]);
-  await billOrganisation(organisationId, req.billings);
+  await billOrganisation(req, organisationId, req.billings);
 };
 
 export const trackComputeSeconds = (req: Request, res: Response, next: NextFunction) => {
@@ -32,11 +32,10 @@ export const trackComputeSeconds = (req: Request, res: Response, next: NextFunct
   next();
 };
 
-export const trackResponseSize = (req: Request, res: Response, next: NextFunction) => {
+export const trackRenderBandwith = (req: Request, res: Response, next: NextFunction) => {
   const originalJson = res.json;
-
   res.json = function (data: any) {
-    registerBillings(req, [{ field: "renderBandwidth", value: getObjectSize(data) }]);
+    registerBillings(req, [{ field: "renderBandwidth", value: getObjectSize(data) + getObjectSize(req.body) }]);
     return originalJson.call(this, data);
   };
   next();

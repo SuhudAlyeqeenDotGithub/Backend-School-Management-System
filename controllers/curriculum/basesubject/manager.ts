@@ -5,7 +5,9 @@ import {
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
-  confirmUserOrgRole
+  confirmUserOrgRole,
+  fetchAllBaseSubjectManagers,
+  checkAccesses
 } from "../../../utils/databaseFunctions.ts";
 import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
@@ -13,6 +15,7 @@ import { StaffContract } from "../../../models/staff/contracts";
 import { BaseSubjectManager } from "../../../models/curriculum/basesubject";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
+import { getNeededAccesses } from "../../../utils/defaultVariables.ts";
 
 const validateBaseSubjectManager = (baseSubjectManagerDataParam: any) => {
   const { managedUntil, ...copyLocalData } = baseSubjectManagerDataParam;
@@ -26,6 +29,51 @@ const validateBaseSubjectManager = (baseSubjectManagerDataParam: any) => {
 
   return true;
 };
+
+export const getAllBaseSubjectManagers = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId } = req.userToken;
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+
+  const { roleId, staffId } = account as any;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError(message, 409);
+  }
+  const hasAccess = checkAccesses(account, tabAccess, getNeededAccesses("All Base Subject Managers"));
+
+  if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Unauthorised Action: You do not have access to delete base subject - Please contact your admin", 403);
+  }
+  const result = await fetchAllBaseSubjectManagers(organisation!._id.toString(), staffId);
+
+  if (!result) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Error fetching base subject teachers", 500);
+  }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 + result.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([result, organisation, role, account])
+    }
+  ]);
+  res.status(201).json(result);
+});
 
 export const getBaseSubjectManagers = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
@@ -41,7 +89,7 @@ export const getBaseSubjectManagers = asyncHandler(async (req: Request, res: Res
   }
 
   for (const key in filters) {
-    if (filters[key] !== "all") {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
       query[key] = filters[key];
     }
   }
@@ -55,7 +103,7 @@ export const getBaseSubjectManagers = asyncHandler(async (req: Request, res: Res
   }
 
   const { roleId, staffId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -66,7 +114,9 @@ export const getBaseSubjectManagers = asyncHandler(async (req: Request, res: Res
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Base Subject Managers");
+  const hasAccess =
+    checkAccess(account, tabAccess, "View Base Subject Managers") &&
+    checkAccess(account, tabAccess, "View Staff Profiles");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
@@ -74,7 +124,7 @@ export const getBaseSubjectManagers = asyncHandler(async (req: Request, res: Res
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
     throwError(
-      "Unauthorised Action: You do not have access to view base subject managers - Please contact your admin",
+      "Unauthorised Action: You do not have access to view base subject managers or one of its required data (staff profiles) - Please contact your admin",
       403
     );
   }
@@ -118,7 +168,7 @@ export const createBaseSubjectManager = asyncHandler(async (req: Request, res: R
   const orgParsedId = account!.organisationId!._id.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -243,7 +293,7 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
   const orgParsedId = account!.organisationId!.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -267,12 +317,23 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
     );
   }
 
+  const staffHasContract = await StaffContract.findOne({
+    staffId
+  }).lean();
+  if (!staffHasContract) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("The staff has no contract with this organisation - Please create one for them", 409);
+  }
+
   const originalBaseSubjectManager = await BaseSubjectManager.findOne({ _id: body._id }).lean();
 
   if (!originalBaseSubjectManager) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 4 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, staffHasContract]) }
     ]);
     throwError("An error occured whilst getting old base subject manager  data, Ensure it has not been deleted", 500);
   }
@@ -288,8 +349,11 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
 
   if (!updatedBaseSubjectManager) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 6 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalBaseSubjectManager]) }
+      { field: "databaseOperation", value: 7 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, staffHasContract, originalBaseSubjectManager])
+      }
     ]);
     throwError("Error updating base subject", 500);
   }
@@ -312,12 +376,18 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([updatedBaseSubjectManager, organisation, role, account, originalBaseSubjectManager]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+        getObjectSize([
+          updatedBaseSubjectManager,
+          organisation,
+          role,
+          account,
+          staffHasContract,
+          originalBaseSubjectManager
+        ]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
 
@@ -336,7 +406,7 @@ export const deleteBaseSubjectManager = asyncHandler(async (req: Request, res: R
 
   const { roleId: creatorRoleId } = account as any;
 
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 

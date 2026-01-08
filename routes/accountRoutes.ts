@@ -9,7 +9,8 @@ import {
   signoutAccount,
   refreshAccessToken,
   verifyAccount,
-  getEmailVerificationCode
+  getEmailVerificationCode,
+  fetchSpecificAccount
 } from "../controllers/accountControllers";
 import { refreshTokenChecker } from "../middleware/checkAccess";
 
@@ -22,5 +23,6 @@ router.post("/orgaccount/refreshaccesstoken", refreshTokenChecker, refreshAccess
 router.post("/orgaccount/resetpassword", resetPasswordSendEmail);
 router.post("/orgaccount/resetpassword/verifycode", resetPasswordVerifyCode);
 router.post("/orgaccount/resetpassword/newpassword", resetPasswordNewPassword);
+router.get("/orgaccount/specific-account", fetchSpecificAccount);
 
 export default router;

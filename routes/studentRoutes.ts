@@ -22,26 +22,17 @@ import {
   getStudentImageUploadSignedUrl,
   deleteStudentImageInBucket
 } from "../controllers/googleCloudStorage/studentSignedUrl";
-import {
-  createStudentDayAttendance,
-  deleteStudentDayAttendance,
-  fetchDayAttendanceStore,
-  getEnrolledDayAttendanceStudents,
-  getStudentDayAttendances,
-  updateStudentDayAttendance
-} from "../controllers/studentControllers/dayAttendance";
-import { createStudentSubjectAttendance, deleteStudentSubjectAttendance, fetchSubjectAttendanceStore, getEnrolledSubjectAttendanceStudents, getStudentSubjectAttendances, updateStudentSubjectAttendance } from "../controllers/studentControllers/subjectAttendance";
 
 // end point for student / profile
-router.get("/student/profile", getStudentProfiles);
-router.get("/student/allprofile", getAllStudentProfiles);
+router.get("/student/profiles", getStudentProfiles);
+router.get("/student/all-profiles", getAllStudentProfiles);
 router.post("/student/profile", createStudentProfile);
 router.put("/student/profile", updateStudentProfile);
 router.delete("/student/profile", deleteStudentProfile);
 
 // end point for student / contracts
-router.get("/student/enrollment", getStudentEnrollments);
-router.get("/student/allenrollment", getAllStudentEnrollments);
+router.get("/student/enrollments", getStudentEnrollments);
+router.get("/student/all-enrollments", getAllStudentEnrollments);
 router.post("/student/enrollment", createStudentEnrollment);
 router.put("/student/enrollment", updateStudentEnrollment);
 router.delete("/student/enrollment", deleteStudentEnrollment);
@@ -51,20 +42,37 @@ router.post("/studentimageuploadsignedurl", getStudentImageUploadSignedUrl);
 router.post("/studentimageviewsignedurl", getStudentImageViewSignedUrl);
 router.delete("/studentimage", deleteStudentImageInBucket);
 
-// end point for student / day attendance
-router.post("/student/attendance/enrolleddayattendancestudents", getEnrolledDayAttendanceStudents);
-router.get("/student/attendance/dayattendance", getStudentDayAttendances);
-router.post("/student/attendance/dayattendance", createStudentDayAttendance);
-router.put("/student/attendance/dayattendance", updateStudentDayAttendance);
-router.delete("/student/attendance/dayattendance", deleteStudentDayAttendance);
-router.post("/student/attendance/dayattendancestore", fetchDayAttendanceStore);
+import {
+  createStudentDayAttendanceTemplate,
+  deleteStudentDayAttendanceTemplate,
+  // fetchStudentDayAttendances,
+  getEnrolledDayAttendanceStudents,
+  getStudentDayAttendanceTemplates,
+  updateStudentDayAttendanceTemplate
+} from "../controllers/studentControllers/dayAttendance";
 
 // end point for student / day attendance
-router.post("/student/attendance/enrolledsubjectattendancestudents", getEnrolledSubjectAttendanceStudents);
-router.get("/student/attendance/subjectattendance", getStudentSubjectAttendances);
-router.post("/student/attendance/subjectattendance", createStudentSubjectAttendance);
-router.put("/student/attendance/subjectattendance", updateStudentSubjectAttendance);
-router.delete("/student/attendance/subjectattendance", deleteStudentSubjectAttendance);
-router.post("/student/attendance/subjectattendancestore", fetchSubjectAttendanceStore);
+router.post("/student/attendance/enrolled-day-attendance-students", getEnrolledDayAttendanceStudents);
+router.get("/student/attendance/day/templates", getStudentDayAttendanceTemplates);
+router.post("/student/attendance/day/template", createStudentDayAttendanceTemplate);
+router.put("/student/attendance/day/template", updateStudentDayAttendanceTemplate);
+router.delete("/student/attendance/day/template", deleteStudentDayAttendanceTemplate);
+
+import {
+  createStudentSubjectAttendanceTemplate,
+  deleteStudentSubjectAttendanceTemplate,
+  // fetchStudentSubjectAttendances,
+  getEnrolledSubjectAttendanceStudents,
+  getStudentSubjectAttendanceTemplates,
+  updateStudentSubjectAttendanceTemplate
+} from "../controllers/studentControllers/subjectAttendance";
+
+// end point for student / subject attendance
+router.post("/student/attendance/enrolled-subject-attendance-students", getEnrolledSubjectAttendanceStudents);
+router.get("/student/attendance/subject/templates", getStudentSubjectAttendanceTemplates);
+router.post("/student/attendance/subject/template", createStudentSubjectAttendanceTemplate);
+router.put("/student/attendance/subject/template", updateStudentSubjectAttendanceTemplate);
+router.delete("/student/attendance/subject/template", deleteStudentSubjectAttendanceTemplate);
+// router.post("/student/attendance/subject", fetchStudentDayAttendances);
 
 export default router;

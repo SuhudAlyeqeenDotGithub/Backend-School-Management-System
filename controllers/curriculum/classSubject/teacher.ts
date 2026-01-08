@@ -6,7 +6,8 @@ import {
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllClassSubjectTeachers
+  fetchAllClassSubjectTeachers,
+  checkAccesses
 } from "../../../utils/databaseFunctions.ts";
 import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
@@ -14,6 +15,7 @@ import { StaffContract } from "../../../models/staff/contracts.ts";
 import { ClassSubjectTeacher } from "../../../models/curriculum/classSubject.ts";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
+import { getNeededAccesses } from "../../../utils/defaultVariables.ts";
 
 const validateClassSubjectTeacher = (subjectTeacherDataParam: any) => {
   const { managedUntil, ...copyLocalData } = subjectTeacherDataParam;
@@ -32,8 +34,8 @@ export const getAllClassSubjectTeachers = asyncHandler(async (req: Request, res:
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { roleId, staffId } = account as any;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -44,7 +46,7 @@ export const getAllClassSubjectTeachers = asyncHandler(async (req: Request, res:
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Class Subject Teachers");
+  const hasAccess = checkAccesses(account, tabAccess, getNeededAccesses("All Class Subject Teachers"));
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
@@ -53,14 +55,14 @@ export const getAllClassSubjectTeachers = asyncHandler(async (req: Request, res:
     ]);
     throwError("Unauthorised Action: You do not have access to delete class subject - Please contact your admin", 403);
   }
-  const result = await fetchAllClassSubjectTeachers(organisation!._id.toString());
+  const result = await fetchAllClassSubjectTeachers(organisation!._id.toString(), staffId);
 
   if (!result) {
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Error fetching subject teachers", 500);
+    throwError("Error fetching class subject teachers", 500);
   }
 
   registerBillings(req, [
@@ -87,7 +89,7 @@ export const getClassSubjectTeachers = asyncHandler(async (req: Request, res: Re
   }
 
   for (const key in filters) {
-    if (filters[key] !== "all") {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
       query[key] = filters[key];
     }
   }
@@ -101,7 +103,7 @@ export const getClassSubjectTeachers = asyncHandler(async (req: Request, res: Re
   }
 
   const { roleId, staffId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -112,7 +114,13 @@ export const getClassSubjectTeachers = asyncHandler(async (req: Request, res: Re
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Class Subject Teachers");
+  const hasAccess =
+    checkAccess(account, tabAccess, "View Class Subject Teachers") &&
+    checkAccess(account, tabAccess, "View Class Subjects") &&
+    checkAccess(account, tabAccess, "View Classes") &&
+    checkAccess(account, tabAccess, "View Programmes") &&
+    checkAccess(account, tabAccess, "View Pathways") &&
+    checkAccess(account, tabAccess, "View Staff Profiles");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
@@ -131,7 +139,7 @@ export const getClassSubjectTeachers = asyncHandler(async (req: Request, res: Re
   );
 
   if (!result || !result.classSubjectTeachers) {
-    throwError("Error fetching subject teachers", 500);
+    throwError("Error fetching class subject teachers", 500);
   }
 
   registerBillings(req, [
@@ -156,7 +164,7 @@ export const createClassSubjectTeacher = asyncHandler(async (req: Request, res: 
   const orgParsedId = account!.organisationId!._id.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -167,7 +175,7 @@ export const createClassSubjectTeacher = asyncHandler(async (req: Request, res: 
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Create ClassSubject Teacher");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create Class Subject Teacher");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
@@ -175,12 +183,12 @@ export const createClassSubjectTeacher = asyncHandler(async (req: Request, res: 
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
     throwError(
-      "Unauthorised Action: You do not have access to create subject teacher - Please contact your admin",
+      "Unauthorised Action: You do not have access to create class subject teacher - Please contact your admin",
       403
     );
   }
 
-  const staffHasContract = await StaffContract.findOne(staffId).lean();
+  const staffHasContract = await StaffContract.findOne({ organisationId: orgParsedId, staffId: staffId }).lean();
   if (!staffHasContract) {
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
@@ -223,7 +231,7 @@ export const createClassSubjectTeacher = asyncHandler(async (req: Request, res: 
       { field: "databaseOperation", value: 7 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, staffHasContract]) }
     ]);
-    throwError("Error creating subject teacher", 500);
+    throwError("Error creating class subject teacher", 500);
   }
 
   let activityLog;
@@ -280,7 +288,7 @@ export const updateClassSubjectTeacher = asyncHandler(async (req: Request, res: 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -291,14 +299,17 @@ export const updateClassSubjectTeacher = asyncHandler(async (req: Request, res: 
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Edit ClassSubject Teacher");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Class Subject Teacher");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to edit subject teacher - Please contact your admin", 403);
+    throwError(
+      "Unauthorised Action: You do not have access to edit class subject teacher - Please contact your admin",
+      403
+    );
   }
 
   const originalClassSubjectTeacher = await ClassSubjectTeacher.findOne({ _id: body._id }).lean();
@@ -308,7 +319,7 @@ export const updateClassSubjectTeacher = asyncHandler(async (req: Request, res: 
       { field: "databaseOperation", value: 4 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("An error occured whilst getting old subject teacher data, Ensure it has not been deleted", 500);
+    throwError("An error occured whilst getting old class subject teacher data, Ensure it has not been deleted", 500);
   }
 
   const updatedClassSubjectTeacher = await ClassSubjectTeacher.findByIdAndUpdate(
@@ -373,7 +384,7 @@ export const deleteClassSubjectTeacher = asyncHandler(async (req: Request, res: 
 
   const { roleId: creatorRoleId } = account as any;
 
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -384,7 +395,7 @@ export const deleteClassSubjectTeacher = asyncHandler(async (req: Request, res: 
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Delete ClassSubject Teacher");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Class Subject Teacher");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
@@ -392,7 +403,7 @@ export const deleteClassSubjectTeacher = asyncHandler(async (req: Request, res: 
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
     throwError(
-      "Unauthorised Action: You do not have access to delete subject teacher - Please contact your admin",
+      "Unauthorised Action: You do not have access to delete class subject teacher - Please contact your admin",
       403
     );
   }
@@ -403,11 +414,11 @@ export const deleteClassSubjectTeacher = asyncHandler(async (req: Request, res: 
       { field: "databaseOperation", value: 5 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Error deleting subject teacher - Please try again", 500);
+    throwError("Error deleting class subject teacher - Please try again", 500);
   }
 
   const emitRoom = deletedClassSubjectTeacher?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "subjectteachers", deletedClassSubjectTeacher, "delete");
+  emitToOrganisation(emitRoom, "classsubjectteachers", deletedClassSubjectTeacher, "delete");
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;

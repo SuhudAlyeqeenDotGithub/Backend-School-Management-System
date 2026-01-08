@@ -6,7 +6,8 @@ import {
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllClassSubjects
+  fetchAllClassSubjects,
+  checkAccesses
 } from "../../../utils/databaseFunctions.ts";
 import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
@@ -16,9 +17,12 @@ import { BaseSubject } from "../../../models/curriculum/basesubject";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
 import { Programme } from "../../../models/curriculum/programme.ts";
+import path from "path";
+import { getNeededAccesses } from "../../../utils/defaultVariables.ts";
 
 const validateSubject = (classSubjectDataParam: any) => {
-  const { description, startDate, endeDate, pathwayId, ...copyLocalData } = classSubjectDataParam;
+  const { description, startDate, endDate, pathwayCustomId, pathwayId, pathway, ...copyLocalData } =
+    classSubjectDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -35,7 +39,7 @@ export const getAllClassSubjects = asyncHandler(async (req: Request, res: Respon
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -46,13 +50,16 @@ export const getAllClassSubjects = asyncHandler(async (req: Request, res: Respon
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Subjects");
+  const hasAccess = checkAccesses(account, tabAccess, getNeededAccesses("All Class Subjects"));
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to view class subjects - Please contact your admin", 403);
+    throwError(
+      "Unauthorised Action: You do not have access to view class subjects or one of its required data (class, base subject) - Please contact your admin",
+      403
+    );
   }
   const classSubjects = await fetchAllClassSubjects(organisation!._id.toString());
 
@@ -88,7 +95,7 @@ export const getClassSubjects = asyncHandler(async (req: Request, res: Response)
   }
 
   for (const key in filters) {
-    if (filters[key] !== "all") {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
       query[key] = filters[key];
     }
   }
@@ -102,7 +109,7 @@ export const getClassSubjects = asyncHandler(async (req: Request, res: Response)
   }
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -113,14 +120,20 @@ export const getClassSubjects = asyncHandler(async (req: Request, res: Response)
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Subjects");
+  const hasAccess =
+    checkAccess(account, tabAccess, "View Class Subjects") &&
+    checkAccess(account, tabAccess, "View Base Subjects") &&
+    checkAccess(account, tabAccess, "View Classes");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to view class subjects - Please contact your admin", 403);
+    throwError(
+      "Unauthorised Action: You do not have access to view class subjects or one of its required data (class, base subject) - Please contact your admin",
+      403
+    );
   }
   const result = await fetchClassSubjects(query, cursorType as string, parsedLimit, organisation!._id.toString());
 
@@ -147,13 +160,13 @@ export const createClassSubject = asyncHandler(async (req: Request, res: Respons
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { customId, programmeId, classId, baseSubjectId, classSubject } = body;
+  const { customId, programmeId, classId, baseSubjectId, classSubject, pathwayId } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -164,14 +177,14 @@ export const createClassSubject = asyncHandler(async (req: Request, res: Respons
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Create Subject");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create Class Subject");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to create classSubject - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to create class subject - Please contact your admin", 403);
   }
 
   const classSubjectExists = await ClassSubject.findOne({ organisationId: orgParsedId, customId }).lean();
@@ -181,72 +194,62 @@ export const createClassSubject = asyncHandler(async (req: Request, res: Respons
       { field: "databaseDataTransfer", value: getObjectSize([classSubjectExists, organisation, role, account]) }
     ]);
     throwError(
-      "A class subject with this Custom Id already exist - Either refer to that record or change the classSubject custom Id",
+      "A class subject with this Custom Id already exist within the organisation - Either refer to that record or change the classSubject custom Id",
       409
     );
   }
 
-  const programmeExists = await Programme.findById(programmeId).lean();
-  if (!programmeExists) {
+  const classSubjectComboExists = await ClassSubject.findOne({
+    organisationId: orgParsedId,
+    classId,
+    baseSubjectId,
+    programmeId,
+    pathwayId: pathwayId ? pathwayId : null
+  }).lean();
+  if (classSubjectComboExists) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 5 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, classSubjectExists]) }
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([classSubjectExists, organisation, role, account]) }
     ]);
     throwError(
-      "No programme with the provided Custom Id exist - Please create the programme or change the programme custom Id",
+      "This class subject combination already exist within the organisation - Either refer to that record or change the combinations",
       409
     );
   }
-
-  const classExists = await Class.findById(classId).lean();
-  if (!classExists) {
+  const baseSubjectExists = await BaseSubject.findById(baseSubjectId).lean();
+  if (!baseSubjectExists) {
     registerBillings(req, [
       { field: "databaseOperation", value: 6 },
       {
         field: "databaseDataTransfer",
-        value: getObjectSize([organisation, role, account, programmeExists, classSubjectExists])
+        value: getObjectSize([organisation, role, account, classSubjectExists, classSubjectComboExists])
       }
     ]);
     throwError(
-      "No class with the provided Custom Id exist - Please create the class or change the class custom Id",
-      409
-    );
-  }
-
-  const baseSubjectExists = await BaseSubject.findById(baseSubjectId).lean();
-  if (!baseSubjectExists) {
-    registerBillings(req, [
-      { field: "databaseOperation", value: 7 },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([organisation, role, account, programmeExists, classExists, classSubjectExists])
-      }
-    ]);
-    throwError(
-      "No base subject with the provided Custom Id exist - Please create the base class subject or change the base classSubject custom Id",
+      "No base subject with the provided Custom Id exist - Please create the base class subject or change the base class subject custom Id",
       409
     );
   }
 
   const newSubject = await ClassSubject.create({
     ...body,
+    pathwayId: pathwayId ? pathwayId : null,
     organisationId: orgParsedId,
-    searchText: generateSearchText([customId, baseSubjectId, programmeId, classId])
+    searchText: generateSearchText([customId, baseSubjectId, programmeId, classId, classSubject])
   });
 
   if (!newSubject) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 9 },
+      { field: "databaseOperation", value: 8 },
       {
         field: "databaseDataTransfer",
         value: getObjectSize([
           organisation,
           role,
           account,
-          programmeExists,
-          classExists,
           baseSubjectExists,
-          classSubjectExists
+          classSubjectExists,
+          classSubjectComboExists
         ])
       }
     ]);
@@ -277,7 +280,7 @@ export const createClassSubject = asyncHandler(async (req: Request, res: Respons
   registerBillings(req, [
     {
       field: "databaseOperation",
-      value: 9 + (logActivityAllowed ? 2 : 0)
+      value: 8 + (logActivityAllowed ? 2 : 0)
     },
     {
       field: "databaseStorageAndBackup",
@@ -286,7 +289,7 @@ export const createClassSubject = asyncHandler(async (req: Request, res: Respons
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([newSubject, baseSubjectExists, organisation, role, account]) +
+        getObjectSize([newSubject, baseSubjectExists, organisation, role, account, classSubjectComboExists]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -298,7 +301,7 @@ export const createClassSubject = asyncHandler(async (req: Request, res: Respons
 export const updateClassSubject = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { customId, programmeId, classId, baseSubjectId, classSubject } = body;
+  const { customId, programmeId, classId, baseSubjectId, classSubject, pathwayId } = body;
 
   if (!validateSubject(body)) {
     throwError("Please fill in all required fields", 400);
@@ -310,7 +313,7 @@ export const updateClassSubject = asyncHandler(async (req: Request, res: Respons
   const orgParsedId = account!.organisationId!.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -321,23 +324,23 @@ export const updateClassSubject = asyncHandler(async (req: Request, res: Respons
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Subject");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Class Subject");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to edit classSubject - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to edit class subject - Please contact your admin", 403);
   }
 
   const originalSubject = await ClassSubject.findOne({ organisationId: orgParsedId, customId }).lean();
-  if (originalSubject) {
+  if (!originalSubject) {
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
       { field: "databaseDataTransfer", value: getObjectSize([originalSubject, organisation, role, account]) }
     ]);
-    throwError("An error occured whilst getting old classSubject data, Ensure it has not been deleted", 500);
+    throwError("An error occured whilst getting old class subject data, Ensure it has not been deleted", 500);
   }
 
   const programmeExists = await Programme.findById(programmeId).lean();
@@ -347,7 +350,7 @@ export const updateClassSubject = asyncHandler(async (req: Request, res: Respons
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalSubject]) }
     ]);
     throwError(
-      "No programme with the provided Custom Id exist - Please create the programme or change the programme custom Id",
+      "No programme with the provided Custom Id exist - Ensure it has not been deleted - or create the programme or change the programme custom Id",
       409
     );
   }
@@ -362,7 +365,7 @@ export const updateClassSubject = asyncHandler(async (req: Request, res: Respons
       }
     ]);
     throwError(
-      "No class with the provided Custom Id exist - Please create the class or change the class custom Id",
+      "No class with the provided Custom Id exist - Ensure it has not been deleted - or create the class or change the class custom Id",
       409
     );
   }
@@ -373,11 +376,11 @@ export const updateClassSubject = asyncHandler(async (req: Request, res: Respons
       { field: "databaseOperation", value: 7 },
       {
         field: "databaseDataTransfer",
-        value: getObjectSize([organisation, role, account, programmeExists, classExists, originalSubject])
+        value: getObjectSize([organisation, role, account, originalSubject])
       }
     ]);
     throwError(
-      "No base subject with the provided Custom Id exist - Please create the base class subject or change the base classSubject custom Id",
+      "No base subject with the provided Custom Id exist -Ensure it has not been deleted - or create the base class subject or change the base class subject custom Id",
       409
     );
   }
@@ -386,7 +389,8 @@ export const updateClassSubject = asyncHandler(async (req: Request, res: Respons
     originalSubject?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([customId, baseSubjectId, programmeId, classId])
+      pathwayId: pathwayId ? pathwayId : null,
+      searchText: generateSearchText([customId, baseSubjectId, programmeId, classId, classSubject])
     },
     { new: true }
   );
@@ -419,8 +423,8 @@ export const updateClassSubject = asyncHandler(async (req: Request, res: Respons
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Subject Update",
-      "Subject",
+      "Class Subject Update",
+      "ClassSubject",
       updatedSubject?._id,
       classSubject,
       difference,
@@ -460,7 +464,7 @@ export const deleteClassSubject = asyncHandler(async (req: Request, res: Respons
 
   const { roleId: creatorRoleId } = account as any;
 
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -471,7 +475,7 @@ export const deleteClassSubject = asyncHandler(async (req: Request, res: Respons
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Subject");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Class Subject");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
@@ -500,8 +504,8 @@ export const deleteClassSubject = asyncHandler(async (req: Request, res: Respons
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Subject Delete",
-      "Subject",
+      "Class Subject Delete",
+      "ClassSubject",
       deletedSubject?._id,
       deletedSubject?.classSubject,
       [

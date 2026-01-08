@@ -34,7 +34,7 @@ export const getStaffImageUploadSignedUrl = asyncHandler(async (req: Request, re
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -99,7 +99,7 @@ export const getStaffImageViewSignedUrl = asyncHandler(async (req: Request, res:
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -157,7 +157,7 @@ export const deleteStaffImageInBucket = asyncHandler(async (req: Request, res: R
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 

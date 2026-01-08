@@ -15,7 +15,7 @@ import {
   getObjectSize,
   getCurrentMonth,
   getNextBillingDate,
-  getLastBillingDate
+  getLastMonth
 } from "../../utils/pureFuctions.ts";
 import { Subscription } from "../../models/admin/subscription.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
@@ -71,7 +71,6 @@ export const getBillings = asyncHandler(async (req: Request, res: Response) => {
       if (key === "organisationId") {
         const parsedOrganisationId = req.query.organisationId as string;
         const orgUID = parsedOrganisationId.split("|")[1].trim();
-        console.log("setting orgUID", orgUID);
         query[key] = orgUID;
       } else {
         query[key] = filters[key];
@@ -87,7 +86,7 @@ export const getBillings = asyncHandler(async (req: Request, res: Response) => {
     }
   }
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -99,31 +98,31 @@ export const getBillings = asyncHandler(async (req: Request, res: Response) => {
     throwError(message, 409);
   }
   const hasAccess = checkAccess(account, tabAccess, "View Billings");
-  if (absoluteAdmin || hasAccess) {
-    const result = await fetchBillings(
-      query,
-      cursorType as string,
-      parsedLimit,
-      organisation!._id.toString(),
-      accountId
-    );
-
-    if (!result || !result.billings) {
-      throwError("Error fetching billings", 500);
-    }
-
+  if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + result.billings.length },
+      { field: "databaseOperation", value: 3 },
       {
         field: "databaseDataTransfer",
-        value: getObjectSize([result, organisation, role, account])
+        value: getObjectSize([organisation, role, account])
       }
     ]);
-    res.status(201).json(result);
-    return;
+    throwError("Unauthorised Action: You do not have access to view billings - Please contact your admin", 403);
+  }
+  const result = await fetchBillings(query, cursorType as string, parsedLimit, organisation!._id.toString(), accountId);
+
+  if (!result || !result.billings) {
+    throwError("Error fetching billings", 500);
   }
 
-  throwError("Unauthorised Action: You do not have access to view billings - Please contact your admin", 403);
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 + result.billings.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([result, organisation, role, account])
+    }
+  ]);
+
+  res.status(201).json(result);
 });
 
 export const getSubscription = asyncHandler(async (req: Request, res: Response) => {
@@ -133,7 +132,7 @@ export const getSubscription = asyncHandler(async (req: Request, res: Response) 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -173,7 +172,7 @@ export const upgradeToPremium = asyncHandler(async (req: Request, res: Response)
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -193,12 +192,15 @@ export const upgradeToPremium = asyncHandler(async (req: Request, res: Response)
         $set: {
           subscriptionType: "Premium",
           premiumStartDate: new Date(),
+          premiumEndDate: null,
           subscriptionStatus: "Active"
         }
-      }
+      },
+      { new: true }
     );
     if (!subscription) {
       await sendEmailToOwner(
+        req,
         "Premium Subscription Upgrade Failed",
         `Organisation with the ID: ${userTokenOrgId} tried to upgrade to premium but failed`
       );
@@ -214,10 +216,12 @@ export const upgradeToPremium = asyncHandler(async (req: Request, res: Response)
     ]);
 
     await sendEmailToOwner(
+      req,
       "Premium Subscription Upgrade",
       `Organisation with the ID: ${userTokenOrgId} and name ${account!.name} upgraded to premium successfully`
     );
     sendEmail(
+      req,
       account!.email,
       "Premium Subscription Upgrade",
       `You have successfully upgraded to premium with SuSchool`,
@@ -236,14 +240,14 @@ export const upgradeToPremium = asyncHandler(async (req: Request, res: Response)
   throwError("Unauthorised Action: You do not have access to view billings - Please contact your admin", 403);
 });
 
-export const cancleSubscription = asyncHandler(async (req: Request, res: Response) => {
+export const cancelSubscription = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -265,10 +269,12 @@ export const cancleSubscription = asyncHandler(async (req: Request, res: Respons
           premiumEndDate: new Date(),
           subscriptionStatus: "Inactive"
         }
-      }
+      },
+      { new: true }
     );
     if (!subscription) {
       await sendEmailToOwner(
+        req,
         "Premium Subscription Cancellation Failed",
         `Organisation with the ID: ${userTokenOrgId} tried to cancel premium subscription but failed`
       );
@@ -284,12 +290,14 @@ export const cancleSubscription = asyncHandler(async (req: Request, res: Respons
     ]);
 
     await sendEmailToOwner(
+      req,
       "Premium Subscription Cancellation",
       `Organisation with the ID: ${userTokenOrgId} and name ${
         account!.name
       } cancelled premium subscription successfully`
     );
     sendEmail(
+      req,
       account!.email,
       "Premium Subscription Cancellation with SuSchool",
       `You have successfully cancelled your premium subscription with SuSchool - Sorry to see you go`,
@@ -355,25 +363,160 @@ export const getOrganisation = asyncHandler(async (req: Request, res: Response) 
   res.status(200).json(account);
 });
 
-export const prepareLastBills = async (accountId: string) => {
+export const transferedLastFreemiumBillToOwnerBills = async (req: Request, accountId: string) => {
   // confirm the user is the owner
   if (accountId !== getOwnerMongoId()) {
     await sendEmailToOwner(
+      req,
+      "Unauthorized Prepare Last Bills Attempt - SuSchool  Management App",
+      `An unauthorized attempt to prepare old bills was made by account ID: ${accountId}.`
+    );
+    throwError("Unauthorized Action: Only owner account can perform this action", 403);
+  }
+  const billingMonth = getLastMonth();
+
+  const ownerLastBill = await Billing.findOne({
+    organisationId: getOwnerMongoId(),
+    billingMonth,
+    subscriptionType: "Premium",
+    billingStatus: "Not Billed"
+  }).lean();
+
+  if (!ownerLastBill) {
+    await sendEmailToOwner(
+      req,
+      "Bills Transfer - Unable to get owner last bill - SuSchool Management App",
+      `Unable to get owner last bill during the transfer to owner bills operation.. ${billingMonth}`
+    );
+    throwError("Unable to get owner last bill", 500);
+    return false;
+  }
+
+  if (ownerLastBill?.transferedFreemiumToOwner) {
+    return true;
+  }
+
+  const freemiumBills = await Billing.find({
+    billingMonth,
+    subscriptionType: "Freemium",
+    billingStatus: "Not Billed"
+  }).lean();
+
+  // check if there are billing documents to process
+  if (!freemiumBills || freemiumBills.length === 0) {
+    await sendEmailToOwner(
+      req,
+      "Bills Transfer - No unbilled freemium billing documents found - SuSchool Management App",
+      `No unbilled freemium billing documents were found during the transfer to owner bills operation. ${billingMonth}`
+    );
+    return true;
+  }
+
+  const targetUsages: any = {
+    renderBaseCost: () => getRenderBaseRate(),
+    renderComputeSeconds: () => getRenderComputeRate(),
+    renderBandwidth: () => getRenderBandwidthRate(),
+    databaseOperation: () => getDatabaseOperationsRate(),
+    databaseDataTransfer: () => getDatabaseDataTransferRate(),
+    cloudStorageGBDownloaded: () => getCloudStorageGbDownloadedRate(),
+    cloudStorageUploadOperation: () => getCloudStorageUploadOperationRate(),
+    cloudStorageDownloadOperation: () => getCloudStorageDownloadOperationRate()
+  };
+
+  let totalUsages: any = {};
+
+  // add all usages for the month
+  for (const freemiumBill of freemiumBills) {
+    for (const field of Object.keys(freemiumBill)) {
+      if (field in targetUsages) {
+        if (field === "renderBaseCost") {
+          totalUsages[field] = (totalUsages[field] || 0) + (freemiumBill as any)[field];
+        } else {
+          totalUsages[field] = (totalUsages[field] || 0) + (freemiumBill as any)[field].value;
+        }
+      }
+    }
+  }
+
+  const newOwnerBill = ownerLastBill as any;
+  for (const usage in totalUsages) {
+    if (usage === "renderBaseCost") {
+      newOwnerBill.renderBaseCost = Number(totalUsages[usage]);
+    } else {
+      newOwnerBill[usage] = { ...newOwnerBill[usage], value: Number(totalUsages[usage]) };
+    }
+  }
+
+  newOwnerBill.transferedFreemiumToOwner = true;
+
+  const updatedOwnerBill = await Billing.findByIdAndUpdate(newOwnerBill._id, newOwnerBill, { new: true }).lean();
+
+  if (!updatedOwnerBill) {
+    await sendEmailToOwner(
+      req,
+      "Bills Transfer - Unable to update owner last bill - SuSchool Management App",
+      `Unable to update owner last bill after the transfer to owner bills.. ${billingMonth}`
+    );
+    throwError("Unable to update owner last bill", 500);
+    return false;
+  }
+
+  const updatedFreemiumBills = await Billing.updateMany(
+    {
+      billingStatus: "Not Billed",
+      subscriptionType: "Freemium",
+      billingMonth
+    },
+    { billingStatus: "Billed" }
+  ).lean();
+
+  return true;
+};
+export const targetUsages: any = {
+  renderBaseCost: () => getRenderBaseRate(),
+  renderComputeSeconds: () => getRenderComputeRate(),
+  renderBandwidth: () => getRenderBandwidthRate(),
+  databaseOperation: () => getDatabaseOperationsRate(),
+  databaseDataTransfer: () => getDatabaseDataTransferRate(),
+  databaseStorageAndBackup: () => getDatabaseDataStorageAndBackupRate(),
+  cloudStorageGBStored: () => getCloudStorageGbStoredRate(),
+  cloudStorageGBDownloaded: () => getCloudStorageGbDownloadedRate(),
+  cloudStorageUploadOperation: () => getCloudStorageUploadOperationRate(),
+  cloudStorageDownloadOperation: () => getCloudStorageDownloadOperationRate()
+};
+export const prepareLastBills = async (req: Request, accountId: string) => {
+  // confirm the user is the owner
+  if (accountId !== getOwnerMongoId()) {
+    await sendEmailToOwner(
+      req,
       "Unauthorized Prepare Last Bills Attempt - SuSchool  Management App",
       `An unauthorized attempt to prepare old bills was made by account ID: ${accountId}.`
     );
     throwError("Unauthorized Action: Only owner account can perform this action", 403);
   }
 
-  const billingMonth = getLastBillingDate();
+  const billTransfered = await transferedLastFreemiumBillToOwnerBills(req, accountId);
+
+  if (!billTransfered) {
+    await sendEmailToOwner(
+      req,
+      "Prepare Bills - Unable to transfer freemium to owner bills - SuSchool Management App",
+      `Unable to transfer freemium to owner bills during the prepare bills operation.`
+    );
+    throwError("Unable to transfer freemium to owner bills", 500);
+  }
+
+  const billingMonth = getLastMonth();
   const billingDocs = await Billing.find({
-    billingStatus: "Not Billed",
-    billingMonth: { $ne: billingMonth }
-  });
+    billingMonth: billingMonth,
+    subscriptionType: "Premium",
+    billingStatus: "Not Billed"
+  }).lean();
 
   // check if there are billing documents to process
   if (!billingDocs || billingDocs.length === 0) {
     await sendEmailToOwner(
+      req,
       "Prepare Bills - No unbilled billing documents found - SuSchool Management App",
       `No unbilled billing documents were found during the prepare bills operation. ${billingMonth}`
     );
@@ -382,19 +525,6 @@ export const prepareLastBills = async (accountId: string) => {
   }
 
   let updatedBillingDocs: any[] = [];
-
-  const targetUsages: any = {
-    renderBaseCost: () => getRenderBaseRate(),
-    renderComputeSeconds: () => getRenderComputeRate(),
-    renderBandwidth: () => getRenderBandwidthRate(),
-    databaseOperation: () => getDatabaseOperationsRate(),
-    databaseDataTransfer: () => getDatabaseDataTransferRate(),
-    databaseStorageAndBackup: () => getDatabaseDataStorageAndBackupRate(),
-    cloudStorageGBStored: () => getCloudStorageGbStoredRate(),
-    cloudStorageGBDownloaded: () => getCloudStorageGbDownloadedRate(),
-    cloudStorageUploadOperation: () => getCloudStorageUploadOperationRate(),
-    cloudStorageDownloadOperation: () => getCloudStorageDownloadOperationRate()
-  };
 
   const targetUsageRates: any = {};
   for (const usage in targetUsages) {
@@ -405,7 +535,7 @@ export const prepareLastBills = async (accountId: string) => {
 
   // add all usages for the month
   for (const billingDoc of billingDocs) {
-    for (const field of Object.keys(billingDoc.toObject())) {
+    for (const field of Object.keys(billingDoc)) {
       if (field in targetUsages) {
         totalUsages[field] = (totalUsages[field] || 0) + (billingDoc as any)[field].value;
       }
@@ -415,9 +545,12 @@ export const prepareLastBills = async (accountId: string) => {
   const totalUsageDoc = await TotalUsage.create({ ...totalUsages, billingMonth, billingDate: getNextBillingDate() });
   if (!totalUsageDoc) {
     await sendEmailToOwner(
+      req,
       "Prepare Last Bills - Failed to create total usage document - SuSchool Management App",
       `Failed to create total usage document for billing month: ${billingMonth}.`
     );
+
+    throwError("Failed to create total usage document", 500);
   }
 
   // calculate cost for total usages for each service
@@ -425,6 +558,7 @@ export const prepareLastBills = async (accountId: string) => {
   // check if the number of total usages and cost calculations are the same
   if (Object.keys(totalUsages).length !== Object.keys(targetUsageRates).length) {
     await sendEmailToOwner(
+      req,
       "Prepare Last Bills - Mismatch in total usages and cost calculations - SuSchool Management App",
       `There was a mismatch in the number of total usages and cost calculations for billing month: ${billingMonth}. Please investigate.`
     );
@@ -432,13 +566,14 @@ export const prepareLastBills = async (accountId: string) => {
   }
 
   await sendEmailToOwner(
+    req,
     "Total Usages and Cost Calculations - SuSchool Management App",
     `The total usages for billing month: ${billingMonth} are as follows: ${JSON.stringify(totalUsages)}`
   );
   // calculate cost for each billing doc based on their percentage usage
   for (const billingDoc of billingDocs) {
     let totalCost = 0;
-    for (const field of Object.keys(billingDoc.toObject())) {
+    for (const field of Object.keys(billingDoc)) {
       if (field in targetUsages && field in targetUsageRates) {
         if (field === "renderBaseCost") {
           const allotedCost = targetUsageRates[field] / billingDocs.length;
@@ -456,16 +591,14 @@ export const prepareLastBills = async (accountId: string) => {
     }
 
     const featuresCost = billingDoc.featuresToCharge?.reduce((acc, feature) => acc + (feature.price ?? 0), 0);
-    totalCost += featuresCost;
+    totalCost += billingDoc.organisationId.toString() === getOwnerMongoId() ? 0 : featuresCost;
 
     billingDoc.totalCost = totalCost;
     updatedBillingDocs.push(billingDoc);
 
     // update billing doc to the database
-    const plainDoc = billingDoc.toObject();
+    const plainDoc = billingDoc;
     const { _id, ...rest } = plainDoc;
-
-    console.log("rest", rest);
 
     const updatedBill = await Billing.findByIdAndUpdate(
       billingDoc._id,
@@ -474,10 +607,11 @@ export const prepareLastBills = async (accountId: string) => {
         billingStatus: "Billed"
       },
       { new: true }
-    );
+    ).lean();
     // check if the update was successful
     if (!updatedBill) {
       await sendEmailToOwner(
+        req,
         "Prepare Last Bills - Error updating billing document - SuSchool Management App",
         `An error occurred while updating billing document ID: ${billingDoc._id} for billing month: ${billingMonth}.`
       );
@@ -488,10 +622,11 @@ export const prepareLastBills = async (accountId: string) => {
   return billingDocs;
 };
 
-export const prepareOldBills = async (accountId: string) => {
+export const prepareOldBills = async (req: Request, accountId: string) => {
   // confirm the user is the owner
   if (accountId !== getOwnerMongoId()) {
     await sendEmailToOwner(
+      req,
       "Unauthorized Prepare Old Bills Attempt - SuSchool  Management App",
       `An unauthorized attempt to prepare old bills was made by account ID: ${accountId}.`
     );
@@ -500,13 +635,15 @@ export const prepareOldBills = async (accountId: string) => {
 
   const billingMonth = getCurrentMonth();
   const billingDocs = await Billing.find({
-    billingStatus: "Not Billed",
-    billingMonth: { $ne: billingMonth }
+    billingMonth: { $ne: billingMonth },
+    subscriptionType: "Premium",
+    billingStatus: "Not Billed"
   });
 
   // check if there are billing documents to process
   if (!billingDocs || billingDocs.length === 0) {
     await sendEmailToOwner(
+      req,
       "Prepare Bills - No unbilled billing documents found - SuSchool Management App",
       `No unbilled billing documents were found during the prepare bills operation.`
     );
@@ -552,6 +689,7 @@ export const prepareOldBills = async (accountId: string) => {
     const totalUsageDoc = await TotalUsage.create({ ...totalUsages, billingMonth, billingDate: getNextBillingDate() });
     if (!totalUsageDoc) {
       await sendEmailToOwner(
+        req,
         "Prepare Old Bills - Failed to create total usage document - SuSchool Management App",
         `Failed to create total usage document for billing month: ${billingMonth}.`
       );
@@ -562,6 +700,7 @@ export const prepareOldBills = async (accountId: string) => {
     // check if the number of total usages and cost calculations are the same
     if (Object.keys(totalUsages).length !== Object.keys(targetUsageRates).length) {
       await sendEmailToOwner(
+        req,
         "Prepare Old Bills - Mismatch in total usages and cost calculations - SuSchool Management App",
         `There was a mismatch in the number of total usages and cost calculations for billing month: ${billingMonth}. Please investigate.`
       );
@@ -569,6 +708,7 @@ export const prepareOldBills = async (accountId: string) => {
     }
 
     await sendEmailToOwner(
+      req,
       "Total Usages and Cost Calculations - SuSchool Management App",
       `The total usages and cost calculations for billing month: ${billingMonth} are as follows: ${JSON.stringify(
         totalUsages
@@ -595,16 +735,13 @@ export const prepareOldBills = async (accountId: string) => {
       }
 
       const featuresCost = billingDoc.featuresToCharge?.reduce((acc, feature) => acc + (feature.price ?? 0), 0);
-      totalCost += featuresCost;
-
+      totalCost += billingDoc.organisationId.toString() === getOwnerMongoId() ? 0 : featuresCost;
       billingDoc.totalCost = totalCost;
       updatedBillingDocs.push(billingDoc);
 
       // update billing doc to the database
       const plainDoc = billingDoc.toObject();
       const { _id, ...rest } = plainDoc;
-
-      console.log("rest", rest);
 
       const updatedBill = await Billing.findByIdAndUpdate(
         billingDoc._id,
@@ -617,6 +754,7 @@ export const prepareOldBills = async (accountId: string) => {
       // check if the update was successful
       if (!updatedBill) {
         await sendEmailToOwner(
+          req,
           "Prepare Old Bills - Error updating billing document - SuSchool Management App",
           `An error occurred while updating billing document ID: ${billingDoc._id} for billing month: ${billingMonth}.`
         );
@@ -632,17 +770,21 @@ export const chargeLastBills = asyncHandler(async (req: Request, res: Response) 
   const { accountId } = req.userToken;
 
   // prepare last bills for charging
-  const billedBillingDocs = await prepareLastBills(accountId);
+  const billedBillingDocs = await prepareLastBills(req, accountId);
 
   // get all unpaid and failed bills
-  const billsToCharge = await Billing.find({ billingStatus: "Billed", paymentStatus: { $in: ["Unpaid", "Failed"] } });
+  const billsToCharge = await Billing.find({
+    subscriptionType: "Premium",
+    paymentStatus: { $in: ["Unpaid", "Failed"] },
+    billingStatus: "Billed"
+  });
 });
 
 export const chargeOldBills = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
 
   // prepare old bills for charging
-  const billedBillingDocs = await prepareOldBills(accountId);
+  const billedBillingDocs = await prepareOldBills(req, accountId);
 
   res.status(201).json("Old bills prepared and charged successfully");
 });
@@ -654,6 +796,7 @@ export const inititalizeTransaction = asyncHandler(async (req: Request, res: Res
 
   if (!email || !amount) {
     await sendEmailToOwner(
+      req,
       "Transaction Initiation Failed - SuSchool Management App",
       `Please fill in all required fields (email and amount)`
     );
@@ -664,7 +807,7 @@ export const inititalizeTransaction = asyncHandler(async (req: Request, res: Res
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -677,6 +820,7 @@ export const inititalizeTransaction = asyncHandler(async (req: Request, res: Res
   }
   if (absoluteAdmin && accountId !== getOwnerMongoId()) {
     await sendEmailToOwner(
+      req,
       "Unauthorised Action: Transaction Initiation Attempt - SuSchool Management App",
       `User with ID: ${accountId} and email: ${email} tried to initiate a transaction with amount: ${amount}`
     );
@@ -684,7 +828,7 @@ export const inititalizeTransaction = asyncHandler(async (req: Request, res: Res
     return;
   }
 
-  const reference = generateCustomId("sulpay", false, 10, true);
+  const reference = generateCustomId("sulpay", false, "", 10, true);
 
   try {
     const response = await axios.post(
@@ -714,9 +858,9 @@ export const paystackWebhook = asyncHandler(async (req: Request, res: Response) 
 
     // handle successful payment
     if (event.event === "charge.success") {
-      const reference = event.data.reference;
-      const authorization = event.data.authorization;
-      const customer = event.data.customer;
+      const reference = event.data?.reference;
+      const authorization = event.data?.authorization;
+      const customer = event.data?.customer;
 
       const updatedSubscription = await Subscription.findOneAndUpdate();
     }

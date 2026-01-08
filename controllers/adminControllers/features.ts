@@ -23,7 +23,7 @@ export const getFeatures = asyncHandler(async (req: Request, res: Response) => {
   const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -70,7 +70,7 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
   const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
 
   const { roleId: creatorRoleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -133,6 +133,7 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
 
   if (!orgAccount) {
     await sendEmailToOwner(
+      req,
       "An error occured while adding feature to organisation account",
       `Organisation with the ID: ${userTokenOrgId} tried to add a feature to their account but failed`
     );
@@ -161,6 +162,7 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
     );
     if (!addedToBilling) {
       await sendEmailToOwner(
+        req,
         "An error occured while adding feature to billing",
         `Organisation with the ID: ${userTokenOrgId} tried to add a feature to their billing but failed`
       );
@@ -209,11 +211,13 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
   ]);
 
   await sendEmail(
+    req,
     orgAccount!.email,
     "Feature Purchased",
     `You have successfully added the feature: ${feature?.name} to your account. You will be charged for this feature from the next billing cycle`
   );
   await sendEmailToOwner(
+    req,
     "Feature Purchased",
     `The user: ${orgAccount?.name} has successfully added the feature: ${feature?.name} to their account. `
   );
@@ -233,7 +237,7 @@ export const removeFeatureAndKeepData = asyncHandler(async (req: Request, res: R
   const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
 
   const { roleId: creatorRoleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -289,6 +293,7 @@ export const removeFeatureAndKeepData = asyncHandler(async (req: Request, res: R
 
   if (!orgAccount) {
     await sendEmailToOwner(
+      req,
       "An error occured while removing feature from organisation account",
       `Organisation with the ID: ${userTokenOrgId} tried to remove {${featureToRemove?.name}} to their account but failed`
     );
@@ -296,11 +301,13 @@ export const removeFeatureAndKeepData = asyncHandler(async (req: Request, res: R
   }
 
   await sendEmail(
+    req,
     orgAccount!.email,
     "Feature Removed",
     `You have successfully removed the feature: ${featureToRemove?.name} from your account. You will still be charged for related data stored`
   );
   await sendEmailToOwner(
+    req,
     "Feature Removed - Remove Keep Data",
     `The user: ${orgAccount?.name} has successfully removed the feature: ${featureToRemove?.name} from their account. But their data will be kept`
   );
@@ -356,7 +363,7 @@ export const removeFeatureAndDeleteData = asyncHandler(async (req: Request, res:
   const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
 
   const { roleId: creatorRoleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -412,16 +419,18 @@ export const removeFeatureAndDeleteData = asyncHandler(async (req: Request, res:
 
   if (!orgAccount) {
     await sendEmailToOwner(
+      req,
       "An error occured while removing feature from organisation account",
       `Organisation with the ID: ${userTokenOrgId} tried to remove {${featureToRemove?.name}} to their account but failed`
     );
     throwError("An error occured while adding feature to your account", 500);
   }
 
-  const removeRelatedData = await removeFeatureRelatedData(featureToRemove!.name, userTokenOrgId);
+  const removeRelatedData = await removeFeatureRelatedData(req, featureToRemove!.name, userTokenOrgId);
 
   if (!removeRelatedData) {
     await sendEmailToOwner(
+      req,
       "An error occured while removing feature data from database",
       `An error occured while clearing the data related to the feature: ${featureToRemove?.name} from the database for organisation with the ID: ${userTokenOrgId} `
     );
@@ -429,11 +438,13 @@ export const removeFeatureAndDeleteData = asyncHandler(async (req: Request, res:
   }
 
   await sendEmail(
+    req,
     orgAccount!.email,
     "Feature Removed - Data Cleared",
     `You have successfully removed the feature: ${featureToRemove?.name} from your account. All related data has been cleared`
   );
   await sendEmailToOwner(
+    req,
     "Feature Removed - Remove and Delete Data",
     `The user: ${orgAccount?.name} has successfully removed the feature: ${featureToRemove?.name} from their account. All related data has been cleared`
   );

@@ -6,7 +6,8 @@ import {
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllPathways
+  fetchAllPathways,
+  checkAccesses
 } from "../../../utils/databaseFunctions.ts";
 import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
@@ -14,6 +15,7 @@ import { throwError, toNegative, generateSearchText, getObjectSize } from "../..
 import { Pathway } from "../../../models/curriculum/pathway";
 import { Programme } from "../../../models/curriculum/programme.ts";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
+import { getNeededAccesses } from "../../../utils/defaultVariables.ts";
 
 const validatePathway = (pathwayDataParam: any) => {
   const { description, startDate, endDate, ...copyLocalData } = pathwayDataParam;
@@ -27,13 +29,12 @@ const validatePathway = (pathwayDataParam: any) => {
 
   return true;
 };
-
 export const getAllPathways = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -44,31 +45,32 @@ export const getAllPathways = asyncHandler(async (req: Request, res: Response) =
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Pathways");
+  const hasAccess = checkAccesses(account, tabAccess, getNeededAccesses("All Pathways"));
 
-  if (absoluteAdmin || hasAccess) {
-    const pathways = await fetchAllPathways(organisation!._id.toString());
-
-    if (!pathways) {
-      throwError("Error fetching pathways", 500);
-    }
-
+  if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + pathways.length },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([pathways, organisation, role, account])
-      }
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    res.status(201).json(pathways);
-    return;
+    throwError(
+      "Unauthorised Action: You do not have access to view pathways or one of it's required data (programmes) - Please contact your admin",
+      403
+    );
+  }
+  const pathways = await fetchAllPathways(organisation!._id.toString());
+
+  if (!pathways) {
+    throwError("Error fetching pathways", 500);
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 3 },
-    { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    { field: "databaseOperation", value: 3 + pathways.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([pathways, organisation, role, account])
+    }
   ]);
-  throwError("Unauthorised Action: You do not have access to view pathways - Please contact your admin", 403);
+  res.status(201).json(pathways);
 });
 
 export const getPathways = asyncHandler(async (req: Request, res: Response) => {
@@ -85,7 +87,7 @@ export const getPathways = asyncHandler(async (req: Request, res: Response) => {
   }
 
   for (const key in filters) {
-    if (filters[key] !== "all") {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
       query[key] = filters[key];
     }
   }
@@ -99,7 +101,7 @@ export const getPathways = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -110,31 +112,34 @@ export const getPathways = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Pathways");
+  const hasAccess =
+    checkAccess(account, tabAccess, "View Programmes") && checkAccess(account, tabAccess, "View Pathways");
 
-  if (absoluteAdmin || hasAccess) {
-    const result = await fetchPathways(query, cursorType as string, parsedLimit, organisation!._id.toString());
-
-    if (!result || !result.pathways) {
-      throwError("Error fetching pathways", 500);
-    }
-
+  if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + result.pathways.length },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([result, organisation, role, account])
-      }
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    res.status(201).json(result);
-    return;
+    throwError(
+      "Unauthorised Action: You do not have access to view pathways or one of it's required data (programmes) - Please contact your admin",
+      403
+    );
+  }
+
+  const result = await fetchPathways(query, cursorType as string, parsedLimit, organisation!._id.toString());
+
+  if (!result || !result.pathways) {
+    throwError("Error fetching pathways", 500);
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 3 },
-    { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    { field: "databaseOperation", value: 3 + result.pathways.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([result, organisation, role, account])
+    }
   ]);
-  throwError("Unauthorised Action: You do not have access to view pathway - Please contact your admin", 403);
+  res.status(201).json(result);
 });
 
 // controller to handle role creation
@@ -142,13 +147,13 @@ export const createPathway = asyncHandler(async (req: Request, res: Response) =>
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { customId, pathway, programmeId } = body;
+  const { customId, pathway, programmeId, programmeCustomId } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -176,12 +181,12 @@ export const createPathway = asyncHandler(async (req: Request, res: Response) =>
       { field: "databaseDataTransfer", value: getObjectSize([pathwayExists, organisation, role, account]) }
     ]);
     throwError(
-      "A pathway with this Custom Id already exist - Either refer to that record or change the pathway custom Id",
+      "A pathway with this Custom Id already exist within the organisation - Either refer to that record or change the pathway custom Id",
       409
     );
   }
 
-  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, customId });
+  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, customId: programmeCustomId }).lean();
   if (!programmeExists) {
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
@@ -191,7 +196,7 @@ export const createPathway = asyncHandler(async (req: Request, res: Response) =>
       }
     ]);
     throwError(
-      "No programme with the provided Custom Id exist - Please create the programme or change the programme custom Id",
+      "No programme with the provided Custom Id exist - Please create the programme or select another programme",
       409
     );
   }
@@ -259,7 +264,7 @@ export const createPathway = asyncHandler(async (req: Request, res: Response) =>
 export const updatePathway = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { pathway, customId, programmeId } = body;
+  const { pathway, customId, programmeId, programmeCustomId } = body;
 
   if (!validatePathway(body)) {
     throwError("Please fill in all required fields", 400);
@@ -271,7 +276,7 @@ export const updatePathway = asyncHandler(async (req: Request, res: Response) =>
   const orgParsedId = account!.organisationId!.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -292,7 +297,7 @@ export const updatePathway = asyncHandler(async (req: Request, res: Response) =>
     throwError("Unauthorised Action: You do not have access to edit pathway - Please contact your admin", 403);
   }
 
-  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, customId });
+  const programmeExists = await Programme.findOne({ organisationId: orgParsedId, customId: programmeCustomId }).lean();
   if (!programmeExists) {
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
@@ -382,7 +387,7 @@ export const deletePathway = asyncHandler(async (req: Request, res: Response) =>
 
   const { roleId: creatorRoleId } = account as any;
 
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 

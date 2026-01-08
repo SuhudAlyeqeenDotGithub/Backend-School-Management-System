@@ -6,7 +6,8 @@ import {
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllPathwayManagers
+  fetchAllPathwayManagers,
+  checkAccesses
 } from "../../../utils/databaseFunctions.ts";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
 import { logActivity } from "../../../utils/databaseFunctions.ts";
@@ -14,6 +15,7 @@ import { diff } from "deep-diff";
 import { StaffContract } from "../../../models/staff/contracts.ts";
 import { PathwayManager } from "../../../models/curriculum/pathway";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
+import { getNeededAccesses } from "../../../utils/defaultVariables.ts";
 
 const validatePathwayManager = (pathwayManagerDataParam: any) => {
   const { managedUntil, _id, ...copyLocalData } = pathwayManagerDataParam;
@@ -32,8 +34,8 @@ export const getAllPathwayManagers = asyncHandler(async (req: Request, res: Resp
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { roleId, staffId } = account as any;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -44,31 +46,36 @@ export const getAllPathwayManagers = asyncHandler(async (req: Request, res: Resp
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Pathway Managers");
+  const hasAccess = checkAccesses(account, tabAccess, getNeededAccesses("All Pathway Managers"));
 
-  if (absoluteAdmin || hasAccess) {
-    const result = await fetchAllPathwayManagers(organisation!._id.toString());
-
-    if (!result) {
-      registerBillings(req, [
-        { field: "databaseOperation", value: 3 },
-        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
-      ]);
-      throwError("Error fetching pathway managers", 500);
-    }
-
+  if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + result.length },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([result, organisation, role, account])
-      }
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    res.status(201).json(result);
-    return;
+    throwError(
+      "Unauthorised Action: You do not have access to view pathway managers or one of it's required data (pathways) - Please contact your admin",
+      403
+    );
+  }
+  const result = await fetchAllPathwayManagers(organisation!._id.toString(), staffId);
+
+  if (!result) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Error fetching pathway managers", 500);
   }
 
-  throwError("Unauthorised Action: You do not have access to view pathway managers - Please contact your admin", 403);
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 + result.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([result, organisation, role, account])
+    }
+  ]);
+  res.status(201).json(result);
 });
 
 export const getPathwayManagers = asyncHandler(async (req: Request, res: Response) => {
@@ -85,7 +92,7 @@ export const getPathwayManagers = asyncHandler(async (req: Request, res: Respons
   }
 
   for (const key in filters) {
-    if (filters[key] !== "all") {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
       query[key] = filters[key];
     }
   }
@@ -99,7 +106,7 @@ export const getPathwayManagers = asyncHandler(async (req: Request, res: Respons
   }
 
   const { roleId, staffId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -110,38 +117,45 @@ export const getPathwayManagers = asyncHandler(async (req: Request, res: Respons
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Pathway Managers");
 
-  if (absoluteAdmin || hasAccess) {
-    const result = await fetchPathwayManagers(
-      query,
-      cursorType as string,
-      parsedLimit,
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      staffId
-    );
+  const hasAccess =
+    checkAccess(account, tabAccess, "View Pathway Managers") && checkAccess(account, tabAccess, "View Pathways");
 
-    if (!result || !result.pathwayManagers) {
-      registerBillings(req, [
-        { field: "databaseOperation", value: 3 },
-        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
-      ]);
-      throwError("Error fetching pathway managers", 500);
-    }
-
+  if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + result.pathwayManagers.length },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([result, organisation, role, account])
-      }
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    res.status(201).json(result);
-    return;
+    throwError(
+      "Unauthorised Action: You do not have access to view pathway managers or one of it's required data (pathways) - Please contact your admin",
+      403
+    );
+  }
+  const result = await fetchPathwayManagers(
+    query,
+    cursorType as string,
+    parsedLimit,
+    absoluteAdmin ? "Absolute Admin" : "User",
+    organisation!._id.toString(),
+    staffId
+  );
+
+  if (!result || !result.pathwayManagers) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Error fetching pathway managers", 500);
   }
 
-  throwError("Unauthorised Action: You do not have access to view pathway managers - Please contact your admin", 403);
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 + result.pathwayManagers.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([result, organisation, role, account])
+    }
+  ]);
+  res.status(201).json(result);
 });
 
 // controller to handle role creation
@@ -156,7 +170,7 @@ export const createPathwayManager = asyncHandler(async (req: Request, res: Respo
   const orgParsedId = account!.organisationId!._id.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -289,7 +303,7 @@ export const updatePathwayManager = asyncHandler(async (req: Request, res: Respo
   const orgParsedId = account!.organisationId!.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -310,12 +324,23 @@ export const updatePathwayManager = asyncHandler(async (req: Request, res: Respo
     throwError("Unauthorised Action: You do not have access to edit pathway manager - Please contact your admin", 403);
   }
 
+  const staffHasContract = await StaffContract.findOne({
+    staffId
+  }).lean();
+  if (!staffHasContract) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("The staff has no contract with this organisation - Please create one for them", 409);
+  }
+
   const originalPathwayManager = await PathwayManager.findOne({ _id: body._id }).lean();
 
   if (!originalPathwayManager) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 4 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, staffHasContract]) }
     ]);
     throwError("An error occured whilst getting old pathway manager data, Ensure it has not been deleted", 500);
   }
@@ -331,7 +356,7 @@ export const updatePathwayManager = asyncHandler(async (req: Request, res: Respo
 
   if (!updatedPathwayManager) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 6 },
+      { field: "databaseOperation", value: 7 },
       {
         field: "databaseDataTransfer",
         value: getObjectSize([updatedPathwayManager, organisation, role, account, originalPathwayManager])
@@ -358,11 +383,11 @@ export const updatePathwayManager = asyncHandler(async (req: Request, res: Respo
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([updatedPathwayManager, organisation, role, account, originalPathwayManager]) +
+        getObjectSize([updatedPathwayManager, organisation, role, account, originalPathwayManager, staffHasContract]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -382,7 +407,7 @@ export const deletePathwayManager = asyncHandler(async (req: Request, res: Respo
 
   const { roleId: creatorRoleId } = account as any;
 
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 

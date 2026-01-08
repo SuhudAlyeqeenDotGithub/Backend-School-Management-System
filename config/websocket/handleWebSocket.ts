@@ -53,18 +53,20 @@ const handleWebSocket = (io: Server) => {
 
     changeStream.on("change", (change) => {
       if (change.operationType === "delete") return;
+      const collection = "ns" in change && change.ns && "coll" in change.ns && change.ns.coll;
+
+      if (collection === "studentdayattendancetemplates") return;
+
       const organisationIdExists =
         "fullDocument" in change && change.fullDocument && "organisationId" in change.fullDocument;
 
-      const collection = "ns" in change && change.ns && "coll" in change.ns && change.ns.coll;
       const organisationId = organisationIdExists ? change.fullDocument?.organisationId?.toString() : null;
       const fullDocument = "fullDocument" in change ? change.fullDocument : null;
+      const fullDocumentId = "fullDocument" in change ? change.fullDocument?._id : null;
 
       if (!collection || !organisationId) return;
 
-      const queueKey = `${collection}-${organisationId}`;
-
-      // console.log("Preparing to emit DB change:", queueKey);
+      const queueKey = `${collection}-${organisationId}-${fullDocumentId}`;
 
       if (queue.has(queueKey)) {
         return;
@@ -78,8 +80,6 @@ const handleWebSocket = (io: Server) => {
           fullDocument,
           changeOperation: change.operationType
         });
-
-        // console.log("Emitted DB change:", queueKey);
 
         queue.delete(queueKey);
       }, 200);

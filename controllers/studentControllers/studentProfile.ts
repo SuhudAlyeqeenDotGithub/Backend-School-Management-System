@@ -6,28 +6,52 @@ import {
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllStudentProfiles
+  fetchAllStudentProfiles,
+  orgHasRequiredFeature,
+  validatePhoneNumber,
+  checkAccesses
 } from "../../utils/databaseFunctions.ts";
 import { logActivity } from "../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
-import { throwError, toNegative, generateSearchText, getObjectSize } from "../../utils/pureFuctions.ts";
+import { throwError, toNegative, generateSearchText, getObjectSize, validateEmail } from "../../utils/pureFuctions.ts";
 import { Student } from "../../models/student/studentProfile";
 import { registerBillings } from "../../utils/billingFunctions.ts";
+import { getNeededAccesses } from "../../utils/defaultVariables.ts";
 
 const validateStudentProfile = (studentDataParam: any) => {
   const {
-    studentImageUrl,
+    imageUrl,
     imageLocalDestination,
-    studentQualification,
+    qualifications,
     workExperience,
     identification,
     skills,
-    studentEmail,
-    studentPhone,
-    studentPostCode,
-    studentEndDate,
+    email,
+    phone,
+    postCode,
+    endDate,
     ...copyLocalData
   } = studentDataParam;
+
+  if (studentDataParam.email && !validateEmail(studentDataParam.email)) {
+    throwError("Please enter a valid email address.", 400);
+    return false;
+  }
+
+  if (!validateEmail(studentDataParam.nextOfKinEmail)) {
+    throwError("Please enter a valid next of kin email address.", 400);
+    return false;
+  }
+
+  if (!validatePhoneNumber(studentDataParam.phone)) {
+    throwError("Please enter a valid phone number with the country code. e.g +234, +447", 400);
+    return false;
+  }
+
+  if (!validatePhoneNumber(studentDataParam.nextOfKinPhone)) {
+    throwError("Please enter a valid next of kin phone number with the country code. e.g +234, +447", 400);
+    return false;
+  }
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -42,18 +66,20 @@ const validateStudentProfile = (studentDataParam: any) => {
 export const getAllStudentProfiles = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-  const orgHasRequiredFeature = organisation?.features
-    ?.map((feature) => feature.name)
-    .includes("Student Profile & Enrollment");
-  if (!orgHasRequiredFeature) {
+  const featureCheckPassed = orgHasRequiredFeature(organisation, "Student Profile & Enrollment");
+  if (!featureCheckPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
       403
     );
   }
 
-  const { roleId, studentId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { roleId } = account as any;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -64,14 +90,10 @@ export const getAllStudentProfiles = asyncHandler(async (req: Request, res: Resp
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Student Profiles");
+  const hasAccess = checkAccesses(account, tabAccess, getNeededAccesses("All Student Profiles"));
 
   if (absoluteAdmin || hasAccess) {
-    const studentProfiles = await fetchAllStudentProfiles(
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      absoluteAdmin ? "" : studentId.studentCustomId.toString()
-    );
+    const studentProfiles = await fetchAllStudentProfiles(organisation!._id.toString());
 
     if (!studentProfiles) {
       throwError("Error fetching student profiles", 500);
@@ -94,16 +116,17 @@ export const getAllStudentProfiles = asyncHandler(async (req: Request, res: Resp
 export const getStudentProfiles = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-  const orgHasRequiredFeature = organisation?.features
-    ?.map((feature) => feature.name)
-    .includes("Student Profile & Enrollment");
-  if (!orgHasRequiredFeature) {
+  const featureCheckPassed = orgHasRequiredFeature(organisation, "Student Profile & Enrollment");
+  if (!featureCheckPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
       403
     );
   }
-
   const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
 
   const parsedLimit = parseInt(limit as string);
@@ -114,7 +137,7 @@ export const getStudentProfiles = asyncHandler(async (req: Request, res: Respons
   }
 
   for (const key in filters) {
-    if (filters[key] !== "all") {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
       query[key] = filters[key];
     }
   }
@@ -127,8 +150,8 @@ export const getStudentProfiles = asyncHandler(async (req: Request, res: Respons
     }
   }
 
-  const { roleId, studentId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { roleId } = account as any;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -142,14 +165,7 @@ export const getStudentProfiles = asyncHandler(async (req: Request, res: Respons
   const hasAccess = checkAccess(account, tabAccess, "View Student Profiles");
 
   if (absoluteAdmin || hasAccess) {
-    const result = await fetchStudentProfiles(
-      query,
-      cursorType as string,
-      parsedLimit,
-      absoluteAdmin ? "Absolute Admin" : "User",
-      organisation!._id.toString(),
-      absoluteAdmin ? "" : studentId.studentCustomId.toString()
-    );
+    const result = await fetchStudentProfiles(query, cursorType as string, parsedLimit, organisation!._id.toString());
 
     if (!result || !result.studentProfiles) {
       throwError("Error fetching student profiles", 500);
@@ -173,25 +189,19 @@ export const getStudentProfiles = asyncHandler(async (req: Request, res: Respons
 export const createStudentProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const {
-    studentCustomId,
-    studentFullName,
-    studentDateOfBirth,
-    studentGender,
-    studentEmail,
-    studentNationality,
-    studentNextOfKinName
-  } = body;
+  const { customId, fullName, dateOfBirth, studentGender, email, nationality, nextOfKinName, nextOfKinEmail } = body;
 
   if (!validateStudentProfile(body)) {
     throwError("Please fill in all required fields", 400);
   }
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-  const orgHasRequiredFeature = organisation?.features
-    ?.map((feature) => feature.name)
-    .includes("Student Profile & Enrollment");
-  if (!orgHasRequiredFeature) {
+  const featureCheckPassed = orgHasRequiredFeature(organisation, "Student Profile & Enrollment");
+  if (!featureCheckPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError(
       "This feature is not enabled for this organisation - You need to purchase Student Profile & Enrollment to use it",
       403
@@ -200,7 +210,7 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
   const orgParsedId = account!.organisationId!._id.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -221,28 +231,61 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
     throwError("Unauthorised Action: You do not have access to create student - Please contact your admin", 403);
   }
 
-  const studentExists = await Student.findOne({ organisationId: orgParsedId, studentCustomId });
+  const orConditions: any[] = [{ customId }];
+  if (email) {
+    orConditions.push({ email });
+  }
+
+  const studentExists = await Student.findOne({
+    organisationId: orgParsedId,
+    $or: orConditions
+  }).lean();
+
   if (studentExists) {
-    throwError(
-      "A student with this Custom Id already exist - Either refer to that record or change the student custom Id",
-      409
-    );
+    if (studentExists.customId === customId) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 4 },
+        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      ]);
+      throwError(
+        "A student with this Custom Id already exists within the organisation - Either refer to that record or change the student custom Id",
+        409
+      );
+    }
+    if (studentExists.email === email) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 4 },
+        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      ]);
+      throwError(
+        "A student already uses this email within the organisation - Either change the student email or leave it blank",
+        409
+      );
+    }
   }
 
   const newStudent = await Student.create({
     ...body,
     organisationId: orgParsedId,
     searchText: generateSearchText([
-      studentCustomId,
-      studentFullName,
+      customId,
+      fullName,
       studentGender,
-      studentEmail,
-      studentDateOfBirth,
-      studentNationality,
-      studentNextOfKinName
+      email,
+      dateOfBirth,
+      nationality,
+      nextOfKinName,
+      nextOfKinEmail
     ])
   });
 
+  if (!newStudent) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, studentExists]) }
+    ]);
+    throwError("Error creating student profile", 500);
+  }
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
@@ -253,14 +296,14 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
       "Student Profile Creation",
       "Student",
       newStudent?._id,
-      studentFullName,
+      fullName,
       [
         {
           kind: "N",
           rhs: {
             _id: newStudent._id,
-            studentId: newStudent.studentCustomId,
-            studentFullName
+            studentId: newStudent.customId,
+            fullName
           }
         }
       ],
@@ -289,15 +332,8 @@ export const createStudentProfile = asyncHandler(async (req: Request, res: Respo
 export const updateStudentProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const {
-    studentCustomId,
-    studentFullName,
-    studentDateOfBirth,
-    studentGender,
-    studentEmail,
-    studentNationality,
-    studentNextOfKinName
-  } = body;
+  const { _id, customId, fullName, dateOfBirth, studentGender, email, nationality, nextOfKinName, nextOfKinEmail } =
+    body;
 
   if (!validateStudentProfile(body)) {
     throwError("Please fill in all required fields", 400);
@@ -317,7 +353,7 @@ export const updateStudentProfile = asyncHandler(async (req: Request, res: Respo
   const orgParsedId = account!.organisationId!.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -337,10 +373,29 @@ export const updateStudentProfile = asyncHandler(async (req: Request, res: Respo
     ]);
     throwError("Unauthorised Action: You do not have access to edit student - Please contact your admin", 403);
   }
+  let emailInUse;
+  if (email) {
+    emailInUse = await Student.findOne({ organisationId: orgParsedId, email }).lean();
 
-  const originalStudent = await Student.findOne({ organisationId: orgParsedId, studentCustomId });
+    if (emailInUse && emailInUse._id.toString() !== _id) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 4 },
+        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      ]);
+      throwError(
+        "A student already uses this email within the organisation - Either change the student email or leave it blank",
+        409
+      );
+    }
+  }
+
+  const originalStudent = await Student.findById(_id).lean();
 
   if (!originalStudent) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, emailInUse]) }
+    ]);
     throwError("An error occured whilst getting old student data", 500);
   }
 
@@ -349,19 +404,27 @@ export const updateStudentProfile = asyncHandler(async (req: Request, res: Respo
     {
       ...body,
       searchText: generateSearchText([
-        studentCustomId,
+        customId,
+        fullName,
         studentGender,
-        studentFullName,
-        studentEmail,
-        studentDateOfBirth,
-        studentNationality,
-        studentNextOfKinName
+        email,
+        dateOfBirth,
+        nationality,
+        nextOfKinName,
+        nextOfKinEmail
       ])
     },
     { new: true }
-  );
+  ).lean();
 
   if (!updatedStudent) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 7 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, emailInUse, originalStudent])
+      }
+    ]);
     throwError("Error updating student profile", 500);
   }
 
@@ -376,18 +439,18 @@ export const updateStudentProfile = asyncHandler(async (req: Request, res: Respo
       "Student Profile Update",
       "Student",
       updatedStudent?._id,
-      studentFullName,
+      fullName,
       difference,
       new Date()
     );
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([updatedStudent, organisation, role, account, originalStudent]) +
+        getObjectSize([updatedStudent, organisation, role, account, emailInUse, originalStudent]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -397,8 +460,8 @@ export const updateStudentProfile = asyncHandler(async (req: Request, res: Respo
 // controller to handle deleting roles
 export const deleteStudentProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { studentIDToDelete } = req.body;
-  if (!studentIDToDelete) {
+  const { _id } = req.body;
+  if (!_id) {
     throwError("Unknown delete request - Please try again", 400);
   }
 
@@ -415,7 +478,7 @@ export const deleteStudentProfile = asyncHandler(async (req: Request, res: Respo
 
   const { roleId: creatorRoleId } = account as any;
 
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -439,17 +502,12 @@ export const deleteStudentProfile = asyncHandler(async (req: Request, res: Respo
     );
   }
 
-  const studentProfileToDelete = await Student.findOne({
-    studentCustomId: studentIDToDelete,
-    organisationId: organisation?._id.toString()
-  });
-
-  if (!studentProfileToDelete) {
-    throwError("Error finding student profile with provided Custom Id - Please try again", 404);
-  }
-
-  const deletedStudentProfile = await Student.findByIdAndDelete(studentProfileToDelete?._id.toString());
+  const deletedStudentProfile = await Student.findByIdAndDelete(_id).lean();
   if (!deletedStudentProfile) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Error deleting student profile - Please try again", 500);
   }
 
@@ -466,17 +524,17 @@ export const deleteStudentProfile = asyncHandler(async (req: Request, res: Respo
       "Student Delete",
       "Student",
       deletedStudentProfile?._id,
-      deletedStudentProfile?.studentFullName,
+      deletedStudentProfile?.fullName,
       [
         {
           kind: "D" as any,
           lhs: {
             _id: deletedStudentProfile?._id,
-            studentCustomId: deletedStudentProfile?.studentCustomId,
-            studentFullName: deletedStudentProfile?.studentFullName,
-            studentEmail: deletedStudentProfile?.studentEmail,
-            studentNextOfKinName: deletedStudentProfile?.studentNextOfKinName,
-            studentQualification: deletedStudentProfile?.studentQualification
+            customId: deletedStudentProfile?.customId,
+            fullName: deletedStudentProfile?.fullName,
+            email: deletedStudentProfile?.email,
+            nextOfKinName: deletedStudentProfile?.nextOfKinName,
+            qualifications: deletedStudentProfile?.qualifications
           }
         }
       ],
@@ -487,7 +545,7 @@ export const deleteStudentProfile = asyncHandler(async (req: Request, res: Respo
   registerBillings(req, [
     {
       field: "databaseOperation",
-      value: 6 + (logActivityAllowed ? 2 : 0)
+      value: 5 + (logActivityAllowed ? 2 : 0)
     },
     {
       field: "databaseStorageAndBackup",
@@ -497,7 +555,7 @@ export const deleteStudentProfile = asyncHandler(async (req: Request, res: Respo
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([deletedStudentProfile, organisation, role, account, studentProfileToDelete]) +
+        getObjectSize([deletedStudentProfile, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);

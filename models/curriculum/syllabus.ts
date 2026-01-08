@@ -8,7 +8,7 @@ const syllabusSchema = new Schema(
     syllabus: { type: String, required: true },
     description: { type: String },
     programmeId: { type: mongoose.Schema.Types.ObjectId, ref: "Programme", required: true },
-    pathwayId: { type: mongoose.Schema.Types.ObjectId, ref: "Pathway" },
+    pathwayId: { type: mongoose.Schema.Types.ObjectId, ref: "Pathway", default: null },
     baseSubjectId: { type: mongoose.Schema.Types.ObjectId, ref: "BaseSubject", required: true },
     startDate: { type: String },
     endDate: { type: String },

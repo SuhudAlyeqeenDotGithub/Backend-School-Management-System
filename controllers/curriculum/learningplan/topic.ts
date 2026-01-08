@@ -32,7 +32,7 @@ export const getAllTopics = asyncHandler(async (req: Request, res: Response) => 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -85,7 +85,7 @@ export const getTopics = asyncHandler(async (req: Request, res: Response) => {
   }
 
   for (const key in filters) {
-    if (filters[key] !== "all") {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
       query[key] = filters[key];
     }
   }
@@ -99,7 +99,7 @@ export const getTopics = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -146,7 +146,7 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -174,7 +174,7 @@ export const createTopic = asyncHandler(async (req: Request, res: Response) => {
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, topicExists]) }
     ]);
     throwError(
-      "A topic with this Custom Id already exist - Either refer to that record or change the topic custom Id",
+      "A topic with this Custom Id already exist within the organisation - Either refer to that record or change the topic custom Id",
       409
     );
   }
@@ -250,7 +250,7 @@ export const updateTopic = asyncHandler(async (req: Request, res: Response) => {
   const orgParsedId = account!.organisationId!.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -340,7 +340,7 @@ export const deleteTopic = asyncHandler(async (req: Request, res: Response) => {
 
   const { roleId: creatorRoleId } = account as any;
 
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 

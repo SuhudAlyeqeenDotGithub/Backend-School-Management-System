@@ -12,7 +12,6 @@ import { logActivity } from "../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
 import bcrypt from "bcryptjs";
 import { StaffContract } from "../../models/staff/contracts.ts";
-import { Staff } from "../../models/staff/profile.ts";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../utils/pureFuctions.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 
@@ -33,7 +32,7 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
   }
 
   for (const key in filters) {
-    if (filters[key] !== "all") {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
       query[key] = filters[key];
     }
   }
@@ -47,7 +46,7 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -107,7 +106,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { staffId, name, email, password, status, roleId: userRoleId, uniqueTabAccess } = req.body;
 
-  if (!staffId || !name || !email || !password || !userRoleId) {
+  if (!staffId || !name || !email || !password) {
     throwError("Please fill all required fields", 400);
   }
 
@@ -115,7 +114,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -142,7 +141,10 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
       { field: "databaseOperation", value: 4 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, userExists]) }
     ]);
-    throwError("Another user within the organisation already uses this email", 409);
+    throwError(
+      "Another user within the organisation already uses this email - they might already have an account",
+      409
+    );
   }
 
   const staffHasActiveContract = await StaffContract.findOne({ staffId, status: "Active" }).lean();
@@ -168,7 +170,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
     name,
     password: hasedPassword,
     status: status,
-    roleId: userRoleId,
+    roleId: userRoleId ? userRoleId : null,
     searchText: generateSearchText([staffId, email, name, status])
   });
 
@@ -250,22 +252,18 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     name,
     email,
     status,
-    roleId: userRoleId,
+    roleId: userRoleId ? userRoleId : null,
     searchText: generateSearchText([staffId, email, name, status])
   };
 
-  // console.log("originalDoc", body);
-  // console.log("updatedDoc", updatedDoc);
-  // throwError("test done", 400);
-
-  if (!name || !email || !userRoleId || !status) {
+  if (!name || !email || !status) {
     throwError("Please fill all required fields", 400);
   }
 
   // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -315,7 +313,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
       { field: "databaseOperation", value: 4 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("This email is already in use within the same organisation - Please provide a different email", 409);
+    throwError("This email is already in use within the same organisation - they might already have an account", 409);
   }
 
   const staffHasActiveContract = await StaffContract.findOne({ staffId }).lean();
@@ -402,6 +400,14 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   registerBillings(req, [
     { field: "databaseOperation", value: 8 + (logActivityAllowed ? 2 : 0) },
     {
+      field: "databaseStorageAndBackup",
+      value:
+        (getObjectSize(updatedUser) +
+          toNegative(getObjectSize(originalUser)) +
+          (logActivityAllowed ? getObjectSize(activityLog) : 0)) *
+        2
+    },
+    {
       field: "databaseDataTransfer",
       value:
         getObjectSize([updatedUser, staffHasActiveContract, organisation, role, account, originalUser]) +
@@ -438,7 +444,7 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   // confirm organisation
 
   const { roleId: creatorRoleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 

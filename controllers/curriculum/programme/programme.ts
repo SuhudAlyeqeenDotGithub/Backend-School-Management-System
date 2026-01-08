@@ -6,13 +6,15 @@ import {
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllProgrammes
+  fetchAllProgrammes,
+  checkAccesses
 } from "../../../utils/databaseFunctions.ts";
 import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
 import { Programme } from "../../../models/curriculum/programme";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
+import { getNeededAccesses } from "../../../utils/defaultVariables.ts";
 
 const validateProgramme = (programmeDataParam: any) => {
   const { description, duration, startDate, endDate, ...copyLocalData } = programmeDataParam;
@@ -32,7 +34,7 @@ export const getAllProgrammes = asyncHandler(async (req: Request, res: Response)
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -43,7 +45,7 @@ export const getAllProgrammes = asyncHandler(async (req: Request, res: Response)
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Programmes");
+  const hasAccess = checkAccesses(account, tabAccess, getNeededAccesses("All Programmes"));
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
@@ -88,7 +90,7 @@ export const getProgrammes = asyncHandler(async (req: Request, res: Response) =>
   }
 
   for (const key in filters) {
-    if (filters[key] !== "all") {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
       query[key] = filters[key];
     }
   }
@@ -102,7 +104,7 @@ export const getProgrammes = asyncHandler(async (req: Request, res: Response) =>
   }
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -154,7 +156,7 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -182,7 +184,7 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
     throwError(
-      "A programme with this Custom Id already exist - Either refer to that record or change the programme custom Id",
+      "A programme with this Custom Id already exist within the organisation - Either refer to that record or change the programme custom Id",
       409
     );
   }
@@ -265,7 +267,7 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
   const orgParsedId = account!.organisationId!.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -358,7 +360,7 @@ export const deleteProgramme = asyncHandler(async (req: Request, res: Response) 
 
   const { roleId: creatorRoleId } = account as any;
 
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 

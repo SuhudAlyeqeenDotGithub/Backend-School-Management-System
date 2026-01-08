@@ -1,6 +1,5 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { Account } from "../../models/admin/accountModel.ts";
 import {
   fetchStaffProfiles,
   emitToOrganisation,
@@ -8,13 +7,15 @@ import {
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
   fetchAllStaffProfiles,
-  validatePhoneNumber
+  validatePhoneNumber,
+  checkAccesses
 } from "../../utils/databaseFunctions.ts";
 import { logActivity } from "../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
 import { throwError, toNegative, validateEmail, generateSearchText, getObjectSize } from "../../utils/pureFuctions.ts";
 import { Staff } from "../../models/staff/profile.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
+import { getNeededAccesses } from "../../utils/defaultVariables.ts";
 
 const validateStaffProfile = (staffDataParam: any) => {
   const {
@@ -31,12 +32,22 @@ const validateStaffProfile = (staffDataParam: any) => {
 
   if (!validateEmail(staffDataParam.email)) {
     throwError("Please enter a valid email address.", 400);
-    return;
+    return false;
+  }
+
+  if (!validateEmail(staffDataParam.nextOfKinEmail)) {
+    throwError("Please enter a valid next of kin email address.", 400);
+    return false;
   }
 
   if (!validatePhoneNumber(staffDataParam.phone)) {
     throwError("Please enter a valid phone number with the country code. e.g +234, +447", 400);
-    return;
+    return false;
+  }
+
+  if (!validatePhoneNumber(staffDataParam.nextOfKinPhone)) {
+    throwError("Please enter a valid next of kin phone number with the country code. e.g +234, +447", 400);
+    return false;
   }
 
   for (const [key, value] of Object.entries(copyLocalData)) {
@@ -54,7 +65,7 @@ export const getAllStaffProfiles = asyncHandler(async (req: Request, res: Respon
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, staffId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -65,7 +76,7 @@ export const getAllStaffProfiles = asyncHandler(async (req: Request, res: Respon
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Staff Profiles");
+  const hasAccess = checkAccesses(account, tabAccess, getNeededAccesses("All Staff Profiles"));
 
   if (absoluteAdmin || hasAccess) {
     const staffProfiles = await fetchAllStaffProfiles(
@@ -110,7 +121,7 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
   }
 
   for (const key in filters) {
-    if (filters[key] !== "all") {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
       query[key] = filters[key];
     }
   }
@@ -124,7 +135,7 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
   }
 
   const { roleId, staffId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -173,7 +184,7 @@ export const getStaffProfiles = asyncHandler(async (req: Request, res: Response)
 export const createStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { customId, fullName, dateOfBirth, gender, email, nationality, nextOfKinName } = body;
+  const { customId, fullName, dateOfBirth, gender, email, nationality, nextOfKinName, nextOfKinEmail } = body;
 
   if (!validateStaffProfile(body)) {
     throwError("Please fill in all required fields", 400);
@@ -184,7 +195,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
   const orgParsedId = account!.organisationId!._id.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -205,36 +216,54 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
     throwError("Unauthorised Action: You do not have access to create staff - Please contact your admin", 403);
   }
 
-  const usedEmail = await Account.findOne({ email, organisationId: orgParsedId }).lean();
-  if (usedEmail) {
-    registerBillings(req, [
-      { field: "databaseOperation", value: 4 },
-      { field: "databaseDataTransfer", value: getObjectSize([usedEmail, organisation, role, account]) }
-    ]);
-    throwError("This email is already in use by another staff member - Please use a different email", 409);
+  const orConditions: any[] = [{ customId }];
+  if (email) {
+    orConditions.push({ email });
   }
 
-  const staffExists = await Staff.findOne({ organisationId: orgParsedId, customId }).lean();
+  const staffExists = await Staff.findOne({
+    organisationId: orgParsedId,
+    $or: orConditions
+  }).lean();
+
   if (staffExists) {
-    registerBillings(req, [
-      { field: "databaseOperation", value: 5 },
-      { field: "databaseDataTransfer", value: getObjectSize([staffExists, organisation, role, account]) }
-    ]);
-    throwError(
-      "A staff with this Custom Id already exist - Either refer to that record or change the staff custom Id",
-      409
-    );
+    if (staffExists.customId === customId) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 4 },
+        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      ]);
+      throwError(
+        "A staff with this Custom Id already exists within the organisation - Either refer to that record or change the staff custom Id",
+        409
+      );
+    }
+    if (staffExists.email === email) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 4 },
+        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      ]);
+      throwError("A staff already uses this email within the organisation - use another email", 409);
+    }
   }
 
   const newStaff = await Staff.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([customId, fullName, gender, email, dateOfBirth, nationality, nextOfKinName])
+    searchText: generateSearchText([
+      customId,
+      fullName,
+      gender,
+      email,
+      dateOfBirth,
+      nationality,
+      nextOfKinName,
+      nextOfKinEmail
+    ])
   });
 
   if (!newStaff) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 7 },
+      { field: "databaseOperation", value: 6 },
       { field: "databaseDataTransfer", value: getObjectSize([newStaff, staffExists, organisation, role, account]) }
     ]);
     throwError("Error creating staff profile - Please try again", 500);
@@ -266,7 +295,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
       value: (getObjectSize(newStaff) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
@@ -274,7 +303,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([newStaff, usedEmail, staffExists, organisation, role, account]) +
+        getObjectSize([newStaff, staffExists, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -286,8 +315,7 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
 export const updateStaffProfile = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { customId, fullName, dateOfBirth, gender, email, nationality, nextOfKinName } = body;
-
+  const { _id, customId, fullName, dateOfBirth, gender, email, nationality, nextOfKinName, nextOfKinEmail } = body;
 
   if (!validateStaffProfile(body)) {
     throwError("Please fill in all required fields", 400);
@@ -299,7 +327,7 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
   const orgParsedId = account!.organisationId!.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -320,12 +348,25 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
     throwError("Unauthorised Action: You do not have access to edit staff - Please contact your admin", 403);
   }
 
+  let emailInUse;
+  if (email) {
+    emailInUse = await Staff.findOne({ organisationId: orgParsedId, email }).lean();
+
+    if (emailInUse && emailInUse._id.toString() !== _id) {
+      registerBillings(req, [
+        { field: "databaseOperation", value: 4 },
+        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      ]);
+      throwError("A staff already uses this email within the organisation - use another email", 409);
+    }
+  }
+
   const originalStaff = await Staff.findOne({ organisationId: orgParsedId, customId }).lean();
 
   if (!originalStaff) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 4 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, emailInUse]) }
     ]);
     throwError("An error occured whilst getting old staff data", 500);
   }
@@ -334,15 +375,24 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
     originalStaff?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([customId, gender, fullName, email, dateOfBirth, nationality, nextOfKinName])
+      searchText: generateSearchText([
+        customId,
+        fullName,
+        gender,
+        email,
+        dateOfBirth,
+        nationality,
+        nextOfKinName,
+        nextOfKinEmail
+      ])
     },
     { new: true }
   ).lean();
 
   if (!updatedStaff) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 6 },
-      { field: "databaseDataTransfer", value: getObjectSize([originalStaff, organisation, role, account]) }
+      { field: "databaseOperation", value: 7 },
+      { field: "databaseDataTransfer", value: getObjectSize([originalStaff, organisation, role, account, emailInUse]) }
     ]);
     throwError("Error updating staff profile", 500);
   }
@@ -365,11 +415,11 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([updatedStaff, organisation, role, account, originalStaff]) +
+        getObjectSize([updatedStaff, organisation, role, account, emailInUse, originalStaff]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -389,7 +439,7 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
 
   const { roleId: creatorRoleId } = account as any;
 
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 

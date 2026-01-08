@@ -6,7 +6,8 @@ import {
   logActivity,
   checkAccess,
   checkOrgAndUserActiveness,
-  confirmUserOrgRole
+  confirmUserOrgRole,
+  fetchPeriods
 } from "../../utils/databaseFunctions.ts";
 import { throwError, toNegative, getObjectSize } from "../../utils/pureFuctions.ts";
 
@@ -14,31 +15,35 @@ import { diff } from "deep-diff";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 import { Period } from "../../models/timeline/period.ts";
 
-// controller to handle role creation
-export const createPeriod = asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.userToken;
-  const { period, startDate, endDate, academicYearId, customId, academicYear } = req.body;
-
-  // validate input
-  if (!period || !startDate || !endDate) {
-    throwError("Please fill in all required fields", 400);
-  }
-  if (!academicYearId || !customId || !academicYear) {
-    throwError("error attaching required fields - Please try again", 400);
-  }
-
-  // confirm user
+export const getPeriods = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
-  // confirm organisation
-  const orgParsedId = account!.organisationId!._id.toString();
 
-  const periodNameExists = await Period.findOne({ academicYearId, period: period });
-  if (periodNameExists) {
-    throwError("This period name is already in use under a same academic year - Please use a different name", 409);
+  const { search = "", limit, cursorType, nextCursor, prevCursor, ...filters } = req.query;
+
+  const parsedLimit = parseInt(limit as string);
+
+  const query: any = { organisationId: userTokenOrgId };
+  if (search) {
+    query.searchText = { $regex: search, $options: "i" };
+  }
+
+  for (const key in filters) {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
+      query[key] = filters[key];
+    }
+  }
+
+  if (cursorType) {
+    if (nextCursor && cursorType === "next") {
+      query._id = { $lt: nextCursor };
+    } else if (prevCursor && cursorType === "prev") {
+      query._id = { $gt: prevCursor };
+    }
   }
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -49,7 +54,69 @@ export const createPeriod = asyncHandler(async (req: Request, res: Response) => 
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Create Academic Year");
+  const hasAccess =
+    checkAccess(account, tabAccess, "View Academic Years") || checkAccess(account, tabAccess, "View Periods");
+
+  if (!absoluteAdmin && !hasAccess) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Unauthorised Action: You do not have access to view periods - Please contact your admin", 403);
+  }
+
+  const result = await fetchPeriods(query, cursorType as string, parsedLimit, organisation!._id.toString());
+
+  if (!result || !result.periods) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Error fetching periods", 500);
+  }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 + result.periods.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([result, organisation, role, account])
+    }
+  ]);
+  res.status(201).json(result);
+});
+
+// controller to handle role creation
+export const createPeriod = asyncHandler(async (req: Request, res: Response) => {
+  const { accountId, organisationId } = req.userToken;
+  const { period, startDate, endDate, academicYearId, customId, academicYear } = req.body;
+
+  // validate input
+  if (!period || !startDate || !endDate) {
+    throwError("Please fill in all required fields", 400);
+  }
+  if (!academicYearId || !customId) {
+    throwError("error attaching required fields - Please try again", 400);
+  }
+
+  // confirm user
+  const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  // confirm organisation
+
+  const { roleId } = account as any;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
+
+  const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
+
+  if (!checkPassed) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError(message, 409);
+  }
+  const hasAccess =
+    checkAccess(account, creatorTabAccess, "Create Academic Year") ||
+    checkAccess(account, creatorTabAccess, "Create Period");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
@@ -57,6 +124,14 @@ export const createPeriod = asyncHandler(async (req: Request, res: Response) => 
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
     throwError("Unauthorised Action: You do not have access to create academic year - Please contact your admin", 403);
+  }
+  const periodNameExists = await Period.findOne({ academicYearId, period: period }).lean();
+  if (periodNameExists) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("This period name is already in use under the same academic year - Please use a different name", 409);
   }
 
   const newPeriod = await Period.create({
@@ -66,9 +141,16 @@ export const createPeriod = asyncHandler(async (req: Request, res: Response) => 
     academicYearId,
     customId,
     academicYear,
-    organisationId: orgParsedId
+    organisationId
   });
 
+  if (!newPeriod) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, periodNameExists]) }
+    ]);
+    throwError("Error creating period", 500);
+  }
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
@@ -129,7 +211,7 @@ export const updatePeriod = asyncHandler(async (req: Request, res: Response) => 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -140,7 +222,9 @@ export const updatePeriod = asyncHandler(async (req: Request, res: Response) => 
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Academic Year");
+  const hasAccess =
+    checkAccess(account, creatorTabAccess, "Edit Academic Year") ||
+    checkAccess(account, creatorTabAccess, "Edit Period");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
@@ -150,9 +234,13 @@ export const updatePeriod = asyncHandler(async (req: Request, res: Response) => 
     throwError("Unauthorised Action: You do not have access to edit academic year - Please contact your admin", 403);
   }
 
-  const originalPeriod = await Period.findById(periodId);
+  const originalPeriod = await Period.findById(periodId).lean();
 
   if (!originalPeriod) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("An error occured whilst getting old period data", 500);
   }
 
@@ -162,9 +250,13 @@ export const updatePeriod = asyncHandler(async (req: Request, res: Response) => 
       ...req.body
     },
     { new: true }
-  );
+  ).lean();
 
   if (!updatedPeriod) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalPeriod]) }
+    ]);
     throwError("Error updating academic year", 500);
   }
 
@@ -201,7 +293,7 @@ export const updatePeriod = asyncHandler(async (req: Request, res: Response) => 
 // controller to handle deleting roles
 export const deletePeriod = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { periodIdToDelete } = req.body;
+  const { _id: periodIdToDelete } = req.body;
   if (!periodIdToDelete) {
     throwError("Unknown delete request - Please try again", 400);
   }
@@ -209,7 +301,7 @@ export const deletePeriod = asyncHandler(async (req: Request, res: Response) => 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId: creatorRoleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
   if (!checkPassed) {
@@ -219,7 +311,9 @@ export const deletePeriod = asyncHandler(async (req: Request, res: Response) => 
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Academic Year");
+  const hasAccess =
+    checkAccess(account, creatorTabAccess, "Delete Academic Year") ||
+    checkAccess(account, creatorTabAccess, "Delete Period");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
@@ -229,14 +323,12 @@ export const deletePeriod = asyncHandler(async (req: Request, res: Response) => 
     throwError("Unauthorised Action: You do not have access to delete academic year - Please contact your admin", 403);
   }
 
-  const periodToDelete = await Period.findById(periodIdToDelete);
-
-  if (!periodToDelete) {
-    throwError("Error finding period - It could have been deleted, Please try again", 404);
-  }
-
-  const deletedPeriod = await Period.findByIdAndDelete(periodIdToDelete);
+  const deletedPeriod = await Period.findByIdAndDelete(periodIdToDelete).lean();
   if (!deletedPeriod) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Error deleting period - Please try again", 500);
   }
 
@@ -253,11 +345,11 @@ export const deletePeriod = asyncHandler(async (req: Request, res: Response) => 
       "Period Deletion",
       "Period",
       deletedPeriod?._id,
-      periodToDelete?.period,
+      deletedPeriod?.period,
       [
         {
           kind: "D" as any,
-          lhs: periodToDelete
+          lhs: deletedPeriod
         }
       ],
       new Date()
@@ -265,7 +357,7 @@ export const deletePeriod = asyncHandler(async (req: Request, res: Response) => 
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
+    { field: "databaseOperation", value: 5 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
       value: toNegative(getObjectSize(deletedPeriod) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
@@ -273,7 +365,7 @@ export const deletePeriod = asyncHandler(async (req: Request, res: Response) => 
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([deletedPeriod, organisation, role, account, periodIdToDelete]) +
+        getObjectSize([deletedPeriod, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);

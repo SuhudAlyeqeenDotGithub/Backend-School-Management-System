@@ -170,7 +170,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
 
   const { roleId: creatorRoleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -241,6 +241,14 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   registerBillings(req, [
     { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
     {
+      field: "databaseStorageAndBackup",
+      value:
+        (getObjectSize(updatedRole) +
+          toNegative(getObjectSize(originalRole)) +
+          (logActivityAllowed ? getObjectSize(activityLog) : 0)) *
+        2
+    },
+    {
       field: "databaseDataTransfer",
       value:
         getObjectSize([updatedRole, organisation, role, account, originalRole]) +
@@ -272,7 +280,7 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   const { account, role, organisation } = (await confirmUserOrgRole(accountId)) as any;
 
   const { roleId: creatorRoleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 

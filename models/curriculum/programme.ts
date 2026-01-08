@@ -36,5 +36,6 @@ const programmeManagerSchema = new Schema(
 );
 
 programmeManagerSchema.index({ organisationId: 1, programmeId: 1, staffId: 1, status: 1 }, { unique: true });
+programmeManagerSchema.index({ organisationId: 1, staffId: 1, status: 1 });
 
 export const ProgrammeManager = model("ProgrammeManager", programmeManagerSchema);

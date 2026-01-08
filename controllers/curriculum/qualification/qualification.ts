@@ -1,24 +1,22 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import {
-  fetchClassTutors,
+  fetchQualifications,
   emitToOrganisation,
   checkAccess,
   checkOrgAndUserActiveness,
   confirmUserOrgRole,
-  fetchAllClassTutors,
-  checkAccesses
+  fetchAllQualifications
 } from "../../../utils/databaseFunctions.ts";
 import { logActivity } from "../../../utils/databaseFunctions.ts";
 import { diff } from "deep-diff";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../../utils/pureFuctions.ts";
-import { StaffContract } from "../../../models/staff/contracts.ts";
-import { ClassTutor } from "../../../models/curriculum/class.ts";
+import { Qualification } from "../../../models/curriculum/qualification";
 import { registerBillings } from "../../../utils/billingFunctions.ts";
-import { getNeededAccesses } from "../../../utils/defaultVariables.ts";
 
-const validateClassTutor = (classTutorDataParam: any) => {
-  const { managedUntil, classCustomId, ...copyLocalData } = classTutorDataParam;
+const validateQualification = (qualificationDataParam: any) => {
+  const { description, duration, awardingBody, level, qualificationType, startDate, endDate, ...copyLocalData } =
+    qualificationDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -30,11 +28,11 @@ const validateClassTutor = (classTutorDataParam: any) => {
   return true;
 };
 
-export const getAllClassTutors = asyncHandler(async (req: Request, res: Response) => {
+export const getAllQualifications = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
-  const { roleId, staffId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -46,33 +44,42 @@ export const getAllClassTutors = asyncHandler(async (req: Request, res: Response
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccesses(account, tabAccess, getNeededAccesses("All Class Tutors"));
+  const hasAccess =
+    checkAccess(account, tabAccess, "View Qualifications") && checkAccess(account, tabAccess, "View Programmes");
 
-  if (absoluteAdmin || hasAccess) {
-    const result = await fetchAllClassTutors(organisation!._id.toString(), staffId);
-
-    if (!result) {
-      registerBillings(req, [
-        { field: "databaseOperation", value: 4 },
-        { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
-      ]);
-      throwError("Error fetching class tutors", 500);
-    }
+  if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 + result.length },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([result, organisation, role, account])
-      }
+      { field: "databaseOperation", value: 3 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    res.status(201).json(result);
-    return;
+    throwError(
+      "Unauthorised Action: You do not have access to view qualifications or one of it's required data (programmes) - Please contact your admin",
+      403
+    );
   }
 
-  throwError("Unauthorised Action: You do not have access to view class tutors - Please contact your admin", 403);
+  const qualifications = await fetchAllQualifications(organisation!._id.toString());
+
+  if (!qualifications) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, qualifications]) }
+    ]);
+    throwError("Error fetching qualification", 500);
+  }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: 3 + qualifications.length },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([qualifications, organisation, role, account])
+    }
+  ]);
+  res.status(201).json(qualifications);
+  return;
 });
 
-export const getClassTutors = asyncHandler(async (req: Request, res: Response) => {
+export const getQualifications = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
@@ -99,7 +106,7 @@ export const getClassTutors = asyncHandler(async (req: Request, res: Response) =
     }
   }
 
-  const { roleId, staffId } = account as any;
+  const { roleId } = account as any;
   const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -112,38 +119,31 @@ export const getClassTutors = asyncHandler(async (req: Request, res: Response) =
     throwError(message, 409);
   }
   const hasAccess =
-    checkAccess(account, tabAccess, "View Class Tutors") &&
-    checkAccess(account, tabAccess, "View Classes") &&
-    checkAccess(account, tabAccess, "View Programmes") &&
-    checkAccess(account, tabAccess, "View Pathways") &&
-    checkAccess(account, tabAccess, "View Staff Profiles");
+    checkAccess(account, tabAccess, "View Qualifications") && checkAccess(account, tabAccess, "View Programmes");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to view class tutors - Please contact your admin", 403);
+    throwError(
+      "Unauthorised Action: You do not have access to view qualifications or one of it's required data (programmes) - Please contact your admin",
+      403
+    );
   }
 
-  const result = await fetchClassTutors(
-    query,
-    cursorType as string,
-    parsedLimit,
-    absoluteAdmin ? "Absolute Admin" : "User",
-    organisation!._id.toString(),
-    staffId
-  );
+  const result = await fetchQualifications(query, cursorType as string, parsedLimit, organisation!._id.toString());
 
-  if (!result || !result.classTutors) {
+  if (!result || !result.qualifications) {
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Error fetching class tutors", 500);
+    throwError("Error fetching qualifications", 500);
   }
+
   registerBillings(req, [
-    { field: "databaseOperation", value: 3 + result.classTutors.length },
+    { field: "databaseOperation", value: 3 + result.qualifications.length },
     {
       field: "databaseDataTransfer",
       value: getObjectSize([result, organisation, role, account])
@@ -153,16 +153,15 @@ export const getClassTutors = asyncHandler(async (req: Request, res: Response) =
 });
 
 // controller to handle role creation
-export const createClassTutor = asyncHandler(async (req: Request, res: Response) => {
+export const createQualification = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
 
-  const { classCustomId, status, classId, classFullTitle, staffId, tutorFullName } = body;
+  const { customId, qualification } = body;
 
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
-
   const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
@@ -175,61 +174,43 @@ export const createClassTutor = asyncHandler(async (req: Request, res: Response)
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Create Class Tutor");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Create Qualification");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to create class tutor - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to create qualification - Please contact your admin", 403);
   }
 
-  const staffHasContract = await StaffContract.findOne({
-    staffId
-  });
-  if (!staffHasContract) {
+  const qualificationExists = await Qualification.findOne({ organisationId: orgParsedId, customId }).lean();
+  if (qualificationExists) {
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("The staff has no contract with this organisation - Please create one for them", 409);
-  }
-  let classAlreadyManaged;
-  if (status === "Active") {
-    classAlreadyManaged = await ClassTutor.findOne({
-      organisationId: orgParsedId,
-      classId,
-      staffId,
-      status: "Active"
-    }).lean();
-    if (classAlreadyManaged) {
-      registerBillings(req, [
-        { field: "databaseOperation", value: 5 },
-        {
-          field: "databaseDataTransfer",
-          value: getObjectSize([organisation, role, account, classAlreadyManaged, staffHasContract])
-        }
-      ]);
-      throwError(
-        "The staff is already an active tutor of this class - Please assign another staff or deactivate their current management, or set this current one to inactive",
-        409
-      );
-    }
+    throwError(
+      "A qualification with this Custom Id already exist within the organisation - Either refer to that record or change the qualification custom Id",
+      409
+    );
   }
 
-  const newClassTutor = await ClassTutor.create({
+  const newQualification = await Qualification.create({
     ...body,
     organisationId: orgParsedId,
-    searchText: generateSearchText([classCustomId, classFullTitle, staffId, tutorFullName])
+    searchText: generateSearchText([customId, qualification])
   });
 
-  if (!newClassTutor) {
+  if (!newQualification) {
     registerBillings(req, [
       { field: "databaseOperation", value: 6 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, staffHasContract]) }
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, newQualification, qualificationExists])
+      }
     ]);
-    throwError("Error creating class tutor", 500);
+    throwError("Error creating qualification", 500);
   }
 
   let activityLog;
@@ -239,14 +220,18 @@ export const createClassTutor = asyncHandler(async (req: Request, res: Response)
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Class Tutor Creation",
-      "ClassTutor",
-      newClassTutor?._id,
-      tutorFullName,
+      "Qualification Creation",
+      "Qualification",
+      newQualification?._id,
+      qualification,
       [
         {
           kind: "N",
-          rhs: newClassTutor
+          rhs: {
+            _id: newQualification._id,
+            qualificationId: newQualification.customId,
+            qualification
+          }
         }
       ],
       new Date()
@@ -256,34 +241,37 @@ export const createClassTutor = asyncHandler(async (req: Request, res: Response)
   registerBillings(req, [
     {
       field: "databaseOperation",
-      value: 6 + (logActivityAllowed ? 2 : 0) + (status === "Active" ? 1 : 0)
+      value: 6 + (logActivityAllowed ? 2 : 0)
     },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newClassTutor) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: (getObjectSize(newQualification) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
     },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([newClassTutor, staffHasContract, organisation, role, account]) +
-        (status === "Active" ? getObjectSize(classAlreadyManaged) : 0) +
+        getObjectSize([newQualification, qualificationExists, organisation, role, account]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
+
   res.status(201).json("successfull");
 });
 
 // controller to handle role update
-export const updateClassTutor = asyncHandler(async (req: Request, res: Response) => {
+export const updateQualification = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const body = req.body;
-  const { classCustomId, classFullTitle, staffId, tutorFullName } = body;
+  const { customId, qualification } = body;
 
-  if (!validateClassTutor(body)) {
+  if (!validateQualification(body)) {
     throwError("Please fill in all required fields", 400);
   }
 
+  // confirm user
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
+  // confirm organisation
+  const orgParsedId = account!.organisationId!.toString();
 
   const { roleId } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
@@ -297,55 +285,58 @@ export const updateClassTutor = asyncHandler(async (req: Request, res: Response)
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Class Tutor");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Qualification");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to edit class tutor - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to edit qualification - Please contact your admin", 403);
   }
 
-  const originalClassTutor = await ClassTutor.findOne({ _id: body._id }).lean();
+  const originalQualification = await Qualification.findOne({ organisationId: orgParsedId, customId }).lean();
 
-  if (!originalClassTutor) {
+  if (!originalQualification) {
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("An error occured whilst getting old class tutor data, Ensure it has not been deleted", 500);
+    throwError("An error occured whilst getting old qualification data, Ensure it has not been deleted", 500);
   }
 
-  const updatedClassTutor = await ClassTutor.findByIdAndUpdate(
-    originalClassTutor?._id.toString(),
+  const updatedQualification = await Qualification.findByIdAndUpdate(
+    originalQualification?._id.toString(),
     {
       ...body,
-      searchText: generateSearchText([classCustomId, classFullTitle, staffId, tutorFullName])
+      searchText: generateSearchText([customId, qualification])
     },
     { new: true }
   ).lean();
 
-  if (!updatedClassTutor) {
+  if (!updatedQualification) {
     registerBillings(req, [
       { field: "databaseOperation", value: 6 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalClassTutor]) }
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, originalQualification, updatedQualification])
+      }
     ]);
-    throwError("Error updating class", 500);
+    throwError("Error updating qualification", 500);
   }
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    const difference = diff(originalClassTutor, updatedClassTutor);
+    const difference = diff(originalQualification, updatedQualification);
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Class Tutor Update",
-      "ClassTutor",
-      updatedClassTutor?._id,
-      classFullTitle,
+      "Qualification Update",
+      "Qualification",
+      updatedQualification?._id,
+      qualification,
       difference,
       new Date()
     );
@@ -356,7 +347,7 @@ export const updateClassTutor = asyncHandler(async (req: Request, res: Response)
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([updatedClassTutor, organisation, role, account, originalClassTutor]) +
+        getObjectSize([updatedQualification, organisation, role, account, originalQualification]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);
@@ -365,7 +356,7 @@ export const updateClassTutor = asyncHandler(async (req: Request, res: Response)
 });
 
 // controller to handle deleting roles
-export const deleteClassTutor = asyncHandler(async (req: Request, res: Response) => {
+export const deleteQualification = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
   const { _id } = req.body;
   if (!_id) {
@@ -387,27 +378,30 @@ export const deleteClassTutor = asyncHandler(async (req: Request, res: Response)
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Class Tutor");
+  const hasAccess = checkAccess(account, creatorTabAccess, "Delete Qualification");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
       { field: "databaseOperation", value: 3 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Unauthorised Action: You do not have access to delete class tutor - Please contact your admin", 403);
+    throwError("Unauthorised Action: You do not have access to delete qualification - Please contact your admin", 403);
   }
 
-  const deletedClassTutor = await ClassTutor.findByIdAndDelete(_id).lean();
-  if (!deletedClassTutor) {
+  const deletedQualification = await Qualification.findByIdAndDelete(_id).lean();
+  if (!deletedQualification) {
     registerBillings(req, [
       { field: "databaseOperation", value: 5 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account, deletedQualification])
+      }
     ]);
-    throwError("Error deleting class Tutor - Please try again", 500);
+    throwError("Error deleting qualification - Please try again", 500);
   }
 
-  const emitRoom = deletedClassTutor?.organisationId?.toString() ?? "";
-  emitToOrganisation(emitRoom, "classtutors", deletedClassTutor, "delete");
+  const emitRoom = deletedQualification?.organisationId?.toString() ?? "";
+  emitToOrganisation(emitRoom, "qualifications", deletedQualification, "delete");
 
   let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
@@ -416,35 +410,35 @@ export const deleteClassTutor = asyncHandler(async (req: Request, res: Response)
     activityLog = await logActivity(
       account?.organisationId,
       accountId,
-      "Class Tutor Deletion",
-      "ClassTutor",
-      deletedClassTutor?._id,
-      deletedClassTutor?.tutorFullName,
+      "Qualification Delete",
+      "Qualification",
+      deletedQualification?._id,
+      deletedQualification?.qualification,
       [
         {
           kind: "D" as any,
-          lhs: deletedClassTutor
+          lhs: deletedQualification
         }
       ],
       new Date()
     );
-
-    registerBillings(req, [
-      {
-        field: "databaseOperation",
-        value: 5 + (logActivityAllowed ? 2 : 0)
-      },
-      {
-        field: "databaseStorageAndBackup",
-        value: toNegative(getObjectSize(deletedClassTutor) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
-      },
-      {
-        field: "databaseDataTransfer",
-        value:
-          getObjectSize([deletedClassTutor, organisation, role, account]) +
-          (logActivityAllowed ? getObjectSize(activityLog) : 0)
-      }
-    ]);
   }
+
+  registerBillings(req, [
+    {
+      field: "databaseOperation",
+      value: 5 + (logActivityAllowed ? 2 : 0)
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: toNegative(getObjectSize(deletedQualification) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    },
+    {
+      field: "databaseDataTransfer",
+      value:
+        getObjectSize([deletedQualification, organisation, role, account]) +
+        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+    }
+  ]);
   res.status(201).json("successfull");
 });

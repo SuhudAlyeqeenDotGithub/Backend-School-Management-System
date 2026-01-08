@@ -7,7 +7,6 @@ const staffContractSchema = new Schema(
     academicYearId: { type: mongoose.Schema.Types.ObjectId, ref: "AcademicYear", required: true },
     staffId: { type: String, required: true },
     staffFullName: { type: String, required: true },
-    academicYear: { type: String, required: true },
     customId: { type: String, required: true },
     jobTitle: { type: String, required: true },
     startDate: { type: String, required: true },
@@ -19,10 +18,9 @@ const staffContractSchema = new Schema(
     searchText: { type: String, required: true },
     contractType: {
       type: String,
-      required: true,
-      enum: ["Full-time", "Part-time", "Casual", "Internship", "Fixed-term"]
+      required: true
     },
-    reportingManagerCustomId: String,
+    managerStaffId: { type: mongoose.Schema.Types.ObjectId, ref: "Staff", default: null },
     probationStartDate: String,
     probationEndDate: String,
     probationMonths: Number,
@@ -30,10 +28,7 @@ const staffContractSchema = new Schema(
     department: String,
     salary: { type: String, required: true },
     payFrequency: String,
-    allowances: {
-      type: [{ _id: String, allowanceType: String, amount: String }],
-      required: true
-    },
+    allowances: { type: [{ _id: String, allowanceType: String, amount: Number, notes: String, grantedDate: String }] },
     terminationNoticePeriod: String,
     workingSchedule: {
       type: [{ _id: String, day: String, startTime: String, endTime: String, hours: String }],

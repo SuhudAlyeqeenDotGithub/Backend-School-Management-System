@@ -10,6 +10,7 @@ import { AcademicYear } from "../models/timeline/academicYear.ts";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
 import { customAlphabet } from "nanoid";
+import fs from "fs";
 import parsePhoneNumberFromString from "libphonenumber-js";
 import { Student } from "../models/student/studentProfile.ts";
 import { Programme, ProgrammeManager } from "../models/curriculum/programme.ts";
@@ -26,6 +27,9 @@ import { Billing } from "../models/admin/billingModel.ts";
 import { getOwnerMongoId } from "./envVariableGetters.ts";
 import path from "path";
 import { generateSearchText, throwError } from "./pureFuctions.ts";
+import { registerBillings } from "./billingFunctions.ts";
+import { Request } from "express";
+import { Period } from "../models/timeline/period.ts";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -60,7 +64,7 @@ export const buildEmailTemplate = (content: string) => {
   `;
 };
 
-export async function sendEmail(to: string, subject: string, text: string, html?: string) {
+export async function sendEmail(req: Request, to: string, subject: string, text: string, html?: string) {
   const mailOptions = {
     from: process.env.EMAIL,
     to,
@@ -76,6 +80,14 @@ export async function sendEmail(to: string, subject: string, text: string, html?
     ]
   };
 
+  const htmlSize = Buffer.byteLength(html || text, "utf8");
+  const attachmentsSize = mailOptions.attachments?.reduce((acc, file) => acc + fs.statSync(file.path).size, 0) || 0;
+
+  const totalEmailSize = htmlSize + attachmentsSize;
+
+  // Then register this bandwidth usage for the school/user
+  registerBillings(req, [{ field: "renderBandwidth", value: totalEmailSize }]);
+
   try {
     await transporter.sendMail(mailOptions);
   } catch (error: any) {
@@ -83,10 +95,10 @@ export async function sendEmail(to: string, subject: string, text: string, html?
   }
 }
 
-export async function sendEmailToOwner(subject: string, text: string, html?: string) {
+export async function sendEmailToOwner(req: Request, subject: string, text: string, html?: string) {
   try {
-    await sendEmail("suhudalyeqeenapp@gmail.com", subject, text, text);
-    await sendEmail("alyekeeniy@gmail.com", subject, text, text);
+    await sendEmail(req, "suhudalyeqeenapp@gmail.com", subject, text, text);
+    await sendEmail(req, "alyekeeniy@gmail.com", subject, text, text);
   } catch (error: any) {
     throwError(error.message || "Error sending email", 500);
   }
@@ -100,9 +112,9 @@ export const validatePhoneNumber = (phoneNumber: string) => {
 };
 
 export const checkAccess = (accountData: any, tabAccess: any, action: string) => {
-  const assignedTabAccess = tabAccess;
+  const assignedTabAccess = tabAccess || [];
 
-  const uniqueTabs = accountData.uniqueTabAccess;
+  const uniqueTabs = accountData?.uniqueTabAccess || [];
 
   // all tabs of each group with access of true
   const assignedTabAccessTabs = assignedTabAccess.flatMap((group: any) => group.tabs);
@@ -118,20 +130,44 @@ export const checkAccess = (accountData: any, tabAccess: any, action: string) =>
   return accountPermittedActions.includes(action);
 };
 
+export const checkAccesses = (accountData: any, tabAccess: any, actions: string[]) => {
+  const assignedTabAccess = tabAccess || [];
+
+  const uniqueTabs = accountData?.uniqueTabAccess || [];
+
+  // all tabs of each group with access of true
+  const assignedTabAccessTabs = assignedTabAccess.flatMap((group: any) => group.tabs);
+  const mergedTabs = [...assignedTabAccessTabs, ...uniqueTabs];
+
+  const accountPermittedActions = mergedTabs
+    .map((tab: any) => {
+      return tab.actions.filter(({ permission }: any) => permission === true);
+    })
+    .map((tab: any) => tab.map(({ action }: any) => action))
+    .flat();
+
+  return actions.some((action) => accountPermittedActions.includes(action));
+};
+
 export const confirmUserOrgRole = async (accountId: string) => {
   const account = await confirmAccount(accountId);
 
-  const organisation = await confirmAccount(account!.organisationId!._id.toString());
+  const organisation = await confirmAccount(account?.organisationId?._id);
 
-  const role = await confirmRole(account!.roleId!._id.toString());
+  const role = await confirmRole(account?.roleId?._id);
 
   return { account, role, organisation };
+};
+
+export const orgHasRequiredFeature = (organisation: any, featureName: string) => {
+  const orgHasRequiredFeature = organisation?.features?.map((feature: any) => feature.name).includes(featureName);
+  return orgHasRequiredFeature;
 };
 
 export const getGoogleCloudFileSize = async (file: any) => {
   const [metadata] = await file.getMetadata();
   // File size in bytes
-  const sizeInBytes = typeof metadata.size === "number" ? metadata.size : parseInt(String(metadata.size || "0"), 10);
+  const sizeInBytes = typeof metadata?.size === "number" ? metadata?.size : parseInt(String(metadata?.size || "0"), 10);
 
   // Convert to GB
   return sizeInBytes / (1024 * 1024 * 1024);
@@ -175,14 +211,21 @@ export const generateRefreshToken = (accountData: any) => {
 export const generateCustomId = (
   prefix?: string,
   neat = false,
+  type: string = "alphanumeric",
   numberOfCharacters = 7,
   paystackReference?: boolean
 ) => {
   if (neat) {
-    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    const nanoid = customAlphabet(alphabet, numberOfCharacters);
+    const alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const numeric = "0123456789";
+    const nanoid = customAlphabet(
+      type === "alphanumeric" ? alphanumeric : type === "alphabet" ? alphabet : numeric,
+      numberOfCharacters
+    );
     return `${prefix ? prefix + "-" : ""}${nanoid()}`;
   }
+
   if (paystackReference) {
     const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopgrstuvwxyz0123456789";
     const nanoid = customAlphabet(alphabet, numberOfCharacters);
@@ -192,7 +235,7 @@ export const generateCustomId = (
 };
 
 export const getVerificationCode = () => {
-  const verificationCode = generateCustomId("SUAPP", true, 5);
+  const verificationCode = generateCustomId("SUAPP", true, "numeric", 5);
   const hashedVerificationCode = crypto.createHash("sha256").update(verificationCode).digest("hex");
   return { verificationCode, hashedVerificationCode };
 };
@@ -233,7 +276,7 @@ export const logActivity = async (
 };
 
 // function to confirm account existence
-export const confirmAccount = async (accountId: string) => {
+export const confirmAccount = async (accountId: any) => {
   const account = await Account.findById(accountId)
     .populate([{ path: "roleId" }, { path: "staffId" }])
     .lean();
@@ -245,14 +288,9 @@ export const confirmAccount = async (accountId: string) => {
 };
 
 // function to confirm role existece
-export const confirmRole = async (roleId: string) => {
+export const confirmRole = async (roleId: any) => {
   const role = await Role.findById(roleId).populate("accountId").lean();
-
-  if (!role) {
-    throwError("This role does not exist", 401);
-  }
-
-  return role;
+  return role ?? { name: "", absoluteAdmin: false, tabAccess: [] };
 };
 
 export const fetchRoles = async (asWho: string, orgId: string, selfId: string) => {
@@ -467,15 +505,8 @@ export const fetchStaffProfiles = async (
   };
 };
 
-export const fetchAllStudentProfiles = async (asWho: string, orgId: string, selfId: string) => {
-  let studentProfiles;
-  if (asWho === "Absolute Admin") {
-    studentProfiles = await Student.find({ organisationId: orgId }).sort({ _id: -1 }).lean();
-  } else {
-    studentProfiles = await Student.find({ organisationId: orgId, studentCustomId: { $ne: selfId } })
-      .sort({ _id: -1 })
-      .lean();
-  }
+export const fetchAllStudentProfiles = async (orgId: string) => {
+  let studentProfiles = await Student.find({ organisationId: orgId }).sort({ _id: -1 }).lean();
 
   if (!studentProfiles) {
     throwError("Error fetching student profiles", 500);
@@ -484,29 +515,12 @@ export const fetchAllStudentProfiles = async (asWho: string, orgId: string, self
   return studentProfiles;
 };
 
-export const fetchStudentProfiles = async (
-  query: any,
-  cursorType: string,
-  limit: number,
-  asWho: string,
-  orgId: string,
-  selfId: string
-) => {
-  let studentProfiles;
-  let totalCount;
-  if (asWho === "Absolute Admin") {
-    studentProfiles = await Student.find({ ...query, organisationId: orgId })
-      .sort({ _id: -1 })
-      .limit(limit + 1)
-      .lean();
-    totalCount = await Student.countDocuments({ ...query, organisationId: orgId });
-  } else {
-    studentProfiles = await Student.find({ ...query, organisationId: orgId, studentCustomId: { $ne: selfId } })
-      .sort({ _id: -1 })
-      .limit(limit + 1)
-      .lean();
-    totalCount = await Student.countDocuments({ ...query, organisationId: orgId, studentCustomId: { $ne: selfId } });
-  }
+export const fetchStudentProfiles = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  let studentProfiles = await Student.find({ ...query, organisationId: orgId })
+    .sort({ _id: -1 })
+    .limit(limit + 1)
+    .lean();
+  let totalCount = await Student.countDocuments({ ...query, organisationId: orgId });
 
   if (!studentProfiles) {
     throwError("Error fetching student profiles", 500);
@@ -582,18 +596,28 @@ export const fetchProgrammeManagers = async (
       .lean();
     totalCount = await ProgrammeManager.countDocuments({ ...query, organisationId: orgId });
   } else {
+    const { staffId, ...restQuery } = query;
+
+    const staffQuery: any = {
+      $ne: selfId
+    };
+
+    if (staffId) {
+      staffQuery.$eq = staffId;
+    }
+
     programmeManagers = await ProgrammeManager.find({
-      ...query,
+      ...restQuery,
       organisationId: orgId,
-      programmeManagerStaffId: { $ne: selfId }
+      staffId: staffQuery
     })
       .sort({ _id: -1 })
       .limit(limit + 1)
       .lean();
     totalCount = await ProgrammeManager.countDocuments({
-      ...query,
+      ...restQuery,
       organisationId: orgId,
-      programmeManagerStaffId: { $ne: selfId }
+      staffId: staffQuery
     });
   }
 
@@ -671,18 +695,28 @@ export const fetchPathwayManagers = async (
       .lean();
     totalCount = await PathwayManager.countDocuments({ ...query, organisationId: orgId });
   } else {
+    const { staffId, ...restQuery } = query;
+
+    const staffQuery: any = {
+      $ne: selfId
+    };
+
+    if (staffId) {
+      staffQuery.$eq = staffId;
+    }
+
     pathwayManagers = await PathwayManager.find({
-      ...query,
+      ...restQuery,
       organisationId: orgId,
-      pathwayManagerStaffId: { $ne: selfId }
+      staffId: staffQuery
     })
       .sort({ _id: -1 })
       .limit(limit + 1)
       .lean();
     totalCount = await PathwayManager.countDocuments({
-      ...query,
+      ...restQuery,
       organisationId: orgId,
-      pathwayManagerStaffId: { $ne: selfId }
+      staffId: staffQuery
     });
   }
 
@@ -707,38 +741,38 @@ export const fetchPathwayManagers = async (
 };
 
 export const fetchAllClasses = async (orgId: string) => {
-  const classs = await Class.find({ organisationId: orgId }).sort({ _id: -1 }).lean();
+  const classes = await Class.find({ organisationId: orgId }).sort({ _id: -1 }).lean();
 
-  if (!classs) {
-    throwError("Error fetching classs", 500);
+  if (!classes) {
+    throwError("Error fetching classes", 500);
   }
 
-  return classs;
+  return classes;
 };
 
 export const fetchClasses = async (query: any, cursorType: string, limit: number, orgId: string) => {
-  const classs = await Class.find({ ...query, organisationId: orgId })
+  const classes = await Class.find({ ...query, organisationId: orgId })
     .sort({ _id: -1 })
     .limit(limit + 1)
     .lean();
   const totalCount = await Class.countDocuments({ ...query, organisationId: orgId });
 
-  if (!classs) {
-    throwError("Error fetching classs", 500);
+  if (!classes) {
+    throwError("Error fetching classes", 500);
   }
-  const hasNext = classs.length > limit || cursorType === "prev";
+  const hasNext = classes.length > limit || cursorType === "prev";
 
-  if (classs.length > limit) {
-    classs.pop();
+  if (classes.length > limit) {
+    classes.pop();
   }
-  const chunkCount = classs.length;
+  const chunkCount = classes.length;
 
   return {
-    classs,
+    classes,
     totalCount,
     chunkCount,
-    nextCursor: classs[classs.length - 1]?._id,
-    prevCursor: classs[0]?._id,
+    nextCursor: classes[classes.length - 1]?._id,
+    prevCursor: classes[0]?._id,
     hasNext
   };
 };
@@ -760,18 +794,28 @@ export const fetchClassTutors = async (
       .lean();
     totalCount = await ClassTutor.countDocuments({ ...query, organisationId: orgId });
   } else {
+    const { staffId, ...restQuery } = query;
+
+    const staffQuery: any = {
+      $ne: selfId
+    };
+
+    if (staffId) {
+      staffQuery.$eq = staffId;
+    }
+
     classTutors = await ClassTutor.find({
-      ...query,
+      ...restQuery,
       organisationId: orgId,
-      classTutorStaffId: { $ne: selfId }
+      staffId: staffQuery
     })
       .sort({ _id: -1 })
       .limit(limit + 1)
       .lean();
     totalCount = await ClassTutor.countDocuments({
-      ...query,
+      ...restQuery,
       organisationId: orgId,
-      classTutorStaffId: { $ne: selfId }
+      staffId: staffQuery
     });
   }
 
@@ -795,8 +839,8 @@ export const fetchClassTutors = async (
   };
 };
 
-export const fetchAllClassTutors = async (orgId: string) => {
-  const classTutors = await ClassTutor.find({ organisationId: orgId }).lean();
+export const fetchAllClassTutors = async (orgId: string, selfId: string) => {
+  const classTutors = await ClassTutor.find({ organisationId: orgId, staffId: { $ne: selfId } }).lean();
 
   if (!classTutors) {
     throwError("Error fetching class managers", 500);
@@ -805,14 +849,24 @@ export const fetchAllClassTutors = async (orgId: string) => {
   return classTutors;
 };
 
-export const fetchAllPathwayManagers = async (orgId: string) => {
-  const pathwayManagers = await PathwayManager.find({ organisationId: orgId }).lean();
+export const fetchAllPathwayManagers = async (orgId: string, selfId: string) => {
+  const pathwayManagers = await PathwayManager.find({ organisationId: orgId, staffId: { $ne: selfId } }).lean();
 
   if (!pathwayManagers) {
     throwError("Error fetching pathway managers", 500);
   }
 
   return pathwayManagers;
+};
+
+export const fetchAllProgrammeManagers = async (orgId: string, selfId: string) => {
+  const programmeManagers = await ProgrammeManager.find({ organisationId: orgId, staffId: { $ne: selfId } }).lean();
+
+  if (!programmeManagers) {
+    throwError("Error fetching programme managers", 500);
+  }
+
+  return programmeManagers;
 };
 
 export const fetchAllBaseSubjects = async (orgId: string) => {
@@ -869,18 +923,28 @@ export const fetchBaseSubjectManagers = async (
       .lean();
     totalCount = await BaseSubjectManager.countDocuments({ ...query, organisationId: orgId });
   } else {
+    const { staffId, ...restQuery } = query;
+
+    const staffQuery: any = {
+      $ne: selfId
+    };
+
+    if (staffId) {
+      staffQuery.$eq = staffId;
+    }
+
     baseSubjectManagers = await BaseSubjectManager.find({
-      ...query,
+      ...restQuery,
       organisationId: orgId,
-      baseSubjectManagerStaffId: { $ne: selfId }
+      staffId: staffQuery
     })
       .sort({ _id: -1 })
       .limit(limit + 1)
       .lean();
     totalCount = await BaseSubjectManager.countDocuments({
-      ...query,
+      ...restQuery,
       organisationId: orgId,
-      baseSubjectManagerStaffId: { $ne: selfId }
+      staffId: staffQuery
     });
   }
 
@@ -978,14 +1042,24 @@ export const fetchClassSubjects = async (query: any, cursorType: string, limit: 
   };
 };
 
-export const fetchAllClassSubjectTeachers = async (orgId: string) => {
-  const subjectTeachers = await ClassSubjectTeacher.find({ organisationId: orgId }).lean();
+export const fetchAllClassSubjectTeachers = async (orgId: string, selfId: string) => {
+  const subjectTeachers = await ClassSubjectTeacher.find({ organisationId: orgId, staffId: { $ne: selfId } }).lean();
 
   if (!subjectTeachers) {
     throwError("Error fetching class subject teachers", 500);
   }
 
   return subjectTeachers;
+};
+
+export const fetchAllBaseSubjectManagers = async (orgId: string, selfId: string) => {
+  const subjectManagers = await BaseSubjectManager.find({ organisationId: orgId, staffId: { $ne: selfId } }).lean();
+
+  if (!subjectManagers) {
+    throwError("Error fetching base subject managers", 500);
+  }
+
+  return subjectManagers;
 };
 
 export const fetchClassSubjectTeachers = async (
@@ -1005,18 +1079,28 @@ export const fetchClassSubjectTeachers = async (
       .lean();
     totalCount = await ClassSubjectTeacher.countDocuments({ ...query, organisationId: orgId });
   } else {
+    const { staffId, ...restQuery } = query;
+
+    const staffQuery: any = {
+      $ne: selfId
+    };
+
+    if (staffId) {
+      staffQuery.$eq = staffId;
+    }
+
     classSubjectTeachers = await ClassSubjectTeacher.find({
-      ...query,
+      ...restQuery,
       organisationId: orgId,
-      classSubjectTeacherStaffId: { $ne: selfId }
+      staffId: staffQuery
     })
       .sort({ _id: -1 })
       .limit(limit + 1)
       .lean();
     totalCount = await ClassSubjectTeacher.countDocuments({
-      ...query,
+      ...restQuery,
       organisationId: orgId,
-      classSubjectTeacherStaffId: { $ne: selfId }
+      staffId: staffQuery
     });
   }
 
@@ -1093,18 +1177,28 @@ export const fetchStaffContracts = async (
       .lean();
     totalCount = await StaffContract.countDocuments({ ...query, organisationId: orgId });
   } else {
+    const { staffId, ...restQuery } = query;
+
+    const staffQuery: any = {
+      $ne: selfId
+    };
+
+    if (staffId) {
+      staffQuery.$eq = staffId;
+    }
+
     staffContracts = await StaffContract.find({
-      ...query,
+      ...restQuery,
       organisationId: orgId,
-      staffId: { $ne: selfId }
+      staffId: staffQuery
     })
       .sort({ _id: -1 })
       .limit(limit + 1)
       .lean();
     totalCount = await StaffContract.countDocuments({
-      ...query,
+      ...restQuery,
       organisationId: orgId,
-      staffId: { $ne: selfId }
+      staffId: staffQuery
     });
   }
 
@@ -1177,72 +1271,89 @@ export const fetchStudentEnrollments = async (query: any, cursorType: string, li
   };
 };
 
-export const fetchStudentDayAttendances = async (query: any, cursorType: string, limit: number, orgId: string) => {
-  const studentDayAttendances = await StudentDayAttendanceTemplate.find({
-    ...query,
-    organisationId: orgId
+export const fetchStudentDayAttendanceTemplates = async (
+  query: any,
+  cursorType: string,
+  limit: number,
+  orgId: string
+) => {
+  const studentDayAttendanceTemplates = await StudentDayAttendanceTemplate.find({
+    organisationId: orgId,
+    ...query
   })
-    .populate("studentDayAttendances")
+    .populate([
+      {
+        path: "studentDayAttendances",
+        select: "_id studentId fullName studentCustomId studentAttendanceStatus reason "
+      },
+      { path: "takenBy", select: "_id name email" }
+    ])
+
     .sort({ _id: -1 })
     .limit(limit + 1)
     .lean();
   const totalCount = await StudentDayAttendanceTemplate.countDocuments({
-    ...query,
-    organisationId: orgId
+    organisationId: orgId,
+    ...query
   });
 
-  if (!studentDayAttendances) {
-    throwError("Error fetching student contracts", 500);
+  if (!studentDayAttendanceTemplates) {
+    throwError("Error fetching student attendance templates", 500);
   }
 
-  const hasNext = studentDayAttendances.length > limit || cursorType === "prev";
+  const hasNext = studentDayAttendanceTemplates.length > limit || cursorType === "prev";
 
-  if (studentDayAttendances.length > limit) {
-    studentDayAttendances.pop();
+  if (studentDayAttendanceTemplates.length > limit) {
+    studentDayAttendanceTemplates.pop();
   }
-  const chunkCount = studentDayAttendances.length;
+  const chunkCount = studentDayAttendanceTemplates.length;
 
   return {
-    studentDayAttendances,
+    studentDayAttendanceTemplates,
     totalCount,
     chunkCount,
-    nextCursor: studentDayAttendances[studentDayAttendances.length - 1]?._id,
-    prevCursor: studentDayAttendances[0]?._id,
+    nextCursor: studentDayAttendanceTemplates[studentDayAttendanceTemplates.length - 1]?._id,
+    prevCursor: studentDayAttendanceTemplates[0]?._id,
     hasNext
   };
 };
 
-export const fetchStudentSubjectAttendances = async (query: any, cursorType: string, limit: number, orgId: string) => {
-  const studentSubjectAttendances = await StudentSubjectAttendanceTemplate.find({
-    ...query,
-    organisationId: orgId
+export const fetchStudentSubjectAttendanceTemplates = async (
+  query: any,
+  cursorType: string,
+  limit: number,
+  orgId: string
+) => {
+  const studentSubjectAttendanceTemplates = await StudentSubjectAttendanceTemplate.find({
+    organisationId: orgId,
+    ...query
   })
     .populate("studentSubjectAttendances")
     .sort({ _id: -1 })
     .limit(limit + 1)
     .lean();
   const totalCount = await StudentSubjectAttendanceTemplate.countDocuments({
-    ...query,
-    organisationId: orgId
+    organisationId: orgId,
+    ...query
   });
 
-  if (!studentSubjectAttendances) {
+  if (!studentSubjectAttendanceTemplates) {
     throwError("Error fetching student contracts", 500);
   }
 
-  const hasNext = studentSubjectAttendances.length > limit || cursorType === "prev";
+  const hasNext = studentSubjectAttendanceTemplates.length > limit || cursorType === "prev";
 
-  if (studentSubjectAttendances.length > limit) {
-    studentSubjectAttendances.pop();
+  if (studentSubjectAttendanceTemplates.length > limit) {
+    studentSubjectAttendanceTemplates.pop();
   }
-  const chunkCount = studentSubjectAttendances.length;
+  const chunkCount = studentSubjectAttendanceTemplates.length;
 
   return {
-    studentSubjectAttendances,
+    studentSubjectAttendanceTemplates,
     totalCount,
     chunkCount,
-    nextCursor: studentSubjectAttendances[studentSubjectAttendances.length - 1]?._id,
-    prevCursor: studentSubjectAttendances[0]?._id,
+    nextCursor: studentSubjectAttendanceTemplates[studentSubjectAttendanceTemplates.length - 1]?._id,
+    prevCursor: studentSubjectAttendanceTemplates[0]?._id,
     hasNext
   };
 };
@@ -1261,4 +1372,31 @@ export const fetchAcademicYears = async (orgId: string) => {
     throwError("Error fetching academic years", 500);
   }
   return academicYears;
+};
+
+export const fetchPeriods = async (query: any, cursorType: string, limit: number, orgId: string) => {
+  const periods = await Period.find({ ...query, organisationId: orgId })
+    .sort({ _id: -1 })
+    .limit(limit + 1)
+    .lean();
+  const totalCount = await Period.countDocuments({ ...query, organisationId: orgId });
+
+  if (!periods) {
+    throwError("Error fetching periods", 500);
+  }
+  const hasNext = periods.length > limit || cursorType === "prev";
+
+  if (periods.length > limit) {
+    periods.pop();
+  }
+  const chunkCount = periods.length;
+
+  return {
+    periods,
+    totalCount,
+    chunkCount,
+    nextCursor: periods[periods.length - 1]?._id,
+    prevCursor: periods[0]?._id,
+    hasNext
+  };
 };

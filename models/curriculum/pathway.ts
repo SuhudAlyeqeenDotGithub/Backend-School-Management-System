@@ -34,6 +34,6 @@ const pathwayManagerSchema = new Schema(
 );
 
 pathwayManagerSchema.index({ organisationId: 1, pathwayId: 1, staffId: 1, status: 1 }, { unique: true });
-// pathwayManagerSchema.index({ organisationId: 1, pathwayId: 1, customStaffId: 1 });
-// pathwayManagerSchema.index({ organisationId: 1, staffId: 1, status: 1 });
+pathwayManagerSchema.index({ organisationId: 1, staffId: 1, status: 1 });
+ // pathwayManagerSchema.index({ organisationId: 1, pathwayId: 1, customStaffId: 1 });
 export const PathwayManager = model("PathwayManager", pathwayManagerSchema);

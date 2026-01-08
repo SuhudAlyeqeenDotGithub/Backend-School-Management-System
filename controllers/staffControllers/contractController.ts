@@ -28,7 +28,7 @@ const validateStaffContract = (staffDataParam: any) => {
     allowances,
     probationMonths,
     terminationNoticePeriod,
-    reportingManagerCustomId,
+    managerStaffId,
     searchText,
     ...copyLocalData
   } = staffDataParam;
@@ -55,7 +55,7 @@ export const getStaffContracts = asyncHandler(async (req: Request, res: Response
   }
 
   for (const key in filters) {
-    if (filters[key] !== "all") {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
       query[key] = filters[key];
     }
   }
@@ -72,7 +72,7 @@ export const getStaffContracts = asyncHandler(async (req: Request, res: Response
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, staffId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -134,7 +134,7 @@ export const getAllStaffContracts = asyncHandler(async (req: Request, res: Respo
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId, staffId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -154,7 +154,7 @@ export const getAllStaffContracts = asyncHandler(async (req: Request, res: Respo
     ]);
     throwError("Unauthorised Action: You do not have access to view staff contracts - Please contact your admin", 403);
   }
-  
+
   const staffContracts = await fetchAllStaffContracts(
     absoluteAdmin ? "Absolute Admin" : "User",
     organisation!._id.toString(),
@@ -181,7 +181,7 @@ export const getAllStaffContracts = asyncHandler(async (req: Request, res: Respo
 // controller to handle role creation
 export const createStaffContract = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { academicYearId, academicYear, staffId, jobTitle, staffFullName } = req.body;
+  const { academicYearId, academicYear, staffId, jobTitle, staffFullName, managerStaffId } = req.body;
 
   if (!validateStaffContract({ ...req.body })) {
     throwError("Please fill in all required fields", 400);
@@ -193,7 +193,7 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
   const orgParsedId = account!.organisationId!._id.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -241,6 +241,7 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
   const newStaffContract = await StaffContract.create({
     ...req.body,
     organisationId: orgParsedId,
+    managerStaffId: managerStaffId ? managerStaffId : null,
     searchText: generateSearchText([academicYear, staffId, staffFullName, jobTitle])
   });
 
@@ -296,7 +297,7 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
 // controller to handle role update
 export const updateStaffContract = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
-  const { academicYearId, academicYear, staffId, jobTitle, staffFullName, _id } = req.body;
+  const { academicYearId, academicYear, staffId, jobTitle, staffFullName, _id, managerStaffId } = req.body;
 
   if (!validateStaffContract({ ...req.body })) {
     throwError("Please fill in all required fields", 400);
@@ -307,7 +308,7 @@ export const updateStaffContract = asyncHandler(async (req: Request, res: Respon
   // confirm organisation
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -356,6 +357,7 @@ export const updateStaffContract = asyncHandler(async (req: Request, res: Respon
     originalStaff?._id,
     {
       ...req.body,
+      managerStaffId: managerStaffId ? managerStaffId : null,
       searchText: generateSearchText([academicYear, staffId, staffFullName, jobTitle])
     },
     { new: true }
@@ -406,7 +408,6 @@ export const deleteStaffContract = asyncHandler(async (req: Request, res: Respon
   const { accountId } = req.userToken;
   const { _id } = req.body;
 
-  console.log("_id", _id);
   if (!_id) {
     throwError("Unknown delete request - Please try again", 400);
   }
@@ -414,7 +415,7 @@ export const deleteStaffContract = asyncHandler(async (req: Request, res: Respon
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId: creatorRoleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 

@@ -7,7 +7,8 @@ import {
   logActivity,
   confirmUserOrgRole,
   checkOrgAndUserActiveness,
-  checkAccess
+  checkAccess,
+  checkAccesses
 } from "../../utils/databaseFunctions.ts";
 
 import { throwError, toNegative, getObjectSize } from "../../utils/pureFuctions.ts";
@@ -16,6 +17,7 @@ import { diff } from "deep-diff";
 import { AcademicYear } from "../../models/timeline/academicYear.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 import { Period } from "../../models/timeline/period.ts";
+import { getNeededAccesses } from "../../utils/defaultVariables.ts";
 export const getAcademicYears = asyncHandler(async (req: Request, res: Response) => {
   const { accountId } = req.userToken;
 
@@ -23,7 +25,7 @@ export const getAcademicYears = asyncHandler(async (req: Request, res: Response)
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -34,28 +36,39 @@ export const getAcademicYears = asyncHandler(async (req: Request, res: Response)
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(account, tabAccess, "View Academic Years");
-
-  if (absoluteAdmin || hasAccess) {
-    const academicYears = await fetchAcademicYears(organisation!._id.toString());
-
-    if (!academicYears) {
-      throwError("Error fetching academic years", 500);
-    }
-
+  const hasAccess = checkAccesses(account, tabAccess, getNeededAccesses("All Academic Years"));
+  if (!absoluteAdmin && !hasAccess) {
+    throwError("Unauthorised Action: You do not have access to view academic years - Please contact your admin", 403);
     registerBillings(req, [
-      { field: "databaseOperation", value: academicYears.length + 3 },
+      { field: "databaseOperation", value: 3 },
       {
         field: "databaseDataTransfer",
-        value: getObjectSize([academicYears, organisation, role, account])
+        value: getObjectSize([organisation, role, account])
       }
     ]);
-
-    res.status(201).json(academicYears);
-    return;
   }
 
-  throwError("Unauthorised Action: You do not have access to view academic years - Please contact your admin", 403);
+  const academicYears = await fetchAcademicYears(organisation!._id.toString());
+  if (!academicYears) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      {
+        field: "databaseDataTransfer",
+        value: getObjectSize([organisation, role, account])
+      }
+    ]);
+    throwError("Error fetching academic years", 500);
+  }
+
+  registerBillings(req, [
+    { field: "databaseOperation", value: academicYears.length + 3 },
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([academicYears, organisation, role, account])
+    }
+  ]);
+
+  res.status(201).json(academicYears);
 });
 
 // controller to handle role creation
@@ -73,13 +86,13 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const yearNameExists = await AcademicYear.findOne({ organisationId: orgParsedId, academicYear });
+  const yearNameExists = await AcademicYear.findOne({ organisationId: orgParsedId, academicYear }).lean();
   if (yearNameExists) {
     throwError("This academic year name is already in use in this organisation - Please use a different name", 409);
   }
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -90,18 +103,12 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
     ]);
     throwError(message, 409);
   }
-  const hasAccess = checkAccess(
-    account,
-
-    creatorTabAccess,
-
-    "Edit Academic Year"
-  );
+  const hasAccess = checkAccess(account, creatorTabAccess, "Edit Academic Year");
 
   if (!absoluteAdmin && !hasAccess) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 3 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, yearNameExists]) }
     ]);
     throwError("Unauthorised Action: You do not have access to create academic year - Please contact your admin", 403);
   }
@@ -114,6 +121,10 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
   });
 
   if (!newAcademicYear) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, yearNameExists]) }
+    ]);
     throwError("Error creating academic year", 500);
   }
 
@@ -122,16 +133,19 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
       organisationId: orgParsedId,
       customId: period.customId,
       academicYearId: newAcademicYear?._id,
-      academicYear: newAcademicYear?.academicYear,
       period: period.period,
       startDate: period.startDate,
       endDate: period.endDate
     })
   );
 
-  const createdPeriods = await Period.insertMany(academicYearTaggedPeriods);
+  const createdPeriods = await Period.insertMany(academicYearTaggedPeriods, { ordered: true });
 
   if (!createdPeriods) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 8 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, yearNameExists]) }
+    ]);
     throwError("Error creating academic year periods", 500);
   }
 
@@ -163,7 +177,7 @@ export const createAcademicYear = asyncHandler(async (req: Request, res: Respons
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) + createdPeriods?.length * 2 },
+    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) + createdPeriods?.length * 2 },
     {
       field: "databaseStorageAndBackup",
       value:
@@ -194,7 +208,7 @@ export const updateAcademicYear = asyncHandler(async (req: Request, res: Respons
   // confirm organisation
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -215,9 +229,13 @@ export const updateAcademicYear = asyncHandler(async (req: Request, res: Respons
     throwError("Unauthorised Action: You do not have access to edit academic year - Please contact your admin", 403);
   }
 
-  const originalAcademicYear = await AcademicYear.findById(academicYearId);
+  const originalAcademicYear = await AcademicYear.findById(academicYearId).lean();
 
   if (!originalAcademicYear) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 4 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("An error occured whilst getting old Academic Year data", 500);
   }
 
@@ -230,6 +248,10 @@ export const updateAcademicYear = asyncHandler(async (req: Request, res: Respons
   );
 
   if (!updatedAcademicYear) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 6 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account, originalAcademicYear]) }
+    ]);
     throwError("Error updating academic year", 500);
   }
 
@@ -274,7 +296,7 @@ export const deleteAcademicYear = asyncHandler(async (req: Request, res: Respons
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId: creatorRoleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -295,16 +317,25 @@ export const deleteAcademicYear = asyncHandler(async (req: Request, res: Respons
     throwError("Unauthorised Action: You do not have access to delete academic year - Please contact your admin", 403);
   }
 
-  const academicYearToDelete = await AcademicYear.findById(academicYearIdToDelete);
+  const deletedAcademicYearPeriods = await Period.deleteMany(
+    { academicYearId: academicYearIdToDelete },
+    { ordered: true }
+  );
 
-  if (!academicYearToDelete) {
-    throwError("Error finding academic year - It could have been deleted, Please try again", 404);
+  if (!deletedAcademicYearPeriods.acknowledged) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
+    throwError("Error deleting academic year periods - Please try again", 500);
   }
 
-  const deletedAcademicYearPeriods = await Period.deleteMany({ academicYearId: academicYearIdToDelete });
-
-  const deletedAcademicYear = await AcademicYear.findByIdAndDelete(academicYearIdToDelete);
+  const deletedAcademicYear = await AcademicYear.findByIdAndDelete(academicYearIdToDelete).lean();
   if (!deletedAcademicYear) {
+    registerBillings(req, [
+      { field: "databaseOperation", value: 5 },
+      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
+    ]);
     throwError("Error deleting academic year - Please try again", 500);
   }
   const emitRoom = deletedAcademicYear?.organisationId?.toString() ?? "";
@@ -320,11 +351,11 @@ export const deleteAcademicYear = asyncHandler(async (req: Request, res: Respons
       "Academic Year Deletion",
       "AcademicYear",
       deletedAcademicYear?._id,
-      academicYearToDelete?.academicYear,
+      deletedAcademicYear?.academicYear,
       [
         {
           kind: "D" as any,
-          lhs: academicYearToDelete
+          lhs: deletedAcademicYear
         }
       ],
       new Date()
@@ -333,15 +364,10 @@ export const deleteAcademicYear = asyncHandler(async (req: Request, res: Respons
 
   let oneRecordSize = 0.0000003;
 
-  const foundRecord = await Period.findOne({ academicYearId: academicYearIdToDelete });
-
-  if (foundRecord) {
-    oneRecordSize = getObjectSize(foundRecord);
-  }
   registerBillings(req, [
     {
       field: "databaseOperation",
-      value: 6 + (logActivityAllowed ? 2 : 0) + deletedAcademicYearPeriods.deletedCount
+      value: 5 + (logActivityAllowed ? 2 : 0) + deletedAcademicYearPeriods.deletedCount
     },
     {
       field: "databaseStorageAndBackup",

@@ -35,7 +35,7 @@ export const getAllSyllabuses = asyncHandler(async (req: Request, res: Response)
   const { account, role, organisation } = await confirmUserOrgRole(accountId);
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -82,7 +82,7 @@ export const getSyllabuses = asyncHandler(async (req: Request, res: Response) =>
   }
 
   for (const key in filters) {
-    if (filters[key] !== "all") {
+    if (filters[key] !== "all" && filters[key] && filters[key] !== "undefined" && filters[key] !== "null") {
       query[key] = filters[key];
     }
   }
@@ -96,7 +96,7 @@ export const getSyllabuses = asyncHandler(async (req: Request, res: Response) =>
   }
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess } = roleId;
+  const { absoluteAdmin, tabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -139,7 +139,7 @@ export const createSyllabus = asyncHandler(async (req: Request, res: Response) =
   // confirm organisation
   const orgParsedId = account!.organisationId!._id.toString();
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -168,7 +168,7 @@ export const createSyllabus = asyncHandler(async (req: Request, res: Response) =
       { field: "databaseDataTransfer", value: getObjectSize([syllabusExists, organisation, role, account]) }
     ]);
     throwError(
-      "A syllabus with this Custom Id already exist - Either refer to that record or change the syllabus custom Id",
+      "A syllabus with this Custom Id already exist within the organisation - Either refer to that record or change the syllabus custom Id",
       409
     );
   }
@@ -289,7 +289,7 @@ export const updateSyllabus = asyncHandler(async (req: Request, res: Response) =
   const orgParsedId = account!.organisationId!.toString();
 
   const { roleId } = account as any;
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
@@ -411,7 +411,7 @@ export const deleteSyllabus = asyncHandler(async (req: Request, res: Response) =
 
   const { roleId: creatorRoleId } = account as any;
 
-  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId;
+  const { absoluteAdmin, tabAccess: creatorTabAccess } = creatorRoleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
 
