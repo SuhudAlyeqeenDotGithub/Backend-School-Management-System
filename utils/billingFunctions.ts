@@ -69,7 +69,10 @@ export const createNewMonthBilling = async (
 
   const features = organisationAccount?.features;
   const featuresIds = features?.map((feature) => feature._id);
-  const featuresObjects = await Feature.find({ _id: { $in: featuresIds } }, "name _id price");
+  const featuresObjects = await Feature.find(
+    { _id: { $in: featuresIds } },
+    "name _id price introductoryPrice introductoryMonths"
+  ).lean();
 
   if (!featuresObjects) {
     await sendEmailToOwner(
@@ -80,11 +83,23 @@ export const createNewMonthBilling = async (
     throwError("Failed to create current month billing document", 500);
   }
 
-  const featuresToCharge = featuresObjects.map((feature) => ({
-    _id: feature._id,
-    name: feature.name,
-    price: feature.price
-  }));
+  const pastPremiumBills = await Billing.find({
+    organisationId,
+    subscriptionType: "Premium",
+    billingMonth: { $ne: newBillingMonth }
+  }).lean();
+
+  const noOfPremiumMonths = pastPremiumBills.length;
+
+  const featuresToCharge = featuresObjects.map((feature) => {
+    const chargeIntroPrice = feature.introductoryMonths > noOfPremiumMonths;
+    return {
+      _id: feature._id,
+      name: feature.name,
+      price: chargeIntroPrice ? feature.introductoryPrice : feature.price
+    };
+  });
+
   // const newBillingDoc = await Billing.create({
   //   organisationId,
   //   billingMonth: newBillingMonth,
@@ -100,7 +115,7 @@ export const createNewMonthBilling = async (
     {
       organisationId,
       billingMonth: newBillingMonth,
-      subscriptionType: "Premium"
+      subscriptionType: subscriptionType
     },
     {
       $setOnInsert: {

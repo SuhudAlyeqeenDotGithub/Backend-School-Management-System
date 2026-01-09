@@ -11,8 +11,7 @@ const featuresSchema = new Schema(
     mandatory: { type: Boolean, required: true },
     tabs: { type: [String], required: true },
     availability: { type: String, required: true, enum: ["Available", "Launching Soon", "Unavailable"] },
-    introductoryMonths: { type: Number, default: 5 },
-
+    introductoryMonths: { type: Number, default: 5 }
   },
   { timestamps: true }
 );
