@@ -307,7 +307,10 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     ]);
     throwError("Disallowed: Another role cannot be assigned to the Default Absolute Admin", 403);
   }
-  const userExists = await Account.findOne({ email: email, organisationId: userTokenOrgId }).lean();
+  const userExists = await Account.findOne(
+    { email: email, organisationId: userTokenOrgId },
+    "_id name email roleId staffId status"
+  ).lean();
   if (userId !== userExists?._id.toString() && userExists) {
     registerBillings(req, [
       { field: "databaseOperation", value: 4 },
@@ -328,46 +331,44 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
-  const originalUser = await Account.findById(userId, "_id name email roleId staffId status").lean();
-
-  if (!originalUser) {
-    registerBillings(req, [
-      { field: "databaseOperation", value: 6 },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([organisation, role, account, userExists, staffHasActiveContract])
-      }
-    ]);
-    throwError("An error occured whilst getting old user data - Please ensure the user still exists", 500);
-  }
-
   const updatedUser = await Account.findByIdAndUpdate(
     userId,
     {
       $set: updatedDoc
     },
     { new: true }
-  ).lean();
+  )
+    .select(
+      "_id name email staffId roleId uniqueTabAccess organisationId organisationInitial settings status accountType"
+    )
+    .populate([
+      { path: "roleId", select: "_id name absoluteAdmin tabAccess" },
+      { path: "staffId", select: "_id, customId, fullName, email" },
+      { path: "organisationId", select: "organisationId name features" }
+    ])
+    .lean();
 
   if (!updatedUser) {
     registerBillings(req, [
       { field: "databaseOperation", value: 8 },
       {
         field: "databaseDataTransfer",
-        value: getObjectSize([organisation, role, account, userExists, staffHasActiveContract, originalUser])
+        value: getObjectSize([organisation, role, account, userExists, staffHasActiveContract, userExists])
       }
     ]);
     throwError("Error updating user", 500);
   }
 
+  emitToOrganisation(userTokenOrgId, "userupdate", updatedUser, "update");
+
   const original = {
-    _id: originalUser?._id,
+    _id: userExists?._id,
     staffId: staffHasActiveContract?.staffId,
     name: name,
     email: email,
     status: status,
     roleId: userRoleId,
-    uniqueTabAccess: originalUser?.uniqueTabAccess
+    uniqueTabAccess: userExists?.uniqueTabAccess
   };
 
   const updated = {
@@ -403,14 +404,14 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
       field: "databaseStorageAndBackup",
       value:
         (getObjectSize(updatedUser) +
-          toNegative(getObjectSize(originalUser)) +
+          toNegative(getObjectSize(userExists)) +
           (logActivityAllowed ? getObjectSize(activityLog) : 0)) *
         2
     },
     {
       field: "databaseDataTransfer",
       value:
-        getObjectSize([updatedUser, staffHasActiveContract, organisation, role, account, originalUser]) +
+        getObjectSize([updatedUser, staffHasActiveContract, organisation, role, account, userExists]) +
         (logActivityAllowed ? getObjectSize(activityLog) : 0)
     }
   ]);

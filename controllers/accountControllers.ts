@@ -401,11 +401,13 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
   }
 
   // find the account by email
-  const account = await Account.findOne({ email: email }).populate([
-    { path: "roleId" },
-    { path: "staffId" },
-    { path: "organisationId", select: "organisationId name features _id" }
-  ]);
+  const account = await Account.findOne({ email: email })
+    .populate([
+      { path: "roleId", select: "_id name absoluteAdmin tabAccess" },
+      { path: "staffId", select: "_id, customId, fullName, email" },
+      { path: "organisationId", select: "organisationId name features" }
+    ])
+    .lean();
   if (!account) {
     throwError(
       `No associated account found for email (${email}) - Sign up if you have no existing account. Or contact your admin.`,
@@ -445,7 +447,7 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
     sameSite: "lax"
   });
 
-  const parsedAccount = account?.toObject();
+  const parsedAccount = account;
 
   const reshapedAccount = {
     ...parsedAccount,
@@ -486,11 +488,16 @@ export const fetchAccount = asyncHandler(async (req: Request, res: Response) => 
 
   // find the account by email
 
-  const account = await Account.findById(accountId).populate([
-    { path: "roleId" },
-    { path: "staffId" },
-    { path: "organisationId", select: "organisationId name features" }
-  ]);
+  const account = await Account.findById(
+    accountId,
+    "_id name email staffId roleId uniqueTabAccess organisationId organisationInitial settings status accountType"
+  )
+    .populate([
+      { path: "roleId", select: "_id name absoluteAdmin tabAccess" },
+      { path: "staffId", select: "_id, customId, fullName, email" },
+      { path: "organisationId", select: "organisationId name features" }
+    ])
+    .lean();
 
   if (!account) {
     registerBillings(req, [
@@ -514,16 +521,11 @@ export const fetchAccount = asyncHandler(async (req: Request, res: Response) => 
     throwError("You account is not active - Please contact your admin if you need help", 409);
   }
 
-  const parsedAccount = account?.toObject();
-
   const reshapedAccount = {
-    ...parsedAccount,
-    settings: { ...defaultSettings, ...parsedAccount?.settings },
-    accountId: parsedAccount?._id
+    ...account,
+    settings: { ...defaultSettings, ...account?.settings },
+    accountId: account?._id
   };
-
-  delete reshapedAccount._id;
-  delete reshapedAccount.password;
 
   registerBillings(req, [
     { field: "databaseOperation", value: 4 },
