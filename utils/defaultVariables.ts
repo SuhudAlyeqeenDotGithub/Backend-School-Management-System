@@ -390,9 +390,149 @@ export const neededAccessesMap = {
     "View Class Tutors",
     "View Base Subject Managers",
     "View Class Subject Teachers"
+  ],
+  "Day Attendances": [
+    "View Student Day Attendances (Admin Access)",
+    "Create Student Day Attendance (Admin Access)",
+    "Edit Student Day Attendance (Admin Access)",
+    "Delete Student Day Attendance (Admin Access)"
+  ],
+  "Subject Attendances": [
+    "View Student Subject Attendances (Admin Access)",
+    "Create Student Subject Attendance (Admin Access)",
+    "Edit Student Subject Attendance (Admin Access)",
+    "Delete Student Subject Attendance (Admin Access)"
   ]
 };
 
 export const getNeededAccesses = (route: string) => {
   return neededAccessesMap[route as keyof typeof neededAccessesMap] || [];
+};
+
+
+export const route_model_map: Record<string, string> = {
+  // Account routes
+  "/suSchool/api/orgaccount/verifyaccount": "Account",
+  "/suSchool/api/orgaccount/verifysignupcode": "Account",
+  "/suSchool/api/orgaccount/signup": "Account",
+  "/suSchool/api/orgaccount/signin": "Account",
+  "/suSchool/api/orgaccount/signout": "Account",
+  "/suSchool/api/orgaccount/refreshaccesstoken": "Account",
+  "/suSchool/api/orgaccount/resetpassword": "Account",
+  "/suSchool/api/orgaccount/resetpassword/verifycode": "Account",
+  "/suSchool/api/orgaccount/resetpassword/newpassword": "Account",
+  "/suSchool/api/orgaccount/specific-account": "Account",
+
+  // Admin routes
+  "/suSchool/api/admin/roles": "Role",
+  "/suSchool/api/admin/features": "Feature",
+  "/suSchool/api/admin/feature/purchase": "Feature",
+  "/suSchool/api/admin/feature/remove-keep": "Feature",
+  "/suSchool/api/admin/feature/remove-delete": "Feature",
+  "/suSchool/api/admin/users": "Account",
+  "/suSchool/api/admin/activity-logs": "ActivityLog",
+  "/suSchool/api/admin/last-activity-log": "ActivityLog",
+  "/suSchool/api/admin/settings": "Setting",
+  "/suSchool/api/admin/billings": "Setting",
+  "/suSchool/api/admin/billing/subscription": "Billing",
+  "/suSchool/api/admin/billing/subscription/toPremium": "Billing",
+  "/suSchool/api/admin/billing/subscription/cancel": "Billing",
+  "/suSchool/api/admin/billing/preparelastbills": "Billing",
+  "/suSchool/api/admin/billing/chargeoldbills": "Billing",
+  "/suSchool/api/admin/billing/organisations": "Billing",
+  "/suSchool/api/admin/billing/organisation": "Billing",
+  "/suSchool/api/admin/billing/initializefirstcharge": "Billing",
+
+  // Staff routes
+  "/suSchool/api/staff/profiles": "Staff",
+  "/suSchool/api/staff/all-profiles": "Staff",
+  "/suSchool/api/staff/profile": "Staff",
+  "/suSchool/api/staff/contracts": "StaffContract",
+  "/suSchool/api/staff/all-contracts": "StaffContract",
+  "/suSchool/api/staff/contract": "StaffContract",
+  "/suSchool/api/staffimageuploadsignedurl": "Staff",
+  "/suSchool/api/staffimageviewsignedurl": "Staff",
+  "/suSchool/api/staffimage": "Staff",
+
+  // Student routes
+  "/suSchool/api/student/profiles": "Student",
+  "/suSchool/api/student/all-profiles": "Student",
+  "/suSchool/api/student/profile": "Student",
+  "/suSchool/api/student/enrollments": "StudentEnrollment",
+  "/suSchool/api/student/all-enrollments": "StudentEnrollment",
+  "/suSchool/api/student/enrollment": "StudentEnrollment",
+  "/suSchool/api/studentimageuploadsignedurl": "Student",
+  "/suSchool/api/studentimageviewsignedurl": "Student",
+  "/suSchool/api/studentimage": "Student",
+
+  // Student attendance
+  "/suSchool/api/student/attendance/enrolled-day-attendance-students": "StudentDayAttendanceTemplate",
+  "/suSchool/api/student/attendance/day/templates": "StudentDayAttendanceTemplate",
+  "/suSchool/api/student/attendance/day/template": "StudentDayAttendanceTemplate",
+  "/suSchool/api/student/attendance/enrolled-subject-attendance-students": "StudentSubjectAttendanceTemplate",
+  "/suSchool/api/student/attendance/subject/templates": "StudentSubjectAttendanceTemplate",
+  "/suSchool/api/student/attendance/subject/template": "StudentSubjectAttendanceTemplate",
+
+  // Curriculum / Programme
+  "/suSchool/api/curriculum/programmes": "Programme",
+  "/suSchool/api/curriculum/all-programmes": "Programme",
+  "/suSchool/api/curriculum/programme": "Programme",
+  "/suSchool/api/curriculum/programme/recent-activities": "Programme",
+  "/suSchool/api/curriculum/programme/managers": "ProgrammeManager",
+  "/suSchool/api/curriculum/programme/all-managers": "ProgrammeManager",
+  "/suSchool/api/curriculum/programme/manager": "ProgrammeManager",
+
+  // Curriculum / Pathway
+  "/suSchool/api/curriculum/pathways": "Pathway",
+  "/suSchool/api/curriculum/all-pathways": "Pathway",
+  "/suSchool/api/curriculum/pathway": "Pathway",
+  "/suSchool/api/curriculum/pathway/managers": "PathwayManager",
+  "/suSchool/api/curriculum/pathway/all-managers": "PathwayManager",
+
+  // Curriculum / Class
+  "/suSchool/api/curriculum/classes": "Class",
+  "/suSchool/api/curriculum/all-classes": "Class",
+  "/suSchool/api/curriculum/class": "Class",
+  "/suSchool/api/curriculum/class/recent-activities": "Class",
+  "/suSchool/api/curriculum/class/tutors": "ClassTutor",
+  "/suSchool/api/curriculum/class/all-tutors": "ClassTutor",
+  "/suSchool/api/curriculum/class/tutor": "ClassTutor",
+
+  // Curriculum / BaseSubject
+  "/suSchool/api/curriculum/base-subjects": "BaseSubject",
+  "/suSchool/api/curriculum/all-base-subjects": "BaseSubject",
+  "/suSchool/api/curriculum/base-subject": "BaseSubject",
+  "/suSchool/api/curriculum/base-subject/managers": "BaseSubjectManager",
+  "/suSchool/api/curriculum/base-subject/all-managers": "BaseSubjectManager",
+  "/suSchool/api/curriculum/base-subject/manager": "BaseSubjectManager",
+  "/suSchool/api/curriculum/day-attendance/required-curriculum/authorized": "StudentDayAttendanceTemplate",
+  "/suSchool/api/curriculum/subject-attendance/required-curriculum/authorized": "StudentSubjectAttendanceTemplate",
+
+  // Curriculum / ClassSubject
+  "/suSchool/api/curriculum/class-subjects": "ClassSubject",
+  "/suSchool/api/curriculum/all-class-subjects": "ClassSubject",
+  "/suSchool/api/curriculum/class-subject": "ClassSubject",
+  "/suSchool/api/curriculum/class-subject/teachers": "ClassSubjectTeacher",
+  "/suSchool/api/curriculum/class-subject/all-teachers": "ClassSubjectTeacher",
+  "/suSchool/api/curriculum/class-subject/teacher": "ClassSubjectTeacher",
+
+  // Curriculum / Topic
+  "/suSchool/api/curriculum/topics": "Topic",
+  "/suSchool/api/curriculum/all-topics": "Topic",
+  "/suSchool/api/curriculum/topic": "Topic",
+
+  // Curriculum / Syllabus
+  "/suSchool/api/curriculum/syllabuses": "Syllabus",
+  "/suSchool/api/curriculum/all-syllabuses": "Syllabus",
+  "/suSchool/api/curriculum/syllabus": "Syllabus",
+
+  // Curriculum / Academic Session
+  "/suSchool/api/curriculum/academic-session/academic-years": "AcademicYear",
+  "/suSchool/api/curriculum/academic-session/academic-year": "AcademicYear",
+  "/suSchool/api/curriculum/academic-session/periods": "Period",
+  "/suSchool/api/curriculum/academic-session/period": "Period",
+
+  // Curriculum / Stage
+  "/suSchool/api/curriculum/stages": "Stage",
+  "/suSchool/api/curriculum/stage": "Stage"
 };

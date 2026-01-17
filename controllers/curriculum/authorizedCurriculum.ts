@@ -1,13 +1,14 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
-import { confirmUserOrgRole, checkOrgAndUserActiveness, checkAccess } from "../../utils/databaseFunctions.ts";
+import { confirmUserOrgRole, checkOrgAndUserActiveness, checkAccesses } from "../../utils/databaseFunctions.ts";
 import { throwError, getObjectSize } from "../../utils/pureFuctions.ts";
 import { Pathway, PathwayManager } from "../../models/curriculum/pathway.ts";
 import { Class, ClassTutor } from "../../models/curriculum/class.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 import { Programme, ProgrammeManager } from "../../models/curriculum/programme.ts";
 import { BaseSubjectManager } from "../../models/curriculum/basesubject.ts";
-import { ClassSubjectTeacher } from "../../models/curriculum/classSubject.ts";
+import { ClassSubject, ClassSubjectTeacher } from "../../models/curriculum/classSubject.ts";
+import { getNeededAccesses } from "../../utils/defaultVariables.ts";
 
 export const getDayAttendanceRequiredCurriculum = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
@@ -27,12 +28,7 @@ export const getDayAttendanceRequiredCurriculum = asyncHandler(async (req: Reque
     ]);
     throwError(message, 409);
   }
-  const hasAccess =
-    checkAccess(account, tabAccess, "View Classes") ||
-    checkAccess(account, tabAccess, "View Programmes") ||
-    checkAccess(account, tabAccess, "View Pathways") ||
-    checkAccess(account, tabAccess, "View Student Day Attendances (Admin Access)") ||
-    checkAccess(account, tabAccess, "View Student Subject Attendances (Admin Access)");
+  const hasAdminAccess = checkAccesses(account, tabAccess, getNeededAccesses("Day Attendances"));
 
   let pathwayManagementDocs;
   let classManagementDocs;
@@ -40,7 +36,7 @@ export const getDayAttendanceRequiredCurriculum = asyncHandler(async (req: Reque
 
   let query: any = { organisationId: userTokenOrgId };
 
-  if (!absoluteAdmin && !hasAccess) {
+  if (!absoluteAdmin && !hasAdminAccess) {
     programmeManagementDocs = await ProgrammeManager.find({
       organisationId: userTokenOrgId,
       staffId,
@@ -155,7 +151,7 @@ export const getDayAttendanceRequiredCurriculum = asyncHandler(async (req: Reque
   return;
 });
 
-export const getAllAuthorizedClassSubjects = asyncHandler(async (req: Request, res: Response) => {
+export const getSubjectAttendanceRequiredCurriculum = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
 
   // confirm user
@@ -173,11 +169,7 @@ export const getAllAuthorizedClassSubjects = asyncHandler(async (req: Request, r
     ]);
     throwError(message, 409);
   }
-  const hasAccess =
-    checkAccess(account, tabAccess, "View Class Subjects") ||
-    checkAccess(account, tabAccess, "View Base Subjects") ||
-    checkAccess(account, tabAccess, "View Student Day Attendances (Admin Access)") ||
-    checkAccess(account, tabAccess, "View Student Subject Attendances (Admin Access)");
+  const hasAdminAccess = checkAccesses(account, tabAccess, getNeededAccesses("Day Attendances"));
 
   let pathwayManagementDocs;
   let classManagementDocs;
@@ -187,7 +179,7 @@ export const getAllAuthorizedClassSubjects = asyncHandler(async (req: Request, r
 
   let query: any = { organisationId: userTokenOrgId };
 
-  if (!absoluteAdmin && !hasAccess) {
+  if (!absoluteAdmin && !hasAdminAccess) {
     programmeManagementDocs = await ProgrammeManager.find({
       organisationId: userTokenOrgId,
       staffId,
@@ -237,7 +229,7 @@ export const getAllAuthorizedClassSubjects = asyncHandler(async (req: Request, r
 
     let classSubjectsManaged: any = [];
     if (classSubjectManagementDocs && classSubjectManagementDocs.length > 0) {
-      classSubjectsManaged = classSubjectManagementDocs.map((doc) => doc._id);
+      classSubjectsManaged = classSubjectManagementDocs.map((doc) => doc.classSubjectId);
     }
 
     query["$or"] = [
@@ -249,36 +241,30 @@ export const getAllAuthorizedClassSubjects = asyncHandler(async (req: Request, r
     ];
   }
 
-  const results = await Class.find(query).lean();
+  const classSubjects = await ClassSubject.find(query).lean();
 
-  if (!results) {
-    registerBillings(req, [
-      {
-        field: "databaseOperation",
-        value:
-          4 +
-          (pathwayManagementDocs ? pathwayManagementDocs.length : 0) +
-          (classManagementDocs ? classManagementDocs.length : 0) +
-          (programmeManagementDocs ? programmeManagementDocs.length : 0) +
-          (baseSubjectManagementDocs ? baseSubjectManagementDocs.length : 0) +
-          (classSubjectManagementDocs ? classSubjectManagementDocs.length : 0)
-      },
-      {
-        field: "databaseDataTransfer",
-        value: getObjectSize([
-          results,
-          pathwayManagementDocs,
-          classManagementDocs,
-          programmeManagementDocs,
-          baseSubjectManagementDocs,
-          classSubjectManagementDocs,
-          organisation,
-          role,
-          account
-        ])
-      }
-    ]);
-    throwError("Error fetching class subjects", 500);
+  const classSubjectsProgrammes = classSubjects.map((sbj) => sbj.programmeId);
+  const classSubjectsPathways = classSubjects.map((sbj) => sbj.pathwayId).filter((pid) => pid != null);
+  const classSubjectsClasses = classSubjects.map((sbj) => sbj.classId);
+
+  let programmes: any = [];
+  let pathways: any = [];
+  let classes: any = [];
+
+  if (classSubjectsProgrammes.length > 0) {
+    programmes = await Programme.find({
+      _id: { $in: classSubjectsProgrammes }
+    }).lean();
+  }
+  if (classSubjectsPathways.length > 0) {
+    pathways = await Pathway.find({
+      _id: { $in: classSubjectsPathways }
+    }).lean();
+  }
+  if (classSubjectsClasses.length > 0) {
+    classes = await Class.find({
+      _id: { $in: classSubjectsClasses }
+    }).lean();
   }
 
   registerBillings(req, [
@@ -286,29 +272,32 @@ export const getAllAuthorizedClassSubjects = asyncHandler(async (req: Request, r
       field: "databaseOperation",
       value:
         3 +
-        results.length +
+        classes.length +
+        programmes.length +
+        pathways.length +
+        classSubjects.length +
         (pathwayManagementDocs ? pathwayManagementDocs.length : 0) +
         (classManagementDocs ? classManagementDocs.length : 0) +
-        (programmeManagementDocs ? programmeManagementDocs.length : 0) +
-        (baseSubjectManagementDocs ? baseSubjectManagementDocs.length : 0) +
-        (classSubjectManagementDocs ? classSubjectManagementDocs.length : 0)
+        (programmeManagementDocs ? programmeManagementDocs.length : 0)
     },
     {
       field: "databaseDataTransfer",
       value: getObjectSize([
-        results,
+        classes,
+        programmes,
+        pathways,
+        classSubjects,
         pathwayManagementDocs,
         classManagementDocs,
-        programmeManagementDocs,
-        baseSubjectManagementDocs,
-        classSubjectManagementDocs,
         organisation,
         role,
-        account
+        account,
+        programmeManagementDocs
       ])
     }
   ]);
 
-  res.status(201).json(results);
+  res.status(201).json({ classes, programmes, pathways, classSubjects });
+
   return;
 });

@@ -7,10 +7,11 @@ import {
   checkAccess,
   confirmUserOrgRole,
   sendEmailToOwner,
-  sendEmail
+  sendEmail,
+  removeFeatureFromBill
 } from "../../utils/databaseFunctions.ts";
 
-import { throwError, getCurrentMonth, getObjectSize } from "../../utils/pureFuctions.ts";
+import { throwError, getCurrentMonth, getObjectSize, toNegative } from "../../utils/pureFuctions.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 import { Account } from "../../models/admin/accountModel.ts";
 import { Billing } from "../../models/admin/billingModel.ts";
@@ -115,29 +116,37 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
     );
   }
 
-  const orgAccount = await Account.findByIdAndUpdate(
-    userTokenOrgId,
-    {
-      $push: {
-        features: {
-          _id: featureId,
-          name: feature?.name,
-          addedOn: new Date(),
-          tabs: feature?.tabs,
-          mandatory: feature?.mandatory
-        }
-      }
-    },
-    { new: true }
-  ).select("organisationId name email phone organisationInitial accountType features");
+  const orgHasFeature = await Account.findOne({
+    organisationId: userTokenOrgId,
+    "features._id": featureId
+  });
 
-  if (!orgAccount) {
-    await sendEmailToOwner(
-      req,
-      "An error occured while adding feature to organisation account",
-      `Organisation with the ID: ${userTokenOrgId} tried to add a feature to their account but failed`
-    );
-    throwError("An error occured while adding feature to your account", 500);
+  let orgAccount = orgHasFeature;
+  if (!orgHasFeature) {
+    orgAccount = await Account.findByIdAndUpdate(
+      userTokenOrgId,
+      {
+        $push: {
+          features: {
+            _id: featureId,
+            name: feature?.name,
+            addedOn: new Date(),
+            tabs: feature?.tabs,
+            mandatory: feature?.mandatory
+          }
+        }
+      },
+      { new: true }
+    ).select("organisationId name email phone organisationInitial accountType features");
+
+    if (!orgAccount) {
+      await sendEmailToOwner(
+        req,
+        "An error occured while adding feature to organisation account",
+        `Organisation with the ID: ${userTokenOrgId} tried to add a feature to their account but failed`
+      );
+      throwError("An error occured while adding feature to your account", 500);
+    }
   }
 
   const existInBill = await Billing.findOne({
@@ -173,11 +182,11 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
     }
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Feature Purchased",
@@ -204,9 +213,7 @@ export const purchaseFeature = asyncHandler(async (req: Request, res: Response) 
     { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) + (!existInBill ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([orgAccount, organisation, role, account, feature]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([orgAccount, organisation, role, account, feature])
     }
   ]);
 
@@ -276,7 +283,7 @@ export const removeFeatureAndKeepData = asyncHandler(async (req: Request, res: R
     throwError(
       `This feature cannot be removed as it is a requirement for the following existing feature : (${dependentFeatures
         .map((f: any) => f.name)
-        .join(", ")}) - You need to be removed them if you want to remove this feature`,
+        .join(", ")}) - You need to remove them if you want to remove this feature`,
       400
     );
   }
@@ -300,23 +307,41 @@ export const removeFeatureAndKeepData = asyncHandler(async (req: Request, res: R
     throwError("An error occured while adding feature to your account", 500);
   }
 
+  const removedFromBill = await removeFeatureFromBill(
+    req,
+    userTokenOrgId,
+    orgAccount?.email,
+    featureId,
+    featureToRemove?.name
+  );
+
   await sendEmail(
     req,
     orgAccount!.email,
-    "Feature Removed",
-    `You have successfully removed the feature: ${featureToRemove?.name} from your account. You will still be charged for related data stored`
+    "Feature Removed - Data Kept",
+    `You have successfully removed the feature: ${
+      featureToRemove?.name
+    } from your account. You will still be charged for related data stored ${
+      removedFromBill ? "but not for the feature price" : "and the feature price for this month"
+    }`
   );
   await sendEmailToOwner(
     req,
     "Feature Removed - Remove Keep Data",
-    `The user: ${orgAccount?.name} has successfully removed the feature: ${featureToRemove?.name} from their account. But their data will be kept`
+    `The user: ${orgAccount?.name} has successfully removed the feature: ${
+      featureToRemove?.name
+    } from their account. But their data will be kept. ${
+      removedFromBill
+        ? "they will not be charged for the feature price"
+        : "they will still be charged for the feature price"
+    }`
   );
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Feature Removed - Remove Keep Data",
@@ -342,9 +367,7 @@ export const removeFeatureAndKeepData = asyncHandler(async (req: Request, res: R
     { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) + allProviderFeatures.length },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([orgAccount, organisation, role, account, allProviderFeatures]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([orgAccount, organisation, role, account, allProviderFeatures])
     }
   ]);
   res.status(201).json(orgAccount);
@@ -427,8 +450,9 @@ export const removeFeatureAndDeleteData = asyncHandler(async (req: Request, res:
   }
 
   const removeRelatedData = await removeFeatureRelatedData(req, featureToRemove!.name, userTokenOrgId);
+  const { deleted, deletedCount, deletedSize } = removeRelatedData as any;
 
-  if (!removeRelatedData) {
+  if (!deleted) {
     await sendEmailToOwner(
       req,
       "An error occured while removing feature data from database",
@@ -437,23 +461,43 @@ export const removeFeatureAndDeleteData = asyncHandler(async (req: Request, res:
     throwError("An error occured while clearing related data - it could be there is no related data prior", 500);
   }
 
+  const removedFromBill = await removeFeatureFromBill(
+    req,
+    userTokenOrgId,
+    orgAccount?.email,
+    featureId,
+    featureToRemove?.name
+  );
+
   await sendEmail(
     req,
     orgAccount!.email,
     "Feature Removed - Data Cleared",
-    `You have successfully removed the feature: ${featureToRemove?.name} from your account. All related data has been cleared`
+    `You have successfully removed the feature: ${
+      featureToRemove?.name
+    } from your account. All related data has been cleared ${
+      !removedFromBill
+        ? "You will still be charged the feature price for this month"
+        : "You not be charged for the feature price"
+    }`
   );
   await sendEmailToOwner(
     req,
     "Feature Removed - Remove and Delete Data",
-    `The user: ${orgAccount?.name} has successfully removed the feature: ${featureToRemove?.name} from their account. All related data has been cleared`
+    `The user: ${orgAccount?.name} has successfully removed the feature: ${
+      featureToRemove?.name
+    } from their account. All related data has been cleared ${
+      removedFromBill
+        ? "they not be charged for the feature price"
+        : "They will still be charged for the feature price for this month"
+    }`
   );
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Feature Removed - Remove Delete Data",
@@ -478,13 +522,15 @@ export const removeFeatureAndDeleteData = asyncHandler(async (req: Request, res:
   registerBillings(req, [
     {
       field: "databaseOperation",
-      value: 6 + (logActivityAllowed ? 2 : 0) + allProviderFeatures.length + (removeRelatedData ? removeRelatedData : 0)
+      value: 6 + (logActivityAllowed ? 2 : 0) + allProviderFeatures.length + (deleted ? deletedCount * 2 : 0)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([orgAccount, organisation, role, account, allProviderFeatures]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([orgAccount, organisation, role, account, allProviderFeatures])
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: getObjectSize([orgAccount, organisation, role, account, allProviderFeatures]) + toNegative(deletedSize)
     }
   ]);
   res.status(201).json(orgAccount);

@@ -12,7 +12,7 @@ import { diff } from "deep-diff";
 import { throwError, toNegative, generateSearchText, getObjectSize } from "../../utils/pureFuctions.ts";
 import { StudentSubjectAttendance, StudentSubjectAttendanceTemplate } from "../../models/student/subjectAttendance.ts";
 import { PathwayManager } from "../../models/curriculum/pathway.ts";
-import { Class, ClassTutor } from "../../models/curriculum/class.ts";
+import { ClassTutor } from "../../models/curriculum/class.ts";
 import { StudentEnrollment } from "../../models/student/enrollment.ts";
 import { registerBillings } from "../../utils/billingFunctions.ts";
 import { ProgrammeManager } from "../../models/curriculum/programme.ts";
@@ -20,7 +20,7 @@ import { BaseSubjectManager } from "../../models/curriculum/basesubject.ts";
 import { ClassSubjectTeacher } from "../../models/curriculum/classSubject.ts";
 
 const validateStudentSubjectAttendance = (studentDataParam: any) => {
-  const { notes, academicYear, pathway, pathwayId, programme, takenByFullName, className, ...copyLocalData } =
+  const { notes, academicYear, pathway, pathwayId, classSubject, programme, className, ...copyLocalData } =
     studentDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
@@ -93,11 +93,11 @@ const validateStudentSubjectAttendance = (studentDataParam: any) => {
 
 export const getEnrolledSubjectAttendanceStudents = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId: userTokenOrgId } = req.userToken;
-  const { academicYearId, pathwayId, classId, programmeId, isActiveManagerOrTutor, subjectId } = req.body;
+  const { academicYearId, pathwayId, classId, programmeId, isActiveManagerOrTutor, classSubjectId } = req.body;
 
   // validate input
-  if (!academicYearId || !classId || !subjectId) {
-    throwError("Please fill in all required fields - Academic Year, Class, Subject", 400);
+  if (!academicYearId || !classId || !classSubjectId) {
+    throwError("Please fill in all required fields - Academic Year, Class, Class Subject", 400);
   }
 
   if (!programmeId) {
@@ -249,6 +249,7 @@ export const getStudentSubjectAttendanceTemplates = asyncHandler(async (req: Req
   let classSubjectManagementDocs;
 
   let isActiveManagerOrTutor = false;
+  let allowedProgrammesPathwaysClassesSubjectsIds: any = [];
 
   if (!absoluteAdmin && !hasAdminAccess) {
     programmeManagementDocs = await ProgrammeManager.find({
@@ -310,6 +311,14 @@ export const getStudentSubjectAttendanceTemplates = asyncHandler(async (req: Req
       classSubjectsManaged = classSubjectManagementDocs.map((doc) => doc.classSubjectId);
     }
 
+    allowedProgrammesPathwaysClassesSubjectsIds = [
+      ...programmesManaged.map((doc: any) => doc.toString()),
+      ...pathwaysManaged.map((doc: any) => doc.toString()),
+      ...classesManaged.map((doc: any) => doc.toString()),
+      ...baseSubjectsManaged.map((doc: any) => doc.toString()),
+      ...classSubjectsManaged.map((doc: any) => doc.toString())
+    ];
+
     query["$or"] = [
       { programmeId: { $in: programmesManaged } },
       { pathwayId: { $in: pathwaysManaged } },
@@ -363,7 +372,10 @@ export const getStudentSubjectAttendanceTemplates = asyncHandler(async (req: Req
         3 +
         result.studentSubjectAttendanceTemplates.length +
         (pathwayManagementDocs ? pathwayManagementDocs.length : 0) +
-        (classManagementDocs ? classManagementDocs.length : 0)
+        (classManagementDocs ? classManagementDocs.length : 0) +
+        (programmeManagementDocs ? programmeManagementDocs.length : 0) +
+        (baseSubjectManagementDocs ? baseSubjectManagementDocs.length : 0) +
+        (classSubjectManagementDocs ? classSubjectManagementDocs.length : 0)
     },
     {
       field: "databaseDataTransfer",
@@ -371,7 +383,11 @@ export const getStudentSubjectAttendanceTemplates = asyncHandler(async (req: Req
     }
   ]);
 
-  const reformedData = { ...result, isActiveManagerOrTutor: isActiveManagerOrTutor };
+  const reformedData = {
+    ...result,
+    isActiveManagerOrTutor: isActiveManagerOrTutor,
+    allowedProgrammesPathwaysClassesSubjectsIds: allowedProgrammesPathwaysClassesSubjectsIds.filter((id: any) => !!id)
+  };
   res.status(201).json(reformedData);
   return;
 });
@@ -379,8 +395,19 @@ export const getStudentSubjectAttendanceTemplates = asyncHandler(async (req: Req
 // // controller to handle role creation
 export const createStudentSubjectAttendanceTemplate = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId } = req.userToken;
-  const { customId, academicYearId, attendanceStatus, takenOn, pathwayId, programmeId, takenBy, status, classId } =
-    req.body;
+  const {
+    customId,
+    academicYearId,
+    attendanceStatus,
+    takenOn,
+    pathwayId,
+    programmeId,
+    lastUpdatedBy,
+    status,
+    classId,
+    classSubjectId,
+    baseSubjectId
+  } = req.body;
 
   const { studentSubjectAttendances, isActiveManagerOrTutor, ...rest } = req.body;
 
@@ -403,7 +430,7 @@ export const createStudentSubjectAttendanceTemplate = asyncHandler(async (req: R
     );
   }
 
-  const { roleId } = account as any;
+  const { roleId, name, email, _id } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -435,15 +462,6 @@ export const createStudentSubjectAttendanceTemplate = asyncHandler(async (req: R
     );
   }
 
-  const classExists = await Class.findOne({ _id: classId }).lean();
-  if (!classExists) {
-    registerBillings(req, [
-      { field: "databaseOperation", value: 4 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
-    ]);
-    throwError("The selected class does not exist - Please change the class", 409);
-  }
-
   const attendance = await StudentSubjectAttendanceTemplate.create({
     ...rest,
     organisationId,
@@ -453,30 +471,38 @@ export const createStudentSubjectAttendanceTemplate = asyncHandler(async (req: R
       pathwayId,
       programmeId,
       classId,
+      classSubjectId,
       status,
       academicYearId,
       attendanceStatus,
       takenOn,
-      takenBy
+      lastUpdatedBy
     ])
   });
 
   if (!attendance) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 7 },
+      { field: "databaseOperation", value: 6 },
       {
         field: "databaseDataTransfer",
-        value: getObjectSize([organisation, role, account, attendanceExists, classExists])
+        value: getObjectSize([organisation, role, account, attendanceExists])
       }
     ]);
     throwError("Error creating student subject attendance template", 500);
   }
 
-  let activityLog;
+  emitToOrganisation(
+    organisationId,
+    "studentsubjectattendancetemplates",
+    { ...attendance?.toObject(), lastUpdatedBy: { name, email, _id } },
+    "insert"
+  );
+
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Student Attendance Creation",
@@ -505,6 +531,8 @@ export const createStudentSubjectAttendanceTemplate = asyncHandler(async (req: R
       programmeId: attendance?.programmeId,
       pathwayId: attendance?.pathwayId ? attendance?.pathwayId : null,
       classId,
+      classSubjectId,
+      baseSubjectId,
       takenOn,
       studentId: studentSubjectAttendance.studentId
     }));
@@ -514,10 +542,10 @@ export const createStudentSubjectAttendanceTemplate = asyncHandler(async (req: R
     });
     if (!studentAttendances) {
       registerBillings(req, [
-        { field: "databaseOperation", value: 7 },
+        { field: "databaseOperation", value: 6 },
         {
           field: "databaseDataTransfer",
-          value: getObjectSize([mappedAttendances, attendance, attendanceExists, classExists])
+          value: getObjectSize([mappedAttendances, attendance, attendanceExists])
         }
       ]);
       throwError(
@@ -528,17 +556,14 @@ export const createStudentSubjectAttendanceTemplate = asyncHandler(async (req: R
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) + mappedAttendances.length * 2 },
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) + mappedAttendances.length * 2 },
     {
       field: "databaseStorageAndBackup",
-      value:
-        (getObjectSize([attendance, studentAttendances]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize([attendance, studentAttendances]) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([mappedAttendances, attendance, attendanceExists, organisation, role, account, classExists]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([mappedAttendances, attendance, attendanceExists, organisation, role, account])
     }
   ]);
 
@@ -548,8 +573,19 @@ export const createStudentSubjectAttendanceTemplate = asyncHandler(async (req: R
 // controller to handle role update
 export const updateStudentSubjectAttendanceTemplate = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId } = req.userToken;
-  const { customId, academicYearId, attendanceStatus, takenOn, pathwayId, programmeId, takenBy, status, classId } =
-    req.body;
+  const {
+    customId,
+    academicYearId,
+    attendanceStatus,
+    takenOn,
+    pathwayId,
+    programmeId,
+    lastUpdatedBy,
+    status,
+    classId,
+    baseSubjectId,
+    classSubjectId
+  } = req.body;
 
   const { studentSubjectAttendances, isActiveManagerOrTutor, ...rest } = req.body;
 
@@ -576,7 +612,7 @@ export const updateStudentSubjectAttendanceTemplate = asyncHandler(async (req: R
 
   const orgParsedId = account!.organisationId!._id.toString();
 
-  const { roleId } = account as any;
+  const { roleId, name, email, _id } = account as any;
   const { absoluteAdmin, tabAccess: creatorTabAccess } = roleId ?? { absoluteAdmin: false, tabAccess: [] };
 
   const { message, checkPassed } = checkOrgAndUserActiveness(organisation, account);
@@ -626,11 +662,12 @@ export const updateStudentSubjectAttendanceTemplate = asyncHandler(async (req: R
         pathwayId,
         programmeId,
         classId,
+        classSubjectId,
         status,
         academicYearId,
         attendanceStatus,
         takenOn,
-        takenBy
+        lastUpdatedBy
       ])
     },
     { new: true }
@@ -643,13 +680,19 @@ export const updateStudentSubjectAttendanceTemplate = asyncHandler(async (req: R
     ]);
     throwError("Error updating student subject attendance template", 500);
   }
+  emitToOrganisation(
+    organisationId,
+    "studentsubjectattendancetemplates",
+    { ...updatedStudentSubjectAttendance, lastUpdatedBy: { name, email, _id } },
+    "update"
+  );
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(attendanceExists, updatedStudentSubjectAttendance);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Student Attendance Update",
@@ -677,6 +720,8 @@ export const updateStudentSubjectAttendanceTemplate = asyncHandler(async (req: R
             programmeId: updatedStudentSubjectAttendance?.programmeId,
             pathwayId: updatedStudentSubjectAttendance?.pathwayId ? updatedStudentSubjectAttendance?.pathwayId : null,
             classId,
+            baseSubjectId,
+            classSubjectId,
             takenOn,
             studentId: studentSubjectAttendance.studentId
           }
@@ -723,15 +768,14 @@ export const updateStudentSubjectAttendanceTemplate = asyncHandler(async (req: R
     { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) + mappedAttendances.length * 2 },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([
-          mappedAttendances,
-          updatedStudentSubjectAttendance,
-          attendanceExists,
-          organisation,
-          role,
-          account
-        ]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([
+        mappedAttendances,
+        updatedStudentSubjectAttendance,
+        attendanceExists,
+        organisation,
+        role,
+        account
+      ])
     }
   ]);
 
@@ -795,17 +839,20 @@ export const deleteStudentSubjectAttendanceTemplate = asyncHandler(async (req: R
       { field: "databaseOperation", value: 5 },
       { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
     ]);
-    throwError("Error deleting student subject attendance template - Please try again", 500);
+    throwError(
+      "Error deleting student subject attendance template - it might have been deleted already - Please refresh your page and try again",
+      500
+    );
   }
 
   const emitRoom = deletedStudentSubjectAttendanceTemplate?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "studentsubjectattendancetemplates", deletedStudentSubjectAttendanceTemplate, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Student Attendance Delete",
@@ -841,14 +888,11 @@ export const deleteStudentSubjectAttendanceTemplate = asyncHandler(async (req: R
       field: "databaseStorageAndBackup",
       value:
         toNegative(getObjectSize(deletedStudentSubjectAttendanceTemplate) * 2) +
-        toNegative(getObjectSize(oneRecordSize) * deletedStudentSubjectAttendances.deletedCount * 2) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+        toNegative(getObjectSize(oneRecordSize) * deletedStudentSubjectAttendances.deletedCount * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedStudentSubjectAttendanceTemplate, organisation, role, account, foundRecord]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedStudentSubjectAttendanceTemplate, organisation, role, account, foundRecord])
     }
   ]);
 

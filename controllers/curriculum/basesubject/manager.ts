@@ -239,11 +239,11 @@ export const createBaseSubjectManager = asyncHandler(async (req: Request, res: R
     throwError("Error creating base subject manager", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Base Subject Manager Creation",
@@ -264,13 +264,11 @@ export const createBaseSubjectManager = asyncHandler(async (req: Request, res: R
     { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newBaseSubjectManager) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newBaseSubjectManager) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([newBaseSubjectManager, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([newBaseSubjectManager, organisation, role, account])
     }
   ]);
 
@@ -358,12 +356,12 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
     throwError("Error updating base subject", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(originalBaseSubjectManager, updatedBaseSubjectManager);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Base Subject Manager Update",
@@ -379,15 +377,14 @@ export const updateBaseSubjectManager = asyncHandler(async (req: Request, res: R
     { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([
-          updatedBaseSubjectManager,
-          organisation,
-          role,
-          account,
-          staffHasContract,
-          originalBaseSubjectManager
-        ]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([
+        updatedBaseSubjectManager,
+        organisation,
+        role,
+        account,
+        staffHasContract,
+        originalBaseSubjectManager
+      ])
     }
   ]);
 
@@ -442,11 +439,11 @@ export const deleteBaseSubjectManager = asyncHandler(async (req: Request, res: R
   const emitRoom = deletedBaseSubjectManager?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "basesubjectmanagers", deletedBaseSubjectManager, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Base Subject Manager Deletion",
@@ -470,14 +467,11 @@ export const deleteBaseSubjectManager = asyncHandler(async (req: Request, res: R
     },
     {
       field: "databaseStorageAndBackup",
-      value:
-        toNegative(getObjectSize(deletedBaseSubjectManager) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedBaseSubjectManager) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedBaseSubjectManager, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedBaseSubjectManager, organisation, role, account])
     }
   ]);
   res.status(201).json("successfull");

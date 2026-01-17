@@ -269,11 +269,11 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
     throwError("Error creating staff profile - Please try again", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Staff Profile Creation",
@@ -298,13 +298,11 @@ export const createStaffProfile = asyncHandler(async (req: Request, res: Respons
     { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newStaff) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newStaff) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([newStaff, staffExists, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([newStaff, staffExists, organisation, role, account])
     }
   ]);
 
@@ -397,12 +395,12 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
     throwError("Error updating staff profile", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(originalStaff, updatedStaff);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Staff Profile Update",
@@ -418,9 +416,7 @@ export const updateStaffProfile = asyncHandler(async (req: Request, res: Respons
     { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([updatedStaff, organisation, role, account, emailInUse, originalStaff]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([updatedStaff, organisation, role, account, emailInUse, originalStaff])
     }
   ]);
 
@@ -472,11 +468,11 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
   const emitRoom = deletedStaffProfile?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "staffs", deletedStaffProfile, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Staff Delete",
@@ -500,13 +496,11 @@ export const deleteStaffProfile = asyncHandler(async (req: Request, res: Respons
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedStaffProfile) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedStaffProfile) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedStaffProfile, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedStaffProfile, organisation, role, account])
     }
   ]);
   res.status(201).json("successfull");

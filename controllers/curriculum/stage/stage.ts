@@ -129,11 +129,11 @@ export const createStage = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error creating stage", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Stage Creation",
@@ -161,13 +161,11 @@ export const createStage = asyncHandler(async (req: Request, res: Response) => {
     },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newStage) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newStage) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([newStage, stageExists, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([newStage, stageExists, organisation, role, account])
     }
   ]);
 
@@ -238,12 +236,12 @@ export const updateStage = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error updating stage", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(originalStage, updatedStage);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Stage Update",
@@ -259,9 +257,7 @@ export const updateStage = asyncHandler(async (req: Request, res: Response) => {
     { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([updatedStage, organisation, role, account, originalStage]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([updatedStage, organisation, role, account, originalStage])
     }
   ]);
 
@@ -312,11 +308,11 @@ export const deleteStage = asyncHandler(async (req: Request, res: Response) => {
   const emitRoom = deletedStage?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "stages", deletedStage, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Stage Delete",
@@ -340,13 +336,11 @@ export const deleteStage = asyncHandler(async (req: Request, res: Response) => {
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedStage) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedStage) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedStage, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedStage, organisation, role, account])
     }
   ]);
   res.status(201).json("successfull");

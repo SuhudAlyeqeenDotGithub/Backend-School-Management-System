@@ -26,7 +26,7 @@ import { StudentSubjectAttendanceTemplate } from "../models/student/subjectAtten
 import { Billing } from "../models/admin/billingModel.ts";
 import { getOwnerMongoId } from "./envVariableGetters.ts";
 import path from "path";
-import { generateSearchText, throwError } from "./pureFuctions.ts";
+import { generateSearchText, getCurrentMonth, getObjectSize, throwError } from "./pureFuctions.ts";
 import { registerBillings } from "./billingFunctions.ts";
 import { Request } from "express";
 import { Period } from "../models/timeline/period.ts";
@@ -247,6 +247,7 @@ export const codeMatches = (code: string, hashedCode: string) => {
 // function to log acitivy
 
 export const logActivity = async (
+  req: Request,
   organisationId: any,
   accountId: any,
   logAction: string,
@@ -272,7 +273,61 @@ export const logActivity = async (
     throwError("Failed to log activity", 500);
   }
 
+  registerBillings(req, [
+    {
+      field: "databaseDataTransfer",
+      value: getObjectSize([activityLog])
+    },
+    {
+      field: "databaseStorageAndBackup",
+      value: getObjectSize([activityLog]) * 2
+    }
+  ]);
+
   return activityLog;
+};
+
+// remove feature from bill when applicable
+export const removeFeatureFromBill = async (
+  req: Request,
+  organisationId: any,
+  orgEmail: any,
+  featureId: any,
+  featureToRemove?: any
+) => {
+  const currentBillDoc = await Billing.findOne({ organisationId, billingMonth: getCurrentMonth() }).lean();
+  if (!currentBillDoc || !currentBillDoc?.createdAt) {
+    sendEmailToOwner(
+      req,
+      "We could not check bill created date",
+      `The user: ${organisationId} tried to remove a feature with id: ${featureToRemove}. we could not decide whether or not to remove it from their billing as we could not get the billing data`
+    );
+
+    return false;
+  }
+  const noOfDaysPassedSinceBillCreation = Math.floor(
+    (new Date().getTime() - new Date(currentBillDoc!.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  if (noOfDaysPassedSinceBillCreation > 2) {
+    sendEmail(
+      req,
+      orgEmail,
+      "Feature Removed but not from billing",
+      `You have successfully removed the feature: ${featureToRemove} from your account. However you will stll be charged as 2 days grace period has passed since this month billing was created.`,
+      `<div><p>You have successfully removed the feature: ${featureToRemove} from your account. However you will stll be charged as 2 days grace period has passed since this month billing was created.</p>
+      <p>You can re-add this feature if you want and use it till the end of the month, then remove by the end of the month, or latest the 1st day of the next month.</p><p>If you have any special requirement or proof that the feature was not used, please contact us at <a href="mailto:suhudalyeqeenapp@gmail.com">suhudalyeqeenapp@gmail.com</a> or <a href="mailto:alyekeeniy@gmail.com">alyekeeniy@gmail.com</a>. We will investigate the matter and remove it from your billing if it truly was not used.</p></div>`
+    );
+
+    return false;
+  } else {
+    const removedFromBilling = await Billing.findOneAndUpdate(
+      { organisationId, billingMonth: getCurrentMonth() },
+      { $pull: { featuresToCharge: { _id: featureId } } },
+      { new: true }
+    );
+    return removedFromBilling;
+  }
 };
 
 // function to confirm account existence
@@ -1284,9 +1339,9 @@ export const fetchStudentDayAttendanceTemplates = async (
     .populate([
       {
         path: "studentDayAttendances",
-        select: "_id studentId fullName studentCustomId studentAttendanceStatus reason "
+        select: "_id studentId fullName studentCustomId studentAttendanceStatus reason"
       },
-      { path: "takenBy", select: "_id name email" }
+      { path: "lastUpdatedBy", select: "_id name email" }
     ])
 
     .sort({ _id: -1 })
@@ -1328,7 +1383,14 @@ export const fetchStudentSubjectAttendanceTemplates = async (
     organisationId: orgId,
     ...query
   })
-    .populate("studentSubjectAttendances")
+    .populate([
+      {
+        path: "studentSubjectAttendances",
+        select: "_id studentId fullName studentCustomId studentAttendanceStatus reason"
+      },
+      { path: "lastUpdatedBy", select: "_id name email" }
+    ])
+
     .sort({ _id: -1 })
     .limit(limit + 1)
     .lean();
@@ -1338,7 +1400,7 @@ export const fetchStudentSubjectAttendanceTemplates = async (
   });
 
   if (!studentSubjectAttendanceTemplates) {
-    throwError("Error fetching student contracts", 500);
+    throwError("Error fetching student attendance templates", 500);
   }
 
   const hasNext = studentSubjectAttendanceTemplates.length > limit || cursorType === "prev";

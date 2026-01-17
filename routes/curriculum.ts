@@ -111,7 +111,7 @@ import {
 } from "../controllers/curriculum/recentActivities";
 import {
   getDayAttendanceRequiredCurriculum,
-  getAllAuthorizedClassSubjects
+  getSubjectAttendanceRequiredCurriculum
 } from "../controllers/curriculum/authorizedCurriculum";
 
 // end point for curriculum / programme
@@ -155,7 +155,6 @@ router.get("/all-classes", getAllClasses);
 router.post("/class", createClass);
 router.put("/class", updateClass);
 router.delete("/class", deleteClass);
-router.get("/day-attendance/required-curriculum", getDayAttendanceRequiredCurriculum);
 router.get("/class/recent-activities", getRecentClassActivities);
 
 router.get("/class/tutors", getClassTutors);
@@ -170,7 +169,8 @@ router.get("/all-base-subjects", getAllBaseSubjects);
 router.post("/base-subject", createBaseSubject);
 router.put("/base-subject", updateBaseSubject);
 router.delete("/base-subject", deleteBaseSubject);
-router.get("/all-class-subjects/authorized", getAllAuthorizedClassSubjects);
+router.get("/day-attendance/required-curriculum/authorized", getDayAttendanceRequiredCurriculum);
+router.get("/subject-attendance/required-curriculum/authorized", getSubjectAttendanceRequiredCurriculum);
 
 router.get("/base-subject/managers", getBaseSubjectManagers);
 router.get("/base-subject/all-managers", getAllBaseSubjectManagers);

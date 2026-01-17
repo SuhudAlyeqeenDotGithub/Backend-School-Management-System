@@ -213,11 +213,11 @@ export const createQualification = asyncHandler(async (req: Request, res: Respon
     throwError("Error creating qualification", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Qualification Creation",
@@ -245,13 +245,11 @@ export const createQualification = asyncHandler(async (req: Request, res: Respon
     },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newQualification) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newQualification) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([newQualification, qualificationExists, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([newQualification, qualificationExists, organisation, role, account])
     }
   ]);
 
@@ -325,12 +323,12 @@ export const updateQualification = asyncHandler(async (req: Request, res: Respon
     throwError("Error updating qualification", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(originalQualification, updatedQualification);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Qualification Update",
@@ -346,9 +344,7 @@ export const updateQualification = asyncHandler(async (req: Request, res: Respon
     { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([updatedQualification, organisation, role, account, originalQualification]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([updatedQualification, organisation, role, account, originalQualification])
     }
   ]);
 
@@ -403,11 +399,11 @@ export const deleteQualification = asyncHandler(async (req: Request, res: Respon
   const emitRoom = deletedQualification?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "qualifications", deletedQualification, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Qualification Delete",
@@ -431,13 +427,11 @@ export const deleteQualification = asyncHandler(async (req: Request, res: Respon
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedQualification) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedQualification) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedQualification, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedQualification, organisation, role, account])
     }
   ]);
   res.status(201).json("successfull");

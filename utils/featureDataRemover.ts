@@ -28,7 +28,11 @@ export const removeFeatureRelatedData = async (req: Request, feature: string, or
       );
       throwError("Error deleting student enrollments", 500);
     }
-    return deleteProfile.deletedCount + deleteEnrollment.deletedCount;
+    return {
+      deleted: deleteProfile.acknowledged && deleteEnrollment.acknowledged,
+      deletedCount: deleteProfile.deletedCount + deleteEnrollment.deletedCount,
+      deletedSize: 0.0000011 * deleteEnrollment.deletedCount + 0.0000012 * deleteProfile.deletedCount
+    };
   }
 
   // delete attendance data
@@ -73,7 +77,23 @@ export const removeFeatureRelatedData = async (req: Request, feature: string, or
       throwError("Error deleting student subject attendance stores", 500);
     }
 
-    return deleteSubjectAttendanceTemplate.deletedCount + deleteSubjectAttendanceStore.deletedCount;
+    return {
+      deleted:
+        deleteDayAttendanceTemplate.acknowledged &&
+        deleteDayAttendanceStore.acknowledged &&
+        deleteSubjectAttendanceTemplate.acknowledged &&
+        deleteSubjectAttendanceStore.acknowledged,
+      deletedCount:
+        deleteSubjectAttendanceTemplate.deletedCount +
+        deleteSubjectAttendanceStore.deletedCount +
+        deleteDayAttendanceTemplate.deletedCount +
+        deleteDayAttendanceStore.deletedCount,
+      deletedSize:
+        0.000001 * deleteDayAttendanceTemplate.deletedCount +
+        0.0000011 * deleteDayAttendanceStore.deletedCount +
+        0.0000011 * deleteSubjectAttendanceTemplate.deletedCount +
+        0.0000012 * deleteSubjectAttendanceStore.deletedCount
+    };
   }
   if (feature === "Student Assessments") {
     return 0;

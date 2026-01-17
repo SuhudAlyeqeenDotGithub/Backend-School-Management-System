@@ -1,3 +1,5 @@
+import { route_model_map } from "./defaultVariables";
+
 export const toNegative = (value: number) => {
   if (value <= 0) return value;
   return Math.abs(value) * -1;
@@ -35,10 +37,25 @@ export const getCurrentMonth = (now = new Date()) => {
   return `${date.toLocaleString("en-GB", { month: "long", year: "numeric" })}`;
 };
 
+export const inferModelFromRoute = (url: string): string => {
+  const exactMatch = route_model_map[url];
+  if (exactMatch) return exactMatch;
+
+  const partialMatch = Object.keys(route_model_map).find((route) => url.startsWith(route));
+  return partialMatch ? route_model_map[partialMatch] : "None";
+};
+
+export const inferLevel = (statusCode: number): string => {
+  if (statusCode >= 500) return "critical";
+  if (statusCode >= 400) return "medium";
+  return "low";
+};
+
 // throw error function
-export const throwError = (message: string, statusCode: number) => {
+export const throwError = (message: string, statusCode: number, model?: string) => {
   const error = new Error(message);
   (error as any).statusCode = statusCode;
+  if (model) (error as any).model = model;
   throw error;
 };
 

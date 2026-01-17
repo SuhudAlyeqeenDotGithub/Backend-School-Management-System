@@ -256,11 +256,11 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
     throwError("Error creating staff contract", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Staff Contract Creation",
@@ -281,13 +281,11 @@ export const createStaffContract = asyncHandler(async (req: Request, res: Respon
     { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newStaffContract) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newStaffContract) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([newStaffContract, academicYearExists, staffExists, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([newStaffContract, academicYearExists, staffExists, organisation, role, account])
     }
   ]);
 
@@ -374,12 +372,12 @@ export const updateStaffContract = asyncHandler(async (req: Request, res: Respon
     throwError("Error updating staff contract", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(originalStaff, updatedStaffContract);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Staff Contract Update",
@@ -395,9 +393,7 @@ export const updateStaffContract = asyncHandler(async (req: Request, res: Respon
     { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([updatedStaffContract, academicYearExists, organisation, role, account, originalStaff]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([updatedStaffContract, academicYearExists, organisation, role, account, originalStaff])
     }
   ]);
   res.status(201).json("successful");
@@ -448,11 +444,11 @@ export const deleteStaffContract = asyncHandler(async (req: Request, res: Respon
   const emitRoom = deletedStaffContract?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "staffcontracts", deletedStaffContract, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Staff Contract Delete",
@@ -476,13 +472,11 @@ export const deleteStaffContract = asyncHandler(async (req: Request, res: Respon
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedStaffContract) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedStaffContract) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedStaffContract, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedStaffContract, organisation, role, account])
     }
   ]);
 

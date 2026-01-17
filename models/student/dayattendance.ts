@@ -1,5 +1,4 @@
-import mongoose from "mongoose";
-const { Schema, model } = mongoose;
+import mongoose, { Schema, model } from "mongoose";
 
 const studentDayAttendanceTemplateSchema = new Schema(
   {
@@ -11,7 +10,7 @@ const studentDayAttendanceTemplateSchema = new Schema(
     classId: { type: mongoose.Schema.Types.ObjectId, ref: "Class", required: true },
     programmeId: { type: mongoose.Schema.Types.ObjectId, ref: "Programme", required: true },
     pathwayId: { type: mongoose.Schema.Types.ObjectId, ref: "Pathway", default: null },
-    takenBy: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
+    lastUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
     notes: { type: String },
     searchText: { type: String, required: true }
   },

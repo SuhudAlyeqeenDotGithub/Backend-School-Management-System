@@ -256,11 +256,11 @@ export const createClassSubject = asyncHandler(async (req: Request, res: Respons
     throwError("Error creating class subject - Please try again", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Class Subject Creation",
@@ -284,13 +284,11 @@ export const createClassSubject = asyncHandler(async (req: Request, res: Respons
     },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newSubject) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newSubject) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([newSubject, baseSubjectExists, organisation, role, account, classSubjectComboExists]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([newSubject, baseSubjectExists, organisation, role, account, classSubjectComboExists])
     }
   ]);
 
@@ -415,12 +413,12 @@ export const updateClassSubject = asyncHandler(async (req: Request, res: Respons
     throwError("Error updating classSubject", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(originalSubject, updatedSubject);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Class Subject Update",
@@ -436,17 +434,16 @@ export const updateClassSubject = asyncHandler(async (req: Request, res: Respons
     { field: "databaseOperation", value: 9 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([
-          updatedSubject,
-          programmeExists,
-          classExists,
-          baseSubjectExists,
-          organisation,
-          role,
-          account,
-          originalSubject
-        ]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([
+        updatedSubject,
+        programmeExists,
+        classExists,
+        baseSubjectExists,
+        organisation,
+        role,
+        account,
+        originalSubject
+      ])
     }
   ]);
   res.status(201).json("successfull");
@@ -497,11 +494,11 @@ export const deleteClassSubject = asyncHandler(async (req: Request, res: Respons
   const emitRoom = deletedSubject?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "classsubjects", deletedSubject, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Class Subject Delete",
@@ -525,13 +522,11 @@ export const deleteClassSubject = asyncHandler(async (req: Request, res: Respons
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedSubject) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedSubject) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedSubject, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedSubject, organisation, role, account])
     }
   ]);
   res.status(201).json("successfull");

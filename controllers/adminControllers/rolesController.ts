@@ -114,11 +114,11 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error creating role", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Role Creation",
@@ -144,12 +144,11 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
     { field: "databaseOperation", value: 5 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newRole) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newRole) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([newRole, organisation, role, account]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([newRole, organisation, role, account])
     }
   ]);
 
@@ -221,12 +220,12 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error updating role", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(originalRole, updatedRole);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Role Update",
@@ -242,17 +241,11 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
     { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
-      value:
-        (getObjectSize(updatedRole) +
-          toNegative(getObjectSize(originalRole)) +
-          (logActivityAllowed ? getObjectSize(activityLog) : 0)) *
-        2
+      value: getObjectSize(updatedRole) + toNegative(getObjectSize(originalRole)) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([updatedRole, organisation, role, account, originalRole]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([updatedRole, organisation, role, account, originalRole])
     }
   ]);
   res.status(201).json("successfull");
@@ -314,11 +307,11 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
   const emitRoom = deletedRole?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "roles", deletedRole, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Role Delete",
@@ -348,13 +341,11 @@ export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedRole) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedRole) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedRole, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedRole, organisation, role, account])
     }
   ]);
   res.status(201).json("successfull");

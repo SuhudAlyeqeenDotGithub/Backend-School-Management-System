@@ -297,11 +297,11 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
     throwError("Error creating student enrollment", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Student Enrollment Creation",
@@ -322,21 +322,20 @@ export const createStudentEnrollment = asyncHandler(async (req: Request, res: Re
     { field: "databaseOperation", value: 9 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newStudentEnrollment) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newStudentEnrollment) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([
-          newStudentEnrollment,
-          academicYearExists,
-          studentExists,
-          enrollementExists,
-          classExists,
-          organisation,
-          role,
-          account
-        ]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([
+        newStudentEnrollment,
+        academicYearExists,
+        studentExists,
+        enrollementExists,
+        classExists,
+        organisation,
+        role,
+        account
+      ])
     }
   ]);
 
@@ -458,12 +457,12 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
     throwError("Error updating student enrollment", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(originalStudentEnrollment, updatedStudentEnrollment);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Student Enrollment Update",
@@ -479,16 +478,15 @@ export const updateStudentEnrollment = asyncHandler(async (req: Request, res: Re
     { field: "databaseOperation", value: 8 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([
-          updatedStudentEnrollment,
-          academicYearExists,
-          classExists,
-          organisation,
-          role,
-          account,
-          originalStudentEnrollment
-        ]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([
+        updatedStudentEnrollment,
+        academicYearExists,
+        classExists,
+        organisation,
+        role,
+        account,
+        originalStudentEnrollment
+      ])
     }
   ]);
   res.status(201).json("successful");
@@ -554,11 +552,11 @@ export const deleteStudentEnrollment = asyncHandler(async (req: Request, res: Re
   const emitRoom = deletedStudentEnrollment?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "studentenrollments", deletedStudentEnrollment, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Student Enrollment Delete",
@@ -582,14 +580,11 @@ export const deleteStudentEnrollment = asyncHandler(async (req: Request, res: Re
     },
     {
       field: "databaseStorageAndBackup",
-      value:
-        toNegative(getObjectSize(deletedStudentEnrollment) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedStudentEnrollment) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedStudentEnrollment, organisation, role, account, StudentEnrollmentToDelete]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedStudentEnrollment, organisation, role, account, StudentEnrollmentToDelete])
     }
   ]);
 

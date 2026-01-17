@@ -1,6 +1,5 @@
 import { Programme } from "models/curriculum/programme";
-import mongoose from "mongoose";
-const { Schema, model } = mongoose;
+import mongoose, { Schema, model } from "mongoose";
 
 const staffSchema = new Schema(
   {

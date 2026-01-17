@@ -245,11 +245,11 @@ export const createPathwayManager = asyncHandler(async (req: Request, res: Respo
     throwError("Error creating pathway manager", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Pathway Manager Creation",
@@ -273,14 +273,13 @@ export const createPathwayManager = asyncHandler(async (req: Request, res: Respo
     },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newPathwayManager) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newPathwayManager) * 2
     },
     {
       field: "databaseDataTransfer",
       value:
         getObjectSize([newPathwayManager, staffHasContract, organisation, role, account]) +
-        (status === "Active" ? getObjectSize(pathwayAlreadyManaged) : 0) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+        (status === "Active" ? getObjectSize(pathwayAlreadyManaged) : 0)
     }
   ]);
 
@@ -365,12 +364,12 @@ export const updatePathwayManager = asyncHandler(async (req: Request, res: Respo
     throwError("Error updating pathway", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(originalPathwayManager, updatedPathwayManager);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Pathway Manager Update",
@@ -386,9 +385,14 @@ export const updatePathwayManager = asyncHandler(async (req: Request, res: Respo
     { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([updatedPathwayManager, organisation, role, account, originalPathwayManager, staffHasContract]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([
+        updatedPathwayManager,
+        organisation,
+        role,
+        account,
+        originalPathwayManager,
+        staffHasContract
+      ])
     }
   ]);
 
@@ -443,11 +447,11 @@ export const deletePathwayManager = asyncHandler(async (req: Request, res: Respo
   const emitRoom = deletedPathwayManager?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "pathwaymanagers", deletedPathwayManager, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Pathway Manager Deletion",
@@ -471,14 +475,11 @@ export const deletePathwayManager = asyncHandler(async (req: Request, res: Respo
     },
     {
       field: "databaseStorageAndBackup",
-      value:
-        toNegative(getObjectSize(deletedPathwayManager) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedPathwayManager) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedPathwayManager, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedPathwayManager, organisation, role, account])
     }
   ]);
   res.status(201).json("successfull");

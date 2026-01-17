@@ -232,11 +232,11 @@ export const createClassTutor = asyncHandler(async (req: Request, res: Response)
     throwError("Error creating class tutor", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Class Tutor Creation",
@@ -260,14 +260,13 @@ export const createClassTutor = asyncHandler(async (req: Request, res: Response)
     },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newClassTutor) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newClassTutor) * 2
     },
     {
       field: "databaseDataTransfer",
       value:
         getObjectSize([newClassTutor, staffHasContract, organisation, role, account]) +
-        (status === "Active" ? getObjectSize(classAlreadyManaged) : 0) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+        (status === "Active" ? getObjectSize(classAlreadyManaged) : 0)
     }
   ]);
   res.status(201).json("successfull");
@@ -334,12 +333,12 @@ export const updateClassTutor = asyncHandler(async (req: Request, res: Response)
     throwError("Error updating class", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(originalClassTutor, updatedClassTutor);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Class Tutor Update",
@@ -355,9 +354,7 @@ export const updateClassTutor = asyncHandler(async (req: Request, res: Response)
     { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([updatedClassTutor, organisation, role, account, originalClassTutor]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([updatedClassTutor, organisation, role, account, originalClassTutor])
     }
   ]);
 
@@ -409,11 +406,11 @@ export const deleteClassTutor = asyncHandler(async (req: Request, res: Response)
   const emitRoom = deletedClassTutor?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "classtutors", deletedClassTutor, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Class Tutor Deletion",
@@ -436,13 +433,11 @@ export const deleteClassTutor = asyncHandler(async (req: Request, res: Response)
       },
       {
         field: "databaseStorageAndBackup",
-        value: toNegative(getObjectSize(deletedClassTutor) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+        value: toNegative(getObjectSize(deletedClassTutor) * 2)
       },
       {
         field: "databaseDataTransfer",
-        value:
-          getObjectSize([deletedClassTutor, organisation, role, account]) +
-          (logActivityAllowed ? getObjectSize(activityLog) : 0)
+        value: getObjectSize([deletedClassTutor, organisation, role, account])
       }
     ]);
   }

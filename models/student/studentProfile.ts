@@ -1,6 +1,5 @@
 import { getEmailVerificationCode } from "controllers/accountControllers";
-import mongoose from "mongoose";
-const { Schema, model } = mongoose;
+import mongoose, { Schema, model } from "mongoose";
 
 const studentSchema = new Schema(
   {

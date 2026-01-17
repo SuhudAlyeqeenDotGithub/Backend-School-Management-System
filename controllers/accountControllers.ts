@@ -122,6 +122,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
 
   // create an activity log for the organization account creation
   await logActivity(
+    req,
     orgAccount._id,
     orgAccount._id,
     "Initial Organization Account Creation",
@@ -176,6 +177,7 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
 
   // create an activity log for the default role creation
   await logActivity(
+    req,
     orgAccount._id,
     orgAccount._id,
     `Initial Default Role Creation for organization (${organisationName}) - Absolute Admin`,
@@ -241,7 +243,8 @@ export const signupOrgAccount = asyncHandler(async (req: Request, res: Response)
   let activityLog;
 
   const difference = diff(original, updated);
-  activityLog = await logActivity(
+  await logActivity(
+    req,
     orgAccount._id,
     orgAccount._id,
     `Updating organization (${organisationName}) Account with Default Role`,
@@ -458,7 +461,8 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
   delete reshapedAccount._id;
   delete reshapedAccount.password;
 
-  const activityLog = await logActivity(
+  await logActivity(
+    req,
     account?.organisationId,
     account?._id,
     "User Sign In",
@@ -476,7 +480,7 @@ export const signinAccount = asyncHandler(async (req: Request, res: Response) =>
     },
     {
       field: "databaseDataTransfer",
-      value: getObjectSize([account, activityLog])
+      value: getObjectSize([account])
     }
   ]);
 
@@ -661,11 +665,11 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
 
   // create a log for reset password request
 
-  let activityLog;
   const logActivityAllowed = accountExist?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       accountExist?._id,
       accountExist?._id,
       "Reset Password Request",
@@ -692,9 +696,7 @@ export const resetPasswordSendEmail = asyncHandler(async (req: Request, res: Res
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([roleExist, accountExist, resetPasswordDoc, previousCode]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([roleExist, accountExist, resetPasswordDoc, previousCode])
     }
   ]);
 
@@ -820,12 +822,12 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
   // create an activity log for the organization account password change
   // get the difference in old and new
 
-  let activityLog;
   const logActivityAllowed = organisationEmailExists?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(organisationEmailExists, updatedAccountPassword);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       updatedAccountPassword?._id,
       updatedAccountPassword?._id,
       `Changing organisation ${updatedAccountPassword?.name} password`,
@@ -877,10 +879,10 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
 
   delete reshapedAccount._id;
   delete reshapedAccount.password;
-  let activityLog2;
 
   if (logActivityAllowed) {
-    activityLog2 = await logActivity(
+    await logActivity(
+      req,
       updatedAccountPassword?.organisationId,
       updatedAccountPassword?._id,
       "User auto Sign In after password change",
@@ -902,9 +904,7 @@ export const resetPasswordNewPassword = asyncHandler(async (req: Request, res: R
     { field: "databaseOperation", value: 12 + (logActivityAllowed ? 4 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([roleExist, deletedCode, updatedAccountPassword, resetPasswordDoc, organisationEmailExists]) +
-        (logActivityAllowed ? getObjectSize([activityLog, activityLog2]) : 0)
+      value: getObjectSize([roleExist, deletedCode, updatedAccountPassword, resetPasswordDoc, organisationEmailExists])
     }
   ]);
 

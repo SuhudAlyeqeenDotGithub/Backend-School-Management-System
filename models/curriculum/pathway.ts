@@ -1,5 +1,4 @@
-import mongoose from "mongoose";
-const { Schema, model } = mongoose;
+import mongoose, { Schema, model } from "mongoose";
 
 const pathwaySchema = new Schema(
   {
@@ -35,5 +34,5 @@ const pathwayManagerSchema = new Schema(
 
 pathwayManagerSchema.index({ organisationId: 1, pathwayId: 1, staffId: 1, status: 1 }, { unique: true });
 pathwayManagerSchema.index({ organisationId: 1, staffId: 1, status: 1 });
- // pathwayManagerSchema.index({ organisationId: 1, pathwayId: 1, customStaffId: 1 });
+// pathwayManagerSchema.index({ organisationId: 1, pathwayId: 1, customStaffId: 1 });
 export const PathwayManager = model("PathwayManager", pathwayManagerSchema);

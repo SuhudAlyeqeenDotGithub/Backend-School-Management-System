@@ -206,11 +206,11 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
     throwError("Error creating programme", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Programme Creation",
@@ -238,13 +238,11 @@ export const createProgramme = asyncHandler(async (req: Request, res: Response) 
     },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newProgramme) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newProgramme) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([newProgramme, programmeExists, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([newProgramme, programmeExists, organisation, role, account])
     }
   ]);
 
@@ -318,12 +316,12 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
     throwError("Error updating programme", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(originalProgramme, updatedProgramme);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Programme Update",
@@ -339,9 +337,7 @@ export const updateProgramme = asyncHandler(async (req: Request, res: Response) 
     { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([updatedProgramme, organisation, role, account, originalProgramme]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([updatedProgramme, organisation, role, account, originalProgramme])
     }
   ]);
 
@@ -396,11 +392,11 @@ export const deleteProgramme = asyncHandler(async (req: Request, res: Response) 
   const emitRoom = deletedProgramme?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "programmes", deletedProgramme, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Programme Delete",
@@ -424,13 +420,11 @@ export const deleteProgramme = asyncHandler(async (req: Request, res: Response) 
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedProgramme) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedProgramme) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedProgramme, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedProgramme, organisation, role, account])
     }
   ]);
   res.status(201).json("successfull");

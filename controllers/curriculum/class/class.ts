@@ -330,6 +330,7 @@ export const createClass = asyncHandler(async (req: Request, res: Response) => {
 
   if (logActivityAllowed) {
     activityLog1 = await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Class Creation",
@@ -403,9 +404,9 @@ export const createClass = asyncHandler(async (req: Request, res: Response) => {
     }
   }
 
-  let activityLog2;
   if (logActivityAllowed) {
-    activityLog2 = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Class Subject Bulk Creation",
@@ -433,24 +434,21 @@ export const createClass = asyncHandler(async (req: Request, res: Response) => {
     },
     {
       field: "databaseStorageAndBackup",
-      value:
-        (getObjectSize(newClass) + (logActivityAllowed ? getObjectSize([activityLog1, activityLog2]) : 0)) * 2 +
-        (autoCreateClassSubjects ? getObjectSize(createdSubjects) : 0)
+      value: getObjectSize(newClass) * 2 + (autoCreateClassSubjects ? getObjectSize(createdSubjects) : 0)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([
-          newClass,
-          classExists,
-          pathwayExists,
-          organisation,
-          role,
-          account,
-          programmeExists,
-          createdSubjects,
-          alreadyOfferingClass
-        ]) + (logActivityAllowed ? getObjectSize([activityLog1, activityLog2]) : 0)
+      value: getObjectSize([
+        newClass,
+        classExists,
+        pathwayExists,
+        organisation,
+        role,
+        account,
+        programmeExists,
+        createdSubjects,
+        alreadyOfferingClass
+      ])
     }
   ]);
 
@@ -521,12 +519,12 @@ export const updateClass = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error updating class", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(alreadyOfferingClass, updatedClass);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Class Update",
@@ -542,9 +540,7 @@ export const updateClass = asyncHandler(async (req: Request, res: Response) => {
     { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([updatedClass, organisation, role, account, alreadyOfferingClass]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([updatedClass, organisation, role, account, alreadyOfferingClass])
     }
   ]);
 
@@ -596,11 +592,11 @@ export const deleteClass = asyncHandler(async (req: Request, res: Response) => {
   const emitRoom = deletedClass?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "classes", deletedClass, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Class Delete",
@@ -624,13 +620,11 @@ export const deleteClass = asyncHandler(async (req: Request, res: Response) => {
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedClass) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedClass) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedClass, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedClass, organisation, role, account])
     }
   ]);
   res.status(201).json("successfull");

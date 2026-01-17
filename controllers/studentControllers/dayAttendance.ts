@@ -18,8 +18,7 @@ import { registerBillings } from "../../utils/billingFunctions.ts";
 import { ProgrammeManager } from "../../models/curriculum/programme.ts";
 
 const validateStudentDayAttendance = (studentDataParam: any) => {
-  const { notes, academicYear, pathway, pathwayId, programme, takenByFullName, className, ...copyLocalData } =
-    studentDataParam;
+  const { notes, academicYear, pathway, pathwayId, programme, ...copyLocalData } = studentDataParam;
 
   for (const [key, value] of Object.entries(copyLocalData)) {
     if (!value || (typeof value === "string" && value.trim() === "")) {
@@ -276,21 +275,21 @@ export const getStudentDayAttendanceTemplates = asyncHandler(async (req: Request
       pathwaysManaged = pathwayManagementDocs.map((doc) => doc.pathwayId);
     }
 
-    let classsManaged: any = [];
+    let classesManaged: any = [];
     if (classManagementDocs && classManagementDocs.length > 0) {
-      classsManaged = classManagementDocs.map((doc) => doc.classId);
+      classesManaged = classManagementDocs.map((doc) => doc.classId);
     }
 
     allowedProgrammesPathwaysClassesIds = [
       ...programmesManaged.map((doc: any) => doc.toString()),
       ...pathwaysManaged.map((doc: any) => doc.toString()),
-      ...classsManaged.map((doc: any) => doc.toString())
+      ...classesManaged.map((doc: any) => doc.toString())
     ];
 
     query["$or"] = [
       { programmeId: { $in: programmesManaged } },
       { pathwayId: { $in: pathwaysManaged } },
-      { classId: { $in: classsManaged } }
+      { classId: { $in: classesManaged } }
     ];
   }
 
@@ -364,8 +363,17 @@ export const getStudentDayAttendanceTemplates = asyncHandler(async (req: Request
 // // controller to handle role creation
 export const createStudentDayAttendanceTemplate = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId } = req.userToken;
-  const { customId, academicYearId, attendanceStatus, takenOn, pathwayId, programmeId, takenBy, status, classId } =
-    req.body;
+  const {
+    customId,
+    academicYearId,
+    attendanceStatus,
+    takenOn,
+    pathwayId,
+    programmeId,
+    lastUpdatedBy,
+    status,
+    classId
+  } = req.body;
 
   const { studentDayAttendances, isActiveManagerOrTutor, ...rest } = req.body;
 
@@ -420,15 +428,6 @@ export const createStudentDayAttendanceTemplate = asyncHandler(async (req: Reque
     );
   }
 
-  const classExists = await Class.findOne({ _id: classId }).lean();
-  if (!classExists) {
-    registerBillings(req, [
-      { field: "databaseOperation", value: 4 },
-      { field: "databaseDataTransfer", value: getObjectSize([organisation, role, account]) }
-    ]);
-    throwError("The selected class does not exist - Please change the class", 409);
-  }
-
   const attendance = await StudentDayAttendanceTemplate.create({
     ...rest,
     organisationId,
@@ -442,36 +441,33 @@ export const createStudentDayAttendanceTemplate = asyncHandler(async (req: Reque
       academicYearId,
       attendanceStatus,
       takenOn,
-      takenBy
+      lastUpdatedBy
     ])
   });
 
   if (!attendance) {
     registerBillings(req, [
-      { field: "databaseOperation", value: 7 },
+      { field: "databaseOperation", value: 6 },
       {
         field: "databaseDataTransfer",
-        value: getObjectSize([organisation, role, account, attendanceExists, classExists])
+        value: getObjectSize([organisation, role, account, attendanceExists])
       }
     ]);
     throwError("Error creating student day attendance template", 500);
   }
 
-  if (absoluteAdmin || hasAdminAccess || isActiveManagerOrTutor) {
-    const emitRoom = attendance?.organisationId?.toString() ?? "";
-    emitToOrganisation(
-      emitRoom,
-      "studentdayattendancetemplates",
-      { ...attendance?.toObject(), takenBy: { name, email, _id } },
-      "insert"
-    );
-  }
+  emitToOrganisation(
+    organisationId,
+    "studentdayattendancetemplates",
+    { ...attendance?.toObject(), lastUpdatedBy: { name, email, _id } },
+    "insert"
+  );
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Student Attendance Creation",
@@ -509,10 +505,10 @@ export const createStudentDayAttendanceTemplate = asyncHandler(async (req: Reque
     });
     if (!studentAttendances) {
       registerBillings(req, [
-        { field: "databaseOperation", value: 7 },
+        { field: "databaseOperation", value: 6 },
         {
           field: "databaseDataTransfer",
-          value: getObjectSize([mappedAttendances, attendance, attendanceExists, classExists])
+          value: getObjectSize([mappedAttendances, attendance, attendanceExists])
         }
       ]);
       throwError(
@@ -523,17 +519,14 @@ export const createStudentDayAttendanceTemplate = asyncHandler(async (req: Reque
   }
 
   registerBillings(req, [
-    { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) + mappedAttendances.length * 2 },
+    { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) + mappedAttendances.length * 2 },
     {
       field: "databaseStorageAndBackup",
-      value:
-        (getObjectSize([attendance, studentAttendances]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize([attendance, studentAttendances]) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([mappedAttendances, attendance, attendanceExists, organisation, role, account, classExists]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([mappedAttendances, attendance, attendanceExists, organisation, role, account])
     }
   ]);
 
@@ -543,8 +536,17 @@ export const createStudentDayAttendanceTemplate = asyncHandler(async (req: Reque
 // controller to handle role update
 export const updateStudentDayAttendanceTemplate = asyncHandler(async (req: Request, res: Response) => {
   const { accountId, organisationId } = req.userToken;
-  const { customId, academicYearId, attendanceStatus, takenOn, pathwayId, programmeId, takenBy, status, classId } =
-    req.body;
+  const {
+    customId,
+    academicYearId,
+    attendanceStatus,
+    takenOn,
+    pathwayId,
+    programmeId,
+    lastUpdatedBy,
+    status,
+    classId
+  } = req.body;
 
   const { studentDayAttendances, isActiveManagerOrTutor, ...rest } = req.body;
 
@@ -615,7 +617,7 @@ export const updateStudentDayAttendanceTemplate = asyncHandler(async (req: Reque
     attendanceExists?._id,
     {
       ...rest,
-      takenBy: accountId,
+      lastUpdatedBy: accountId,
       pathwayId: pathwayId ? pathwayId : null,
       searchText: generateSearchText([
         customId,
@@ -626,7 +628,7 @@ export const updateStudentDayAttendanceTemplate = asyncHandler(async (req: Reque
         academicYearId,
         attendanceStatus,
         takenOn,
-        takenBy
+        lastUpdatedBy
       ])
     },
     { new: true }
@@ -640,22 +642,19 @@ export const updateStudentDayAttendanceTemplate = asyncHandler(async (req: Reque
     throwError("Error updating student day attendance template", 500);
   }
 
-  if (absoluteAdmin || hasAdminAccess || isActiveManagerOrTutor) {
-    const emitRoom = updatedStudentDayAttendance?.organisationId?.toString() ?? "";
-    emitToOrganisation(
-      emitRoom,
-      "studentdayattendancetemplates",
-      { ...updatedStudentDayAttendance, takenBy: { name, email, _id } },
-      "update"
-    );
-  }
+  emitToOrganisation(
+    organisationId,
+    "studentdayattendancetemplates",
+    { ...updatedStudentDayAttendance, lastUpdatedBy: { name, email, _id } },
+    "update"
+  );
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(attendanceExists, updatedStudentDayAttendance);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Student Attendance Update",
@@ -672,7 +671,7 @@ export const updateStudentDayAttendanceTemplate = asyncHandler(async (req: Reque
   if (studentDayAttendances.length > 0) {
     mappedAttendances = studentDayAttendances.map((studentDayAttendance: any) =>
       studentDayAttendance._id && studentDayAttendance.organisationId && studentDayAttendance.attendanceTemplateId
-        ? { ...studentDayAttendance, takenBy: accountId }
+        ? { ...studentDayAttendance, lastUpdatedBy: accountId }
         : {
             ...studentDayAttendance,
             organisationId,
@@ -682,7 +681,7 @@ export const updateStudentDayAttendanceTemplate = asyncHandler(async (req: Reque
             pathwayId: updatedStudentDayAttendance?.pathwayId ? updatedStudentDayAttendance?.pathwayId : null,
             classId,
             takenOn,
-            takenBy: accountId,
+            lastUpdatedBy: accountId,
             studentId: studentDayAttendance.studentId
           }
     );
@@ -728,9 +727,14 @@ export const updateStudentDayAttendanceTemplate = asyncHandler(async (req: Reque
     { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) + mappedAttendances.length * 2 },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([mappedAttendances, updatedStudentDayAttendance, attendanceExists, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([
+        mappedAttendances,
+        updatedStudentDayAttendance,
+        attendanceExists,
+        organisation,
+        role,
+        account
+      ])
     }
   ]);
 
@@ -800,11 +804,11 @@ export const deleteStudentDayAttendanceTemplate = asyncHandler(async (req: Reque
   const emitRoom = deletedStudentDayAttendanceTemplate?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "studentdayattendancetemplates", deletedStudentDayAttendanceTemplate, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Student Attendance Delete",
@@ -840,14 +844,11 @@ export const deleteStudentDayAttendanceTemplate = asyncHandler(async (req: Reque
       field: "databaseStorageAndBackup",
       value:
         toNegative(getObjectSize(deletedStudentDayAttendanceTemplate) * 2) +
-        toNegative(getObjectSize(oneRecordSize) * deletedStudentDayAttendances.deletedCount * 2) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+        toNegative(getObjectSize(oneRecordSize) * deletedStudentDayAttendances.deletedCount * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedStudentDayAttendanceTemplate, organisation, role, account, foundRecord]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedStudentDayAttendanceTemplate, organisation, role, account, foundRecord])
     }
   ]);
 

@@ -55,7 +55,7 @@ const handleWebSocket = (io: Server) => {
       if (change.operationType === "delete") return;
       const collection = "ns" in change && change.ns && "coll" in change.ns && change.ns.coll;
 
-      if (collection === "studentdayattendancetemplates") return;
+      if (collection === "studentdayattendancetemplates" || collection === "studentsubjectattendancetemplates") return;
 
       const organisationIdExists =
         "fullDocument" in change && change.fullDocument && "organisationId" in change.fullDocument;

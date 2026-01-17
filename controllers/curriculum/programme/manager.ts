@@ -244,11 +244,11 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
     throwError("Error creating programme manager", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Programme Manager Creation",
@@ -272,14 +272,13 @@ export const createProgrammeManager = asyncHandler(async (req: Request, res: Res
     },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newProgrammeManager) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newProgrammeManager) * 2
     },
     {
       field: "databaseDataTransfer",
       value:
         getObjectSize([newProgrammeManager, staffHasContract, organisation, role, account]) +
-        (status === "Active" ? getObjectSize(programmeAlreadyManaged) : 0) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+        (status === "Active" ? getObjectSize(programmeAlreadyManaged) : 0)
     }
   ]);
 
@@ -375,12 +374,12 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
     throwError("Error updating programme", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(originalProgrammeManager, updatedProgrammeManager);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Programme Manager Update",
@@ -396,15 +395,14 @@ export const updateProgrammeManager = asyncHandler(async (req: Request, res: Res
     { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([
-          updatedProgrammeManager,
-          organisation,
-          role,
-          account,
-          originalProgrammeManager,
-          staffHasContract
-        ]) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([
+        updatedProgrammeManager,
+        organisation,
+        role,
+        account,
+        originalProgrammeManager,
+        staffHasContract
+      ])
     }
   ]);
   res.status(201).json("successfull");
@@ -461,11 +459,11 @@ export const deleteProgrammeManager = asyncHandler(async (req: Request, res: Res
   const emitRoom = deletedProgrammeManager?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "programmemanagers", deletedProgrammeManager, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Programme Manager Deletion",
@@ -489,14 +487,11 @@ export const deleteProgrammeManager = asyncHandler(async (req: Request, res: Res
     },
     {
       field: "databaseStorageAndBackup",
-      value:
-        toNegative(getObjectSize(deletedProgrammeManager) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedProgrammeManager) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedProgrammeManager, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedProgrammeManager, organisation, role, account])
     }
   ]);
   res.status(201).json("successfull");

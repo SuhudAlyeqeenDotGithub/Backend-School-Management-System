@@ -182,11 +182,11 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
     throwError("Error creating role", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "User Account Creation",
@@ -215,13 +215,11 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
     { field: "databaseOperation", value: 8 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newUser) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newUser) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([newUser, userExists, staffHasActiveContract, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([newUser, userExists, staffHasActiveContract, organisation, role, account])
     }
   ]);
 
@@ -381,12 +379,12 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     uniqueTabAccess: updatedUser?.uniqueTabAccess
   };
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(original, updated);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "User Account Update",
@@ -402,17 +400,11 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     { field: "databaseOperation", value: 8 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
-      value:
-        (getObjectSize(updatedUser) +
-          toNegative(getObjectSize(userExists)) +
-          (logActivityAllowed ? getObjectSize(activityLog) : 0)) *
-        2
+      value: getObjectSize(updatedUser) + toNegative(getObjectSize(userExists)) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([updatedUser, staffHasActiveContract, organisation, role, account, userExists]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([updatedUser, staffHasActiveContract, organisation, role, account, userExists])
     }
   ]);
 
@@ -479,11 +471,11 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   const emitRoom = deletedUser?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "accounts", deletedUser, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "User Account Deletion",
@@ -514,13 +506,11 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedUser) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedUser) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedUser, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedUser, organisation, role, account])
     }
   ]);
 
@@ -574,11 +564,11 @@ export const updateOrgSettings = asyncHandler(async (req: Request, res: Response
     throwError("Error updating user", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Organisation Account Setting Update",
@@ -594,9 +584,7 @@ export const updateOrgSettings = asyncHandler(async (req: Request, res: Response
     { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([updatedAccount, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([updatedAccount, organisation, role, account])
     }
   ]);
 

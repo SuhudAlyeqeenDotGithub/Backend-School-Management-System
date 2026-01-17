@@ -1,5 +1,4 @@
-import mongoose from "mongoose";
-const { Schema, model } = mongoose;
+import mongoose, { Schema, model } from "mongoose";
 
 import { generateCustomId } from "../../utils/databaseFunctions";
 import { generateSearchText, getCurrentMonth, getNextBillingDate } from "../../utils/pureFuctions.ts";

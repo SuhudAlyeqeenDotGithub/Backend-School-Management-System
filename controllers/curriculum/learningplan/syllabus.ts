@@ -235,11 +235,11 @@ export const createSyllabus = asyncHandler(async (req: Request, res: Response) =
     throwError("Error creating syllabus - Please try again", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Syllabus Creation",
@@ -260,13 +260,11 @@ export const createSyllabus = asyncHandler(async (req: Request, res: Response) =
     { field: "databaseOperation", value: 8 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newSyllabus) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newSyllabus) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([newSyllabus, syllabusExists, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([newSyllabus, syllabusExists, organisation, role, account])
     }
   ]);
 
@@ -369,12 +367,12 @@ export const updateSyllabus = asyncHandler(async (req: Request, res: Response) =
     throwError("Error updating syllabus", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(originalSyllabus, updatedSyllabus);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Syllabus Update",
@@ -390,9 +388,7 @@ export const updateSyllabus = asyncHandler(async (req: Request, res: Response) =
     { field: "databaseOperation", value: 7 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([updatedSyllabus, organisation, role, account, originalSyllabus]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([updatedSyllabus, organisation, role, account, originalSyllabus])
     }
   ]);
 
@@ -445,11 +441,11 @@ export const deleteSyllabus = asyncHandler(async (req: Request, res: Response) =
   const emitRoom = deletedSyllabus?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "syllabuses", deletedSyllabus, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Syllabus Delete",
@@ -473,13 +469,11 @@ export const deleteSyllabus = asyncHandler(async (req: Request, res: Response) =
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedSyllabus) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedSyllabus) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedSyllabus, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedSyllabus, organisation, role, account])
     }
   ]);
   res.status(201).json("successfull");

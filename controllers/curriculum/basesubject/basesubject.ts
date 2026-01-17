@@ -201,11 +201,11 @@ export const createBaseSubject = asyncHandler(async (req: Request, res: Response
     throwError("Error creating base subject", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "BaseSubject Creation",
@@ -230,13 +230,11 @@ export const createBaseSubject = asyncHandler(async (req: Request, res: Response
     { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseStorageAndBackup",
-      value: (getObjectSize(newBaseSubject) + (logActivityAllowed ? getObjectSize(activityLog) : 0)) * 2
+      value: getObjectSize(newBaseSubject) * 2
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([newBaseSubject, organisation, role, account, baseSubjectExists]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([newBaseSubject, organisation, role, account, baseSubjectExists])
     }
   ]);
 
@@ -307,12 +305,12 @@ export const updateBaseSubject = asyncHandler(async (req: Request, res: Response
     throwError("Error updating base subject", 500);
   }
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
     const difference = diff(originalBaseSubject, updatedBaseSubject);
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "Base Subject Update",
@@ -328,9 +326,7 @@ export const updateBaseSubject = asyncHandler(async (req: Request, res: Response
     { field: "databaseOperation", value: 6 + (logActivityAllowed ? 2 : 0) },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([updatedBaseSubject, organisation, role, account, originalBaseSubject]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([updatedBaseSubject, organisation, role, account, originalBaseSubject])
     }
   ]);
 
@@ -385,11 +381,11 @@ export const deleteBaseSubject = asyncHandler(async (req: Request, res: Response
   const emitRoom = deletedBaseSubject?.organisationId?.toString() ?? "";
   emitToOrganisation(emitRoom, "basesubjects", deletedBaseSubject, "delete");
 
-  let activityLog;
   const logActivityAllowed = organisation?.settings?.logActivity;
 
   if (logActivityAllowed) {
-    activityLog = await logActivity(
+    await logActivity(
+      req,
       account?.organisationId,
       accountId,
       "BasesSubject Delete",
@@ -413,13 +409,11 @@ export const deleteBaseSubject = asyncHandler(async (req: Request, res: Response
     },
     {
       field: "databaseStorageAndBackup",
-      value: toNegative(getObjectSize(deletedBaseSubject) * 2) + (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: toNegative(getObjectSize(deletedBaseSubject) * 2)
     },
     {
       field: "databaseDataTransfer",
-      value:
-        getObjectSize([deletedBaseSubject, organisation, role, account]) +
-        (logActivityAllowed ? getObjectSize(activityLog) : 0)
+      value: getObjectSize([deletedBaseSubject, organisation, role, account])
     }
   ]);
   res.status(201).json("successfull");
